@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Operações ICQA</title>
+<style>
+  :root{
+    --bg:#f4f6f9;
+    --panel:#ffffff;
+    --ink:#1f2937;
+    --muted:#6b7280;
+    --line:#e5e7eb;
+    --accent:#2563eb;
+    --accent-dark:#1d4ed8;
+    --danger:#dc2626;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+  }
+  header{
+    background:var(--panel);
+    border-bottom:1px solid var(--line);
+    padding:16px 24px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:12px;
+  }
+  header h1{
+    font-size:18px;
+    margin:0;
+  }
+  header .sub{
+    font-size:12px;
+    color:var(--muted);
+  }
+  .backup-actions{
+    display:flex;
+    gap:8px;
+  }
+  nav#tabs{
+    display:flex;
+    gap:4px;
+    padding:8px 16px 0;
+    overflow-x:auto;
+    background:var(--panel);
+    border-bottom:1px solid var(--line);
+  }
+  nav#tabs button{
+    border:none;
+    background:transparent;
+    padding:10px 14px;
+    font-size:13px;
+    cursor:pointer;
+    color:var(--muted);
+    border-bottom:2px solid transparent;
+    white-space:nowrap;
+  }
+  nav#tabs button.active{
+    color:var(--accent);
+    border-bottom:2px solid var(--accent);
+    font-weight:600;
+  }
+  main{
+    padding:20px;
+    max-width:1400px;
+    margin:0 auto;
+  }
+  .toolbar{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-bottom:12px;
+    flex-wrap:wrap;
+  }
+  .toolbar input[type="search"]{
+    padding:8px 10px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    font-size:13px;
+    min-width:220px;
+  }
+  .btn{
+    padding:8px 12px;
+    border-radius:8px;
+    border:1px solid var(--line);
+    background:var(--panel);
+    color:var(--ink);
+    font-size:13px;
+    cursor:pointer;
+  }
+  .btn:hover{background:#f0f2f5;}
+  .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .btn.primary:hover{background:var(--accent-dark);}
+  .btn.danger{color:var(--danger);border-color:#fca5a5;}
+  .row-count{font-size:12px;color:var(--muted);margin-left:auto;}
+  .grid-wrap{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    overflow-x:auto;
+  }
+  table{
+    border-collapse:collapse;
+    width:100%;
+    font-size:13px;
+  }
+  thead th{
+    text-align:left;
+    padding:10px 8px;
+    background:#f9fafb;
+    border-bottom:1px solid var(--line);
+    white-space:nowrap;
+    font-weight:600;
+    color:var(--muted);
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+  }
+  tbody td{
+    padding:4px 6px;
+    border-bottom:1px solid var(--line);
+    vertical-align:middle;
+  }
+  tbody tr:hover{background:#fafbfc;}
+  td input, td select{
+    width:100%;
+    min-width:110px;
+    padding:6px 8px;
+    border:1px solid transparent;
+    border-radius:6px;
+    font-size:13px;
+    background:transparent;
+    color:var(--ink);
+    font-family:inherit;
+  }
+  td input:hover, td select:hover{border-color:var(--line);}
+  td input:focus, td select:focus{
+    border-color:var(--accent);
+    background:#fff;
+    outline:none;
+  }
+  td.computed{
+    font-weight:600;
+    text-align:center;
+  }
+  td.actions-cell{white-space:nowrap;text-align:center;}
+  .icon-btn{
+    border:none;
+    background:transparent;
+    cursor:pointer;
+    color:var(--danger);
+    font-size:15px;
+    padding:4px 8px;
+  }
+  select.status-badge{
+    border-radius:14px;
+    font-weight:600;
+    font-size:12px;
+    text-align:center;
+    padding-left:10px;
+  }
+  .badge-ok{background:#dcfce7;color:#166534;}
+  .badge-warn{background:#fef9c3;color:#854d0e;}
+  .badge-bad{background:#fee2e2;color:#991b1b;}
+  .badge-info{background:#dbeafe;color:#1e40af;}
+  .badge-neutral{background:#f1f5f9;color:#334155;}
+  .dashboard-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(200px,1fr));
+    gap:14px;
+    margin-bottom:20px;
+  }
+  .tile{
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px;
+  }
+  .tile .value{font-size:26px;font-weight:700;}
+  .tile .label{font-size:12px;color:var(--muted);margin-top:4px;}
+  .tile.alert .value{color:var(--danger);}
+  .empty-hint{
+    padding:24px;
+    text-align:center;
+    color:var(--muted);
+    font-size:13px;
+  }
+  footer{
+    text-align:center;
+    font-size:11px;
+    color:var(--muted);
+    padding:20px;
+  }
+  input[type="file"]{display:none;}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div>
+      <h1>Painel de Operações ICQA</h1>
+      <div class="sub">Reps · Escalas · Planos de ação · Dimensionamento · Almoço · Pontos alinhados · Controle de lost em MU · Desenvolvimento de tarefas</div>
+    </div>
+    <div class="backup-actions">
+      <button class="btn" id="btnExportAll">Exportar backup (JSON)</button>
+      <button class="btn" id="btnImportAll">Importar backup (JSON)</button>
+      <input type="file" id="fileImportAll" accept="application/json">
+    </div>
+  </header>
+  <nav id="tabs"></nav>
+  <main id="content"></main>
+  <footer>Os dados ficam salvos neste navegador (localStorage). Use "Exportar backup" para guardar uma cópia ou transferir para outro computador.</footer>
+</div>
+<script>
+(function(){
+  "use strict";
+
+  var STORAGE_KEY = "icqa_grid_state_v1";
+  var AREA_OPTIONS = ["Inbound","Outbound","Dock","Sorter","ICQA","Outros"];
+  var TURNO_OPTIONS = ["Manhã","Tarde","Noite"];
+
+  var BADGE_MAP = {
+    "ativo":"badge-ok","concluído":"badge-ok","concluido":"badge-ok","resolvido":"badge-ok",
+    "confirmado":"badge-ok","confirmada":"badge-ok","alinhado":"badge-ok",
+    "em andamento":"badge-info","investigando":"badge-info","revisar":"badge-warn",
+    "pendente":"badge-warn","não iniciado":"badge-neutral","nao iniciado":"badge-neutral",
+    "aberto":"badge-warn","alta":"badge-bad","média":"badge-warn","media":"badge-warn","baixa":"badge-neutral",
+    "atrasado":"badge-bad","bloqueado":"badge-bad","falta":"badge-bad","desligado":"badge-bad",
+    "afastado":"badge-warn","férias":"badge-info","ferias":"badge-info","alterada":"badge-warn"
+  };
+
+  function badgeClass(value){
+    var key = (value||"").toString().trim().toLowerCase();
+    return BADGE_MAP[key] || "badge-neutral";
+  }
+
+  function uid(){
+    return "r" + Date.now().toString(36) + Math.random().toString(36).slice(2,8);
+  }
+
+  function col(key,label,type,options){
+    return {key:key,label:label,type:type||"text",options:options||null};
+  }
+
+  var MODULES = [
+    {
+      key:"reps",
+      label:"Reps",
+      columns:[
+        col("nome","Nome"),
+        col("matricula","Matrícula"),
+        col("funcao","Função"),
+        col("area","Área","select",AREA_OPTIONS),
+        col("turno","Turno","select",TURNO_OPTIONS),
+        col("status","Status","select",["Ativo","Férias","Afastado","Desligado"]),
+        col("observacoes","Observações")
+      ]
+    },
+    {
+      key:"escalas",
+      label:"Escalas",
+      columns:[
+        col("colaborador","Colaborador"),
+        col("dia","Dia","date"),
+        col("turno","Turno","select",TURNO_OPTIONS),
+        col("entrada","Entrada","time"),
+        col("saida","Saída","time"),
+        col("area","Área","select",AREA_OPTIONS),
+        col("status","Status","select",["Confirmada","Pendente","Alterada","Falta"])
+      ]
+    },
+    {
+      key:"planos",
+      label:"Planos de Ação",
+      columns:[
+        col("problema","Problema"),
+        col("acao","Ação"),
+        col("responsavel","Responsável"),
+        col("area","Área","select",AREA_OPTIONS),
+        col("prazo","Prazo","date"),
+        col("prioridade","Prioridade","select",["Alta","Média","Baixa"]),
+        col("status","Status","select",["Não iniciado","Em andamento","Concluído","Atrasado"])
+      ]
+    },
+    {
+      key:"dimensionamento",
+      label:"Dimensionamento",
+      columns:[
+        col("area","Área","select",AREA_OPTIONS),
+        col("turno","Turno","select",TURNO_OPTIONS),
+        col("data","Data","date"),
+        col("hcNecessario","HC Necessário","number"),
+        col("hcReal","HC Real","number"),
+        col("gap","Gap","computed"),
+        col("observacoes","Observações")
+      ]
+    },
+    {
+      key:"almoco",
+      label:"Almoço",
+      columns:[
+        col("colaborador","Colaborador"),
+        col("turno","Turno","select",TURNO_OPTIONS),
+        col("horario1","Saída almoço","time"),
+        col("horario2","Retorno almoço","time"),
+        col("duracao","Duração (min)","number"),
+        col("area","Área","select",AREA_OPTIONS),
+        col("status","Status","select",["Confirmado","Pendente"])
+      ]
+    },
+    {
+      key:"pontos",
+      label:"Pontos Alinhados",
+      columns:[
+        col("tema","Tema"),
+        col("data","Data","date"),
+        col("area","Área","select",AREA_OPTIONS),
+        col("responsavel","Responsável"),
+        col("decisao","Decisão"),
+        col("status","Status","select",["Alinhado","Pendente","Revisar"])
+      ]
+    },
+    {
+      key:"lost",
+      label:"Controle de Lost em MU",
+      columns:[
+        col("data","Data","date"),
+        col("area","Área","select",AREA_OPTIONS),
+        col("item","SKU / Item"),
+        col("quantidadeMU","Quantidade (MU)","number"),
+        col("motivo","Motivo","select",["Avaria","Extravio","Erro de processo","Outro"]),
+        col("responsavel","Responsável"),
+        col("status","Status","select",["Aberto","Investigando","Resolvido"])
+      ]
+    },
+    {
+      key:"tarefas",
+      label:"Desenvolvimento de Tarefas",
+      columns:[
+        col("tarefa","Tarefa"),
+        col("responsavel","Responsável"),
+        col("area","Área","select",AREA_OPTIONS),
+        col("inicio","Início","date"),
+        col("fim","Fim","date"),
+        col("progresso","Progresso (%)","number"),
+        col("status","Status","select",["Não iniciado","Em andamento","Concluído","Bloqueado"])
+      ]
+    }
+  ];
+
+  function seedRow(mod, values){
+    var row = {id:uid()};
+    mod.columns.forEach(function(c){
+      row[c.key] = (values && values[c.key] !== undefined) ? values[c.key] : "";
+    });
+    return row;
+  }
+
+  function buildSeed(){
+    var s = {};
+    s.reps = [seedRow(MODULES[0],{nome:"Exemplo - editar ou excluir",funcao:"Operador",area:"ICQA",turno:"Manhã",status:"Ativo"})];
+    s.escalas = [seedRow(MODULES[1],{colaborador:"Exemplo - editar ou excluir",turno:"Manhã",area:"ICQA",status:"Pendente"})];
+    s.planos = [seedRow(MODULES[2],{problema:"Exemplo - editar ou excluir",prioridade:"Média",status:"Não iniciado"})];
+    s.dimensionamento = [seedRow(MODULES[3],{area:"ICQA",turno:"Manhã",hcNecessario:10,hcReal:8})];
+    s.almoco = [seedRow(MODULES[4],{colaborador:"Exemplo - editar ou excluir",turno:"Manhã",duracao:60,status:"Pendente"})];
+    s.pontos = [seedRow(MODULES[5],{tema:"Exemplo - editar ou excluir",status:"Pendente"})];
+    s.lost = [seedRow(MODULES[6],{item:"Exemplo - editar ou excluir",quantidadeMU:0,motivo:"Avaria",status:"Aberto"})];
+    s.tarefas = [seedRow(MODULES[7],{tarefa:"Exemplo - editar ou excluir",progresso:0,status:"Não iniciado"})];
+    return s;
+  }
+
+  function loadState(){
+    try{
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if(!raw) return buildSeed();
+      var parsed = JSON.parse(raw);
+      MODULES.forEach(function(m){ if(!parsed[m.key]) parsed[m.key] = []; });
+      return parsed;
+    }catch(e){
+      return buildSeed();
+    }
+  }
+
+  var state = loadState();
+  var activeTab = "dashboard";
+
+  function save(){
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if(activeTab === "dashboard") renderDashboard();
+  }
+
+  function computeValue(mod, row){
+    if(mod.key === "dimensionamento"){
+      var need = parseFloat(row.hcNecessario) || 0;
+      var real = parseFloat(row.hcReal) || 0;
+      return real - need;
+    }
+    return "";
+  }
+
+  function csvEscape(v){
+    v = (v===undefined||v===null) ? "" : String(v);
+    if(/[",\n]/.test(v)) return '"' + v.replace(/"/g,'""') + '"';
+    return v;
+  }
+
+  function parseCsv(text){
+    var rows = [];
+    var i=0, field="", row=[], inQuotes=false;
+    while(i < text.length){
+      var c = text[i];
+      if(inQuotes){
+        if(c === '"'){
+          if(text[i+1] === '"'){ field += '"'; i+=2; continue; }
+          inQuotes = false; i++; continue;
+        }
+        field += c; i++; continue;
+      } else {
+        if(c === '"'){ inQuotes = true; i++; continue; }
+        if(c === ','){ row.push(field); field=""; i++; continue; }
+        if(c === '\r'){ i++; continue; }
+        if(c === '\n'){ row.push(field); rows.push(row); row=[]; field=""; i++; continue; }
+        field += c; i++; continue;
+      }
+    }
+    row.push(field);
+    rows.push(row);
+    return rows.filter(function(r){ return !(r.length===1 && r[0]===""); });
+  }
+
+  function exportCsv(mod){
+    var headers = mod.columns.map(function(c){ return c.label; });
+    var lines = [headers.map(csvEscape).join(",")];
+    (state[mod.key]||[]).forEach(function(row){
+      var vals = mod.columns.map(function(c){
+        var v = c.type === "computed" ? computeValue(mod,row) : row[c.key];
+        return csvEscape(v);
+      });
+      lines.push(vals.join(","));
+    });
+    var blob = new Blob([lines.join("\n")], {type:"text/csv;charset=utf-8;"});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = mod.key + ".csv";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function importCsv(mod, text){
+    var rows = parseCsv(text);
+    if(rows.length < 1) return;
+    var header = rows[0];
+    var idxByCol = {};
+    mod.columns.forEach(function(c){
+      var idx = header.indexOf(c.label);
+      if(idx > -1) idxByCol[c.key] = idx;
+    });
+    var newRows = [];
+    for(var r=1; r<rows.length; r++){
+      var raw = rows[r];
+      if(raw.length===1 && raw[0].trim()==="") continue;
+      var obj = {id:uid()};
+      mod.columns.forEach(function(c){
+        if(c.type === "computed") return;
+        var idx = idxByCol[c.key];
+        obj[c.key] = (idx!==undefined && raw[idx]!==undefined) ? raw[idx] : "";
+      });
+      newRows.push(obj);
+    }
+    state[mod.key] = newRows;
+    save();
+    render();
+  }
+
+  function updateCell(modKey, rowId, colKey, value){
+    var rows = state[modKey];
+    for(var i=0;i<rows.length;i++){
+      if(rows[i].id === rowId){ rows[i][colKey] = value; break; }
+    }
+    save();
+  }
+
+  function addRow(mod){
+    state[mod.key].push(seedRow(mod));
+    save();
+    render();
+  }
+
+  function removeRow(mod, rowId){
+    if(!confirm("Excluir esta linha?")) return;
+    state[mod.key] = state[mod.key].filter(function(r){ return r.id !== rowId; });
+    save();
+    render();
+  }
+
+  function matchesSearch(mod, row, term){
+    if(!term) return true;
+    term = term.toLowerCase();
+    return mod.columns.some(function(c){
+      var v = c.type==="computed" ? computeValue(mod,row) : row[c.key];
+      return String(v||"").toLowerCase().indexOf(term) > -1;
+    });
+  }
+
+  var searchTerms = {};
+
+  function renderModuleView(mod){
+    var wrap = document.createElement("div");
+
+    var toolbar = document.createElement("div");
+    toolbar.className = "toolbar";
+
+    var search = document.createElement("input");
+    search.type = "search";
+    search.placeholder = "Buscar em " + mod.label + "...";
+    search.value = searchTerms[mod.key] || "";
+    search.oninput = function(){ searchTerms[mod.key] = search.value; renderTable(); };
+    toolbar.appendChild(search);
+
+    var addBtn = document.createElement("button");
+    addBtn.className = "btn primary";
+    addBtn.textContent = "+ Adicionar linha";
+    addBtn.onclick = function(){ addRow(mod); };
+    toolbar.appendChild(addBtn);
+
+    var exportBtn = document.createElement("button");
+    exportBtn.className = "btn";
+    exportBtn.textContent = "Exportar CSV";
+    exportBtn.onclick = function(){ exportCsv(mod); };
+    toolbar.appendChild(exportBtn);
+
+    var importLabel = document.createElement("button");
+    importLabel.className = "btn";
+    importLabel.textContent = "Importar CSV";
+    var fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = ".csv,text/csv";
+    fileInput.onchange = function(){
+      var f = fileInput.files[0];
+      if(!f) return;
+      var reader = new FileReader();
+      reader.onload = function(){ importCsv(mod, reader.result); };
+      reader.readAsText(f, "UTF-8");
+      fileInput.value = "";
+    };
+    importLabel.onclick = function(){ fileInput.click(); };
+    toolbar.appendChild(importLabel);
+    toolbar.appendChild(fileInput);
+
+    var countLabel = document.createElement("span");
+    countLabel.className = "row-count";
+    toolbar.appendChild(countLabel);
+
+    wrap.appendChild(toolbar);
+
+    var gridWrap = document.createElement("div");
+    gridWrap.className = "grid-wrap";
+    wrap.appendChild(gridWrap);
+
+    function renderTable(){
+      var term = searchTerms[mod.key] || "";
+      var rows = (state[mod.key]||[]).filter(function(r){ return matchesSearch(mod,r,term); });
+      countLabel.textContent = rows.length + " linha(s)";
+
+      if(!state[mod.key] || state[mod.key].length===0){
+        gridWrap.innerHTML = "";
+        var hint = document.createElement("div");
+        hint.className = "empty-hint";
+        hint.textContent = "Nenhuma linha ainda. Clique em \"+ Adicionar linha\" para começar.";
+        gridWrap.appendChild(hint);
+        return;
+      }
+
+      var table = document.createElement("table");
+      var thead = document.createElement("thead");
+      var trh = document.createElement("tr");
+      mod.columns.forEach(function(c){
+        var th = document.createElement("th");
+        th.textContent = c.label;
+        trh.appendChild(th);
+      });
+      var thActions = document.createElement("th");
+      thActions.textContent = "";
+      trh.appendChild(thActions);
+      thead.appendChild(trh);
+      table.appendChild(thead);
+
+      var tbody = document.createElement("tbody");
+      rows.forEach(function(row){
+        var tr = document.createElement("tr");
+        mod.columns.forEach(function(c){
+          var td = document.createElement("td");
+          if(c.type === "computed"){
+            td.className = "computed";
+            td.textContent = computeValue(mod,row);
+          } else if(c.type === "select"){
+            var select = document.createElement("select");
+            select.className = "status-badge " + badgeClass(row[c.key]);
+            var blankOpt = document.createElement("option");
+            blankOpt.value = ""; blankOpt.textContent = "—";
+            select.appendChild(blankOpt);
+            c.options.forEach(function(opt){
+              var o = document.createElement("option");
+              o.value = opt; o.textContent = opt;
+              if(row[c.key] === opt) o.selected = true;
+              select.appendChild(o);
+            });
+            select.onchange = function(){
+              select.className = "status-badge " + badgeClass(select.value);
+              updateCell(mod.key, row.id, c.key, select.value);
+            };
+            td.appendChild(select);
+          } else {
+            var input = document.createElement("input");
+            input.type = c.type === "time" ? "time" : (c.type === "date" ? "date" : (c.type === "number" ? "number" : "text"));
+            input.value = row[c.key] || "";
+            input.oninput = function(){ updateCell(mod.key, row.id, c.key, input.value); };
+            td.appendChild(input);
+          }
+          tr.appendChild(td);
+        });
+        var tdActions = document.createElement("td");
+        tdActions.className = "actions-cell";
+        var delBtn = document.createElement("button");
+        delBtn.className = "icon-btn";
+        delBtn.title = "Excluir linha";
+        delBtn.textContent = "✕";
+        delBtn.onclick = function(){ removeRow(mod, row.id); };
+        tdActions.appendChild(delBtn);
+        tr.appendChild(tdActions);
+        tbody.appendChild(tr);
+      });
+      table.appendChild(tbody);
+      gridWrap.innerHTML = "";
+      gridWrap.appendChild(table);
+    }
+
+    renderTable();
+    return wrap;
+  }
+
+  function statTile(value, label, alert){
+    var tile = document.createElement("div");
+    tile.className = "tile" + (alert ? " alert" : "");
+    var v = document.createElement("div");
+    v.className = "value"; v.textContent = value;
+    var l = document.createElement("div");
+    l.className = "label"; l.textContent = label;
+    tile.appendChild(v); tile.appendChild(l);
+    return tile;
+  }
+
+  function renderDashboard(){
+    var content = document.getElementById("content");
+    var wrap = document.createElement("div");
+
+    var grid = document.createElement("div");
+    grid.className = "dashboard-grid";
+
+    var repsAtivos = (state.reps||[]).filter(function(r){ return r.status === "Ativo"; }).length;
+    var planosAtrasados = (state.planos||[]).filter(function(r){ return r.status === "Atrasado"; }).length;
+    var planosAndamento = (state.planos||[]).filter(function(r){ return r.status === "Em andamento"; }).length;
+    var gapTotal = (state.dimensionamento||[]).reduce(function(sum,r){
+      return sum + ((parseFloat(r.hcReal)||0) - (parseFloat(r.hcNecessario)||0));
+    },0);
+    var lostTotal = (state.lost||[]).reduce(function(sum,r){ return sum + (parseFloat(r.quantidadeMU)||0); },0);
+    var pontosPendentes = (state.pontos||[]).filter(function(r){ return r.status !== "Alinhado"; }).length;
+    var tarefasAndamento = (state.tarefas||[]).filter(function(r){ return r.status === "Em andamento"; }).length;
+    var tarefasBloqueadas = (state.tarefas||[]).filter(function(r){ return r.status === "Bloqueado"; }).length;
+
+    grid.appendChild(statTile(repsAtivos, "Reps ativos"));
+    grid.appendChild(statTile(planosAndamento, "Planos de ação em andamento"));
+    grid.appendChild(statTile(planosAtrasados, "Planos de ação atrasados", planosAtrasados>0));
+    grid.appendChild(statTile((gapTotal>0?"+":"") + gapTotal, "Gap de dimensionamento", gapTotal<0));
+    grid.appendChild(statTile(lostTotal, "Total lost (MU)", lostTotal>0));
+    grid.appendChild(statTile(pontosPendentes, "Pontos pendentes de alinhamento", pontosPendentes>0));
+    grid.appendChild(statTile(tarefasAndamento, "Tarefas em andamento"));
+    grid.appendChild(statTile(tarefasBloqueadas, "Tarefas bloqueadas", tarefasBloqueadas>0));
+
+    wrap.appendChild(grid);
+
+    var hint = document.createElement("div");
+    hint.className = "empty-hint";
+    hint.textContent = "Use as abas acima para editar cada módulo. Os totais aqui atualizam automaticamente.";
+    wrap.appendChild(hint);
+
+    content.innerHTML = "";
+    content.appendChild(wrap);
+  }
+
+  function render(){
+    var content = document.getElementById("content");
+    content.innerHTML = "";
+    if(activeTab === "dashboard"){
+      renderDashboard();
+      return;
+    }
+    var mod = MODULES.filter(function(m){ return m.key === activeTab; })[0];
+    if(!mod) return;
+    content.appendChild(renderModuleView(mod));
+  }
+
+  function renderTabs(){
+    var tabs = document.getElementById("tabs");
+    tabs.innerHTML = "";
+    var all = [{key:"dashboard", label:"Resumo"}].concat(MODULES);
+    all.forEach(function(t){
+      var btn = document.createElement("button");
+      btn.textContent = t.label;
+      if(t.key === activeTab) btn.className = "active";
+      btn.onclick = function(){
+        activeTab = t.key;
+        renderTabs();
+        render();
+      };
+      tabs.appendChild(btn);
+    });
+  }
+
+  document.getElementById("btnExportAll").onclick = function(){
+    var blob = new Blob([JSON.stringify(state, null, 2)], {type:"application/json"});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url; a.download = "icqa-grid-backup.json";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  var fileImportAll = document.getElementById("fileImportAll");
+  document.getElementById("btnImportAll").onclick = function(){ fileImportAll.click(); };
+  fileImportAll.onchange = function(){
+    var f = fileImportAll.files[0];
+    if(!f) return;
+    var reader = new FileReader();
+    reader.onload = function(){
+      try{
+        var parsed = JSON.parse(reader.result);
+        MODULES.forEach(function(m){ if(!parsed[m.key]) parsed[m.key] = []; });
+        state = parsed;
+        save();
+        render();
+      }catch(e){
+        alert("Arquivo inválido. Selecione um backup JSON exportado por este painel.");
+      }
+    };
+    reader.readAsText(f, "UTF-8");
+    fileImportAll.value = "";
+  };
+
+  renderTabs();
+  render();
+})();
+</script>
+</body>
+</html>
