@@ -4,9 +4,11 @@ Adaptação do app Google Apps Script "Corrida de Produtividade" para o GRID.
 A interface é a mesma; o `Código.gs` foi portado para `src/engine.js` e os dados
 (antes em `PropertiesService`) agora ficam em `src/storage.js`:
 
-1. API de state do GRID (`/api/v1/documents/{doc_id}/state`), compartilhada entre usuários
-2. `localStorage` (se o iframe permitir)
-3. memória (aba Backup para não perder dados)
+1. `window.GRID.state` (SDK injetado pelo GRID em todo HTML), compartilhado entre usuários
+2. memória (se o SDK não existir), usando a aba Backup para não perder dados
+
+O GRID rejeita uploads que usam `localStorage`/`sessionStorage`/`document.cookie`
+(erro `invalid_file`), por isso o app não usa nenhum deles.
 
 ## Build e pacote
 

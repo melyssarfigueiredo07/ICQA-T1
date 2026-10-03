@@ -1,67 +1,38 @@
 import { emptyDb, normalizeDb } from "./engine.js"
 
-const KEY = "corrida_produtividade_v1"
-const memory = {}
-const state = { mode: "memória", notice: "" }
+const state = { mode: "memória (não salva)", notice: "" }
+let memoryDb = null
 
-function docId() {
-  const m = String(window.location.href).match(/\/d\/([0-9A-HJKMNP-TV-Z]{26})/)
-  return m ? m[1] : null
+async function sdk() {
+  for (let i = 0; i < 20; i++) {
+    const g = window.GRID
+    if (g && g.state && typeof g.state.get === "function" && typeof g.state.set === "function") return g.state
+    await new Promise((r) => setTimeout(r, 150))
+  }
+  return null
 }
 
-function localGet() {
-  try { return window.localStorage.getItem(KEY) } catch { return memory[KEY] ?? null }
+function isConflict(e) {
+  return !!e && (e.status === 409 || e.conflict === true || /409|conflict|stale|updated_at/i.test(String(e.message || e)))
 }
-
-function localSet(v) {
-  try { window.localStorage.setItem(KEY, v) } catch { memory[KEY] = v }
-}
-
-function localAvailable() {
-  try { window.localStorage.setItem("__t", "1"); window.localStorage.removeItem("__t"); return true } catch { return false }
-}
-
-async function remoteLoad(id) {
-  const r = await fetch(`/api/v1/documents/${id}/state`, { credentials: "include" })
-  if (!r.ok) throw new Error("state " + r.status)
-  const j = await r.json()
-  const st = j.state || {}
-  return { db: st.meta ? normalizeDb(st) : emptyDb(), version: j.updated_at || "" }
-}
-
-async function remoteSave(id, db, version) {
-  const r = await fetch(`/api/v1/documents/${id}/state`, {
-    method: "PUT",
-    credentials: "include",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ state: db, if_updated_at: version || "" }),
-  })
-  if (r.status === 409) { const e = new Error("conflict"); e.conflict = true; throw e }
-  if (!r.ok) throw new Error("state " + r.status)
-}
-
-let remoteOk = null
 
 async function load() {
-  const id = docId()
-  if (id && remoteOk !== false) {
+  const st = await sdk()
+  if (st) {
     try {
-      const out = await remoteLoad(id)
-      if (remoteOk === null) { remoteOk = true; state.mode = "GRID (compartilhado)" }
-      return { ...out, id }
+      const out = await st.get()
+      const raw = out.state || {}
+      state.mode = "GRID (compartilhado)"
+      return { st, db: raw.meta ? normalizeDb(raw) : emptyDb(), raw, updatedAt: out.updated_at }
     } catch {
-      remoteOk = false
-      state.mode = localAvailable() ? "local (este navegador)" : "memória (não salva)"
-      state.notice = "Não foi possível usar o armazenamento compartilhado do GRID. Os dados ficam só neste navegador; use a aba Backup."
+      state.notice = "Não foi possível ler o armazenamento do GRID. Os dados ficam só em memória; use a aba Backup."
     }
-  } else if (remoteOk === null) {
-    remoteOk = false
-    state.mode = localAvailable() ? "local (este navegador)" : "memória (não salva)"
+  } else {
+    state.notice = "Armazenamento do GRID indisponível. Os dados ficam só em memória; use a aba Backup."
   }
-  const raw = localGet()
-  let db
-  try { db = raw ? normalizeDb(JSON.parse(raw)) : emptyDb() } catch { db = emptyDb() }
-  return { db, version: "", id: null }
+  state.mode = "memória (não salva)"
+  if (!memoryDb) memoryDb = emptyDb()
+  return { st: null, db: memoryDb, raw: {}, updatedAt: "" }
 }
 
 export async function read() {
@@ -70,15 +41,15 @@ export async function read() {
 
 export async function mutate(fn) {
   for (let attempt = 0; attempt < 3; attempt++) {
-    const { db, version, id } = await load()
+    const { st, db, raw, updatedAt } = await load()
     const result = fn(db)
     if (result && result.ok === false) return result
+    if (!st) { memoryDb = db; return result }
     try {
-      if (id) await remoteSave(id, db, version)
-      else localSet(JSON.stringify(db))
+      await st.set({ ...raw, meta: db.meta, entries: db.entries }, updatedAt)
       return result
     } catch (e) {
-      if (e.conflict) continue
+      if (isConflict(e) && attempt < 2) continue
       throw e
     }
   }
