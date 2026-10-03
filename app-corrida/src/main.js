@@ -375,7 +375,7 @@ function renderHist(){
     html+='<tr><td><strong>'+e.rep+'</strong></td><td><span class="type-tag '+(tipo==="Operador de Máquina"?"tag-op":"tag-rep")+'">'+( tipo==="Operador de Máquina"?"Op.":"REP")+'</span></td><td>'+e.mes+' '+e.ano+'</td><td>S'+e.sem+'</td>'
       +TASKS.map(function(t){ var v=parseInt(e[t]); return '<td>'+(isNaN(v)?0:v)+'</td>'; }).join('')
       +'<td><strong>'+tot+'</strong></td>'
-      +'<td style="white-space:nowrap"><button class="tbi ted" onclick="editEntry(\''+e.id+'\')">✏</button><button class="tbi tdl" onclick="delEntry(\''+e.id+'\')">🗑</button></td></tr>';
+      +'<td style="white-space:nowrap"><button class="tbi ted" data-click="editEntry(\''+e.id+'\')">✏</button><button class="tbi tdl" data-click="delEntry(\''+e.id+'\')">🗑</button></td></tr>';
   });
   document.getElementById("htbl").innerHTML=html+'</tbody>';
 }
@@ -415,8 +415,8 @@ function renderReps(){
     html += '</div>';
     // Actions
     html += '<div style="display:flex;gap:6px;flex-shrink:0">';
-    html += '<button class="btn btn-sm" style="font-size:12px" onclick="openEditModal(\''+r.nome.replace(/\'/g,"\\'")+'\')" title="Editar">✏️ Editar</button>';
-    html += '<button class="btn btn-d btn-sm" onclick="removeRep(\''+r.nome.replace(/\'/g,"\\'")+'\')">🗑</button>';
+    html += '<button class="btn btn-sm" style="font-size:12px" data-click="openEditModal(\''+r.nome.replace(/\'/g,"\\'")+'\')" title="Editar">✏️ Editar</button>';
+    html += '<button class="btn btn-d btn-sm" data-click="removeRep(\''+r.nome.replace(/\'/g,"\\'")+'\')">🗑</button>';
     html += '</div>';
     html += '</div>'; // rep-card
   });
@@ -521,7 +521,7 @@ function buildRegHTML(reg,isPreview){
   if(reg.observacao){ html+='<div class="hist-obs" style="margin-top:14px">💬 '+reg.observacao+'</div>'; }
   html+='<div class="hist-gen" style="margin-top:8px">Gerado em: '+reg.geradoEm+' · '+reg.totalReps+' participante'+(reg.totalReps!==1?'s':'')+'</div>';
   if(!isPreview){
-    html+='<div style="margin-top:10px"><button class="btn btn-d btn-sm" onclick="delDestaque(\''+reg.id+'\')">🗑 Remover do histórico</button></div>';
+    html+='<div style="margin-top:10px"><button class="btn btn-d btn-sm" data-click="delDestaque(\''+reg.id+'\')">🗑 Remover do histórico</button></div>';
   }
   return html;
 }
@@ -533,7 +533,7 @@ function renderHistDest(){
   var html="";
   hist.forEach(function(reg,idx){
     var g=reg.geral,col=g?avci(g.nome):"#888";
-    html+='<div class="hist-card"><div class="hist-hdr" onclick="toggleHist(\'hb-'+idx+'\')">'
+    html+='<div class="hist-card"><div class="hist-hdr" data-click="toggleHist(\'hb-'+idx+'\')">'
       +'<div style="font-size:20px">🌟</div><div class="hist-month">'+reg.mes+' '+reg.ano+'</div>';
     if(g){ html+='<div class="hist-chip"><div class="av" style="background:'+col+'">'+ini(g.nome)+'</div><div class="hist-chip-name">'+g.nome+'</div></div>'; }
     html+='<div style="font-size:12px;color:var(--t2);margin-left:8px">▾</div>'
@@ -777,8 +777,37 @@ function backupRestaurar(){
 // ═══════════════════════════════════════
 //  BOOT
 // ═══════════════════════════════════════
+
+// ═══════════════════════════════════════
+//  EVENTOS (delegados; sem JS inline no HTML)
+// ═══════════════════════════════════════
+function parseArgs(str, el, ev){
+  var out=[], i=0, n=str.length;
+  while(i<n){
+    while(i<n && /[\s,]/.test(str[i])) i++;
+    if(i>=n) break;
+    if(str[i]==="'" || str[i]==='"'){
+      var q=str[i++], v="";
+      while(i<n && str[i]!==q){ if(str[i]==="\\" && i+1<n){ v+=str[i+1]; i+=2; } else { v+=str[i++]; } }
+      i++; out.push(v);
+    } else {
+      var tok=str.slice(i).match(/^[^,\s]+/)[0]; i+=tok.length;
+      out.push(tok==="this"?el:(tok==="event"?ev:tok));
+    }
+  }
+  return out;
+}
+function runHandler(expr, el, ev){
+  var m=String(expr).match(/^\s*([A-Za-z_$][\w$]*)\s*\(([\s\S]*)\)\s*;?\s*$/);
+  if(!m || typeof window[m[1]]!=="function") return;
+  window[m[1]].apply(null, parseArgs(m[2], el, ev));
+}
+document.addEventListener("click", function(e){ var el=e.target.closest("[data-click]"); if(el) runHandler(el.getAttribute("data-click"), el, e); });
+document.addEventListener("change", function(e){ var el=e.target.closest("[data-change]"); if(el) runHandler(el.getAttribute("data-change"), el, e); });
+document.addEventListener("keydown", function(e){ var el=e.target.closest("[data-enter]"); if(el && e.key==="Enter") runHandler(el.getAttribute("data-enter"), el, e); });
+
 buildTaskGrid();
 loadData();
 setInterval(loadData, 60000);
 
-Object.assign(window, { addRep, askConfirm, avc, avci, backupBaixar, backupGerar, backupRestaurar, ballSvg, buildPodium, buildRegHTML, buildRkTable, buildTaskGrid, calcDestaque, callApi, changePeriod, clearForm, closeModal, closeModalBtn, delDestaque, delEntry, editEntry, goTab, hideAlt, hideLoad, ini, initSels, loadData, loadDestaques, onData, openEditModal, removeRep, render, renderDestaques, renderDestiquePreview, renderHist, renderHistDest, renderKPIs, renderPodio, renderRanking, renderReps, repTipo, runDebug, saveEditRep, saveEntry, showAlt, showLoad, toast, toggleHist, toggleTipo });
+Object.assign(window, { addRep, askConfirm, avc, avci, backupBaixar, backupGerar, backupRestaurar, ballSvg, buildPodium, buildRegHTML, buildRkTable, buildTaskGrid, calcDestaque, callApi, changePeriod, clearForm, closeModal, closeModalBtn, delDestaque, delEntry, editEntry, goTab, hideAlt, hideLoad, ini, initSels, loadData, loadDestaques, onData, openEditModal, parseArgs, removeRep, render, renderDestaques, renderDestiquePreview, renderHist, renderHistDest, renderKPIs, renderPodio, renderRanking, renderReps, repTipo, runDebug, runHandler, saveEditRep, saveEntry, showAlt, showLoad, toast, toggleHist, toggleTipo });

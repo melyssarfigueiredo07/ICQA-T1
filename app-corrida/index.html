@@ -266,22 +266,22 @@ button{font-family:'Sora',sans-serif;cursor:pointer}
     <div class="btxt">Competição <span>Mensal</span></div>
   </div>
   <div class="hdr-r">
-    <select class="psel" id="hdr-mes" onchange="changePeriod()"></select>
-    <select class="psel" id="hdr-ano" onchange="changePeriod()"></select>
+    <select class="psel" id="hdr-mes" data-change="changePeriod()"></select>
+    <select class="psel" id="hdr-ano" data-change="changePeriod()"></select>
     <div class="live">AO VIVO</div>
   </div>
 </header>
 
 <div class="tabs-bar">
   <nav class="tabs">
-    <button class="tb on"  onclick="goTab('podio',this)">🏆 Pódio</button>
-    <button class="tb"     onclick="goTab('dest',this)">⭐ Destaques</button>
-    <button class="tb"     onclick="goTab('ranking',this)">📊 Ranking</button>
-    <button class="tb"     onclick="goTab('destmes',this)">🌟 Destaque do Mês</button>
-    <button class="tb"     onclick="goTab('inserir',this)">➕ Inserir</button>
-    <button class="tb"     onclick="goTab('hist',this)">📋 Histórico</button>
-    <button class="tb"     onclick="goTab('reps',this)">👥 REPs</button>
-    <button class="tb"     onclick="goTab('backup',this)">💾 Backup</button>
+    <button class="tb on"  data-click="goTab('podio',this)">🏆 Pódio</button>
+    <button class="tb"     data-click="goTab('dest',this)">⭐ Destaques</button>
+    <button class="tb"     data-click="goTab('ranking',this)">📊 Ranking</button>
+    <button class="tb"     data-click="goTab('destmes',this)">🌟 Destaque do Mês</button>
+    <button class="tb"     data-click="goTab('inserir',this)">➕ Inserir</button>
+    <button class="tb"     data-click="goTab('hist',this)">📋 Histórico</button>
+    <button class="tb"     data-click="goTab('reps',this)">👥 REPs</button>
+    <button class="tb"     data-click="goTab('backup',this)">💾 Backup</button>
   </nav>
 </div>
 
@@ -291,7 +291,7 @@ button{font-family:'Sora',sans-serif;cursor:pointer}
   <section id="sec-podio" class="sec">
     <div id="debug-box" style="display:none;background:#1A1A1A;color:#FFE600;font-family:monospace;font-size:11px;padding:10px 14px;border-radius:8px;margin-bottom:12px;white-space:pre-wrap;word-break:break-all"></div>
     <div class="card"><div class="ch"><div><div class="ct">🏆 Pódio Geral</div><div class="cs" id="podio-per"></div></div>
-      <button class="btn btn-sm" onclick="runDebug()" style="font-size:11px">🔍 Debug</button>
+      <button class="btn btn-sm" data-click="runDebug()" style="font-size:11px">🔍 Debug</button>
     </div><div id="podio-geral"></div></div>
     <div class="card"><div class="ch"><div class="ct">🏆 Pódio REPs</div></div><div id="podio-rep"></div></div>
     <div class="card"><div class="ch"><div class="ct">🏆 Pódio Operadores</div></div><div id="podio-op"></div></div>
@@ -303,9 +303,9 @@ button{font-family:'Sora',sans-serif;cursor:pointer}
       <div class="ch"><div><div class="ct">💾 Backup e migração</div><div class="cs">Gere um backup dos dados, ou cole um JSON para restaurar (também serve para importar os dados do Apps Script antigo).</div></div></div>
       <div id="bk-alt" class="alt"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
-        <button class="btn" onclick="backupGerar()">Gerar backup</button>
-        <button class="btn" onclick="backupBaixar()">Baixar arquivo</button>
-        <button class="btn btn-p" onclick="backupRestaurar()">Restaurar do texto</button>
+        <button class="btn" data-click="backupGerar()">Gerar backup</button>
+        <button class="btn" data-click="backupBaixar()">Baixar arquivo</button>
+        <button class="btn btn-p" data-click="backupRestaurar()">Restaurar do texto</button>
       </div>
       <textarea id="bk-text" spellcheck="false" style="width:100%;min-height:240px;font-family:monospace;font-size:12px;padding:10px;border:1px solid var(--bor);border-radius:var(--r2)" placeholder='Cole aqui um JSON no formato {"meta":{...},"entries":[...]} e clique em "Restaurar do texto".'></textarea>
     </div>
@@ -361,14 +361,14 @@ button{font-family:'Sora',sans-serif;cursor:pointer}
         <div class="fg" style="min-width:140px"><label>Mês</label><select id="dest-mes"></select></div>
         <div class="fg" style="min-width:100px"><label>Ano</label><select id="dest-ano"></select></div>
         <div class="fg" style="flex:1;min-width:200px"><label>Observação (opcional)</label><input type="text" id="dest-obs" placeholder="Ex: Semana de inventário…" maxlength="120"></div>
-        <button class="btn btn-p" id="btn-calc" onclick="calcDestaque()" style="white-space:nowrap">⚡ Calcular e Salvar</button>
+        <button class="btn btn-p" id="btn-calc" data-click="calcDestaque()" style="white-space:nowrap">⚡ Calcular e Salvar</button>
       </div>
     </div>
     <div id="dest-preview"></div>
     <div class="card">
       <div class="ch">
         <div><div class="ct">📅 Histórico de Destaques</div><div class="cs" id="dest-hist-sub"></div></div>
-        <button class="btn btn-sm" onclick="loadDestaques()">↻ Atualizar</button>
+        <button class="btn btn-sm" data-click="loadDestaques()">↻ Atualizar</button>
       </div>
       <div id="dest-hist-list"></div>
     </div>
@@ -391,8 +391,8 @@ button{font-family:'Sora',sans-serif;cursor:pointer}
       <p style="font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.4px;margin-bottom:9px">Tarefas realizadas</p>
       <div class="tgrid" id="tgrid"></div>
       <div class="brow">
-        <button class="btn btn-p" id="btn-sv" onclick="saveEntry()">💾 Salvar</button>
-        <button class="btn" onclick="clearForm()">✕ Limpar</button>
+        <button class="btn btn-p" id="btn-sv" data-click="saveEntry()">💾 Salvar</button>
+        <button class="btn" data-click="clearForm()">✕ Limpar</button>
       </div>
     </div>
   </section>
@@ -403,12 +403,12 @@ button{font-family:'Sora',sans-serif;cursor:pointer}
       <div class="ch"><div><div class="ct">Histórico de lançamentos</div><div class="cs" id="hist-sub"></div></div></div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;align-items:flex-end">
         <div class="fg" style="min-width:130px"><label>Filtrar mês</label>
-          <select id="hist-fmes" onchange="renderHist()">
+          <select id="hist-fmes" data-change="renderHist()">
             <option value="todos">Todos os meses</option>
           </select>
         </div>
         <div class="fg" style="min-width:100px"><label>Filtrar ano</label>
-          <select id="hist-fano" onchange="renderHist()">
+          <select id="hist-fano" data-change="renderHist()">
             <option value="todos">Todos os anos</option>
           </select>
         </div>
@@ -431,7 +431,7 @@ button{font-family:'Sora',sans-serif;cursor:pointer}
       <div class="ch"><div class="ct">➕ Adicionar novo REP</div></div>
       <div class="fgrid">
         <div class="fg"><label>Nome</label>
-          <input type="text" id="new-rep" placeholder="Nome completo" maxlength="60" onkeydown="if(event.key==='Enter')addRep()">
+          <input type="text" id="new-rep" placeholder="Nome completo" maxlength="60" data-enter="addRep()">
         </div>
         <div class="fg"><label>Tipo</label>
           <select id="new-tipo">
@@ -444,7 +444,7 @@ button{font-family:'Sora',sans-serif;cursor:pointer}
         </div>
       </div>
       <div class="brow">
-        <button class="btn btn-y" onclick="addRep()">+ Adicionar REP</button>
+        <button class="btn btn-y" data-click="addRep()">+ Adicionar REP</button>
       </div>
     </div>
   </section>
@@ -456,11 +456,11 @@ button{font-family:'Sora',sans-serif;cursor:pointer}
 
 
 <!-- MODAL EDITAR REP -->
-<div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+<div class="modal-overlay" id="modal-overlay" data-click="closeModal(event)">
   <div class="modal" id="modal-rep">
     <div class="modal-title">
       ✏️ Editar REP
-      <button class="modal-close" onclick="closeModalBtn()">✕</button>
+      <button class="modal-close" data-click="closeModalBtn()">✕</button>
     </div>
     <div id="modal-alert" class="alt" style="margin-bottom:12px"></div>
     <div class="fg" style="margin-bottom:12px">
@@ -479,8 +479,8 @@ button{font-family:'Sora',sans-serif;cursor:pointer}
       <input type="text" id="edit-cargo" maxlength="80" placeholder="Ex: Analista de Logística, Operador Sênior…">
     </div>
     <div class="modal-footer">
-      <button class="btn" onclick="closeModalBtn()">Cancelar</button>
-      <button class="btn btn-p" id="btn-modal-save" onclick="saveEditRep()">💾 Salvar</button>
+      <button class="btn" data-click="closeModalBtn()">Cancelar</button>
+      <button class="btn btn-p" id="btn-modal-save" data-click="saveEditRep()">💾 Salvar</button>
     </div>
   </div>
 </div>
