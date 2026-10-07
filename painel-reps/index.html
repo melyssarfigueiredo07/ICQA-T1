@@ -50,6 +50,13 @@
             <input type="text" id="repNome" placeholder="Nome do rep">
           </div>
           <div class="field">
+            <label>Classificação</label>
+            <select id="repClasse">
+              <option value="rep">Rep</option>
+              <option value="ps">PS</option>
+            </select>
+          </div>
+          <div class="field">
             <label>Escala</label>
             <select id="repEscala">
               <option value="">Sem escala</option>
@@ -57,14 +64,6 @@
               <option value="B">B</option>
               <option value="C">C</option>
               <option value="D">D</option>
-            </select>
-          </div>
-          <div class="field">
-            <label>Classificação</label>
-            <select id="repClasse">
-              <option value="">Sem classificação</option>
-              <option value="ps_operacoes">PS Operações</option>
-              <option value="ps_icqa">PS ICQA</option>
             </select>
           </div>
           <div class="field">
@@ -97,6 +96,8 @@
             <select id="repCategoria">
               <option value="inventario">Inventário</option>
               <option value="qualidade">Qualidade</option>
+              <option value="ps_operacoes">PS Operações</option>
+              <option value="ps_icqa">PS ICQA</option>
             </select>
           </div>
           <div class="field">
@@ -156,9 +157,8 @@
           <label>Filtrar por classificação</label>
           <select id="repFiltroClasse">
             <option value="">Todas</option>
-            <option value="ps_operacoes">PS Operações</option>
-            <option value="ps_icqa">PS ICQA</option>
-            <option value="__none">Sem classificação</option>
+            <option value="rep">Rep</option>
+            <option value="ps">PS</option>
           </select>
         </div>
         <div class="view-meta" id="repOrdemInfo">Ordenado por escala (A–D) e ordem alfabética</div>
@@ -234,6 +234,8 @@
             <select id="pontoCategoria">
               <option value="inventario">Inventário</option>
               <option value="qualidade">Qualidade</option>
+              <option value="ps_operacoes">PS Operações</option>
+              <option value="ps_icqa">PS ICQA</option>
             </select>
           </div>
           <div class="field">
@@ -344,6 +346,10 @@
     </div>
 
   </div>
+</div>
+
+<div class="ficha-overlay" id="fichaOverlay" style="display:none;">
+  <div class="ficha" id="fichaBox"></div>
 </div>
 
 <script src="app.js"></script>

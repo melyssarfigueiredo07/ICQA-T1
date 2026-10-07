@@ -18,9 +18,9 @@
 
   var STATUS_LABEL = {ativo:"Ativo", ferias:"Férias", afastado:"Afastado"};
   var STATUS_TAG = {ativo:"tag-green", ferias:"tag-amber", afastado:"tag-mute"};
-  var CATEGORIA_LABEL = {inventario:"Inventário", qualidade:"Qualidade"};
-  var CLASSE_LABEL = {ps_operacoes:"PS Operações", ps_icqa:"PS ICQA"};
-  var CLASSE_TAG = {ps_operacoes:"tag-ps-op", ps_icqa:"tag-ps-icqa"};
+  var CATEGORIA_LABEL = {inventario:"Inventário", qualidade:"Qualidade", ps_operacoes:"PS Operações", ps_icqa:"PS ICQA"};
+  var CLASSE_LABEL = {rep:"Rep", ps:"PS"};
+  var CLASSE_TAG = {rep:"tag-teal", ps:"tag-amber"};
   var ESCALAS = ["A","B","C","D"];
 
   function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -60,11 +60,29 @@
       return String(a.nome||"").localeCompare(String(b.nome||""), "pt-BR", {sensitivity:"base"});
     });
   }
-  function classeOptions(selected){
-    return '<option value="">Sem classificação</option>' +
-      Object.keys(CLASSE_LABEL).map(function(k){
-        return '<option value="'+k+'"'+(selected===k?' selected':'')+'>'+CLASSE_LABEL[k]+'</option>';
-      }).join("");
+  function repClasse(r){ return r && r.classe==="ps" ? "ps" : "rep"; }
+  // Versão anterior gravava "PS Operações"/"PS ICQA" em `classe`; agora isso é a Área e `classe` é Rep/PS.
+  function migrateReps(){
+    (state.reps||[]).forEach(function(r){
+      if(r.classe==="ps_operacoes" || r.classe==="ps_icqa"){ r.categoria = r.classe; r.classe = "ps"; }
+    });
+  }
+  function repInitials(nome){
+    var p = String(nome||"?").trim().split(/\s+/);
+    return ((p[0]||"?")[0] + (p.length>1 ? p[p.length-1][0] : "")).toUpperCase();
+  }
+  function repFlags(r){
+    var f = [];
+    if(r.acessoHV==="sim") f.push("Acesso ao HV");
+    if(r.terceiraContagem==="sim") f.push("3ª contagem");
+    if(r.maquina==="sim") f.push("Máquina");
+    return f;
+  }
+  function repSkillNames(r){
+    return (r.skills||[]).map(function(tid){
+      var t = state.tasks.find(function(x){return x.id===tid;});
+      return t ? t.nome : "";
+    }).filter(Boolean);
   }
   function repName(id){
     var r = state.reps.find(function(x){return x.id===id;});
@@ -100,6 +118,7 @@
         if(res.updated_at !== lastUpdatedAt){
           lastUpdatedAt = res.updated_at;
           state = Object.assign({}, DEFAULT_STATE, res.state||{});
+          migrateReps();
           document.getElementById("teamNameInput").value = state.teamName || "";
           renderAll();
         }
@@ -110,6 +129,7 @@
     window.GRID.state.get().then(function(res){
       lastUpdatedAt = res.updated_at;
       state = Object.assign({}, DEFAULT_STATE, res.state||{});
+      migrateReps();
       document.getElementById("teamNameInput").value = state.teamName || "";
       renderAll();
       startPolling();
@@ -182,8 +202,8 @@
       stripCell("Ativos", ativos, "green", "green", "Em atividade agora") +
       stripCell("Inventário", inv, "", "teal", "Reps na área") +
       stripCell("Qualidade", qlt, "", "amber", "Reps na área") +
-      stripCell("PS Operações", state.reps.filter(function(r){return r.classe==="ps_operacoes";}).length, "amber", "amber", "Classificados") +
-      stripCell("PS ICQA", state.reps.filter(function(r){return r.classe==="ps_icqa";}).length, "teal", "teal", "Classificados");
+      stripCell("PS Operações", state.reps.filter(function(r){return r.categoria==="ps_operacoes";}).length, "amber", "amber", "Reps na área") +
+      stripCell("PS ICQA", state.reps.filter(function(r){return r.categoria==="ps_icqa";}).length, "teal", "teal", "Reps na área");
 
     if(!editing.rep) renderRepSkillsChecklist([]);
 
@@ -197,9 +217,7 @@
     empty.style.display = "none";
     var filtro = (document.getElementById("repFiltroClasse")||{}).value || "";
     var visiveis = sortReps(state.reps.filter(function(r){
-      if(!filtro) return true;
-      if(filtro==="__none") return !r.classe;
-      return r.classe===filtro;
+      return !filtro || repClasse(r)===filtro;
     }));
     if(visiveis.length===0){
       grid.innerHTML = '<div class="hint" style="grid-column:1/-1;padding:14px 4px;">Nenhum rep nessa classificação.</div>';
@@ -213,61 +231,69 @@
         var n = visiveis.filter(function(x){return (x.escala||"")===ge;}).length;
         out += '<div class="grp-head">'+(ge?"Escala "+esc(ge):"Sem escala")+' <span class="grp-n">· '+n+' rep'+(n!==1?"s":"")+'</span></div>';
       }
-      out += (function(r){
-      var skillChips = (r.skills||[]).map(function(tid){
-        var t = state.tasks.find(function(x){return x.id===tid;});
-        return t ? '<span class="chip">'+esc(t.nome)+'</span>' : "";
-      }).join("") || '<span class="hint">Nenhuma marcada</span>';
-      var escCls = ["A","B","C","D"].indexOf(r.escala)>-1 ? " esc-"+r.escala.toLowerCase() : "";
-      return '<div class="card'+escCls+'">' +
-        '<div class="card-head">' +
-          '<div class="card-title">'+esc(r.nome)+'</div>' +
-          '<div class="row-actions">' +
-            '<button class="btn-ghost" data-act="edit-rep" data-id="'+r.id+'">Editar</button>' +
-            '<button class="btn-ghost" data-act="del-rep" data-id="'+r.id+'">Excluir</button>' +
-          '</div>' +
-        '</div>' +
-        '<div class="card-tags">' +
-          '<span class="tag tag-dark">'+CATEGORIA_LABEL[r.categoria]+'</span>' +
-          (CLASSE_LABEL[r.classe] ? '<span class="tag '+CLASSE_TAG[r.classe]+'">'+CLASSE_LABEL[r.classe]+'</span>' : "") +
-          '<span class="tag '+STATUS_TAG[r.status]+'">'+STATUS_LABEL[r.status]+'</span>' +
-        '</div>' +
-        '<div class="classe-quick"><select class="rep-classe-select" data-id="'+r.id+'" title="Classificação">'+classeOptions(r.classe||"")+'</select></div>' +
-        '<div class="card-body">' +
-          '<div class="card-field"><span class="card-field-label">Escala</span><span>'+esc(r.escala||"—")+'</span></div>' +
-          '<div class="card-field"><span class="card-field-label">Admissão</span><span class="num">'+fmtDate(r.admissao)+'</span></div>' +
-          '<div class="card-field"><span class="card-field-label">Acesso ao HV</span><span>'+(r.acessoHV==="sim"?"Sim":"Não")+'</span></div>' +
-          '<div class="card-field"><span class="card-field-label">3ª contagem</span><span>'+(r.terceiraContagem==="sim"?"Sim":"Não")+'</span></div>' +
-          '<div class="card-field"><span class="card-field-label">Máquina</span><span>'+(r.maquina==="sim"?"Sim":"Não")+'</span></div>' +
-        '</div>' +
-        '<div class="card-section">' +
-          '<div class="card-section-label">Dados pessoais e contato</div>' +
-          '<div class="card-body" style="margin-bottom:0;">' +
-            '<div class="card-field"><span class="card-field-label">CPF</span><span class="num">'+esc(r.cpf||"—")+'</span></div>' +
-            '<div class="card-field"><span class="card-field-label">Aniversário</span><span class="num">'+fmtDate(r.aniversario)+'</span></div>' +
-            '<div class="card-field"><span class="card-field-label">LDAP</span><span>'+esc(r.ldap||"—")+'</span></div>' +
-            '<div class="card-field"><span class="card-field-label">RE</span><span class="num">'+esc(r.re||"—")+'</span></div>' +
-            '<div class="card-field"><span class="card-field-label">Email</span><span>'+esc(r.email||"—")+'</span></div>' +
-            '<div class="card-field"><span class="card-field-label">Endereço</span><span>'+esc(r.endereco||"—")+'</span></div>' +
-            '<div class="card-field"><span class="card-field-label">Telefone</span><span class="num">'+esc(r.telefone||"—")+'</span></div>' +
-          '</div>' +
-        '</div>' +
-        '<div class="card-section">' +
-          '<div class="card-section-label">Tarefas que sabe realizar</div>' +
-          skillChips +
-        '</div>' +
-      '</div>';
-      })(r);
+      out += repCardHTML(r);
     });
     grid.innerHTML = out;
   }
+
+  function field(label, val, cls){
+    return val ? '<div class="sq-field"><span class="sq-label">'+label+'</span><span class="sq-val'+(cls?' '+cls:'')+'">'+esc(val)+'</span></div>' : "";
+  }
+  function repTags(r){
+    var cl = repClasse(r);
+    return '<span class="tag '+CLASSE_TAG[cl]+'">'+CLASSE_LABEL[cl]+'</span>' +
+      (CATEGORIA_LABEL[r.categoria] ? '<span class="tag tag-dark">'+CATEGORIA_LABEL[r.categoria]+'</span>' : "") +
+      (STATUS_LABEL[r.status] ? '<span class="tag '+STATUS_TAG[r.status]+'">'+STATUS_LABEL[r.status]+'</span>' : "");
+  }
+  function repCardHTML(r){
+    var escCls = ESCALAS.indexOf(r.escala)>-1 ? " esc-"+r.escala.toLowerCase() : "";
+    var info = field("Escala", r.escala) + field("Admissão", r.admissao ? fmtDate(r.admissao) : "", "num") +
+               field("LDAP", r.ldap) + field("RE", r.re, "num");
+    var flags = repFlags(r);
+    var skills = repSkillNames(r), shown = skills.slice(0,3), more = skills.length - shown.length;
+    return '<div class="card rep-card'+escCls+'">' +
+      '<div class="rep-top"><div class="rep-avatar">'+esc(repInitials(r.nome))+'</div><div class="rep-name">'+esc(r.nome)+'</div></div>' +
+      '<div class="card-tags">'+repTags(r)+'</div>' +
+      (info ? '<div class="sq-grid">'+info+'</div>' : "") +
+      (flags.length ? '<div class="sq-flags">'+flags.map(function(f){return '<span class="flag">✓ '+f+'</span>';}).join("")+'</div>' : "") +
+      (skills.length ? '<div class="sq-skills">'+shown.map(function(n){return '<span class="chip">'+esc(n)+'</span>';}).join("")+(more>0?'<span class="chip chip-more">+'+more+'</span>':"")+'</div>' : "") +
+      '<div class="sq-foot">' +
+        '<button class="btn-ghost" data-act="ficha" data-id="'+r.id+'">Ver ficha</button>' +
+        '<span class="row-actions">' +
+          '<button class="btn-ghost" data-act="edit-rep" data-id="'+r.id+'">Editar</button>' +
+          '<button class="btn-ghost" data-act="del-rep" data-id="'+r.id+'">Excluir</button>' +
+        '</span>' +
+      '</div>' +
+    '</div>';
+  }
+
+  function openFicha(id){
+    var r = state.reps.find(function(x){return x.id===id;});
+    if(!r) return;
+    function row(label, val, cls){ return val ? '<div class="ficha-row"><span>'+label+'</span><b class="'+(cls||"")+'">'+esc(val)+'</b></div>' : ""; }
+    function sec(title, inner){ return inner ? '<div class="ficha-sec"><div class="ficha-sec-title">'+title+'</div>'+inner+'</div>' : ""; }
+    var trabalho = row("Escala", r.escala) + row("Admissão", r.admissao ? fmtDate(r.admissao) : "", "num");
+    var flags = repFlags(r);
+    var contato = row("CPF", r.cpf, "num") + row("Aniversário", r.aniversario ? fmtDate(r.aniversario) : "", "num") +
+      row("LDAP", r.ldap) + row("RE", r.re, "num") + row("Email", r.email) + row("Telefone", r.telefone, "num") + row("Endereço", r.endereco);
+    var skills = repSkillNames(r);
+    document.getElementById("fichaBox").innerHTML =
+      '<div class="ficha-head"><div class="rep-avatar">'+esc(repInitials(r.nome))+'</div><div><div class="ficha-name">'+esc(r.nome)+'</div><div class="card-tags" style="margin:6px 0 0;padding:0;border:0;">'+repTags(r)+'</div></div></div>' +
+      sec("Trabalho", trabalho) +
+      sec("Habilitações", flags.length ? '<div class="sq-flags">'+flags.map(function(f){return '<span class="flag">✓ '+f+'</span>';}).join("")+'</div>' : "") +
+      sec("Dados pessoais e contato", contato) +
+      sec("Tarefas que sabe realizar", skills.length ? skills.map(function(n){return '<span class="chip">'+esc(n)+'</span>';}).join("") : "") +
+      '<div class="ficha-foot"><button class="btn" data-act="close-ficha">Fechar</button></div>';
+    document.getElementById("fichaOverlay").style.display = "flex";
+  }
+  function closeFicha(){ document.getElementById("fichaOverlay").style.display = "none"; }
 
   function startRepEdit(rep){
     editing.rep = rep.id;
     document.getElementById("repFormTitle").textContent = "Editar rep";
     document.getElementById("repNome").value = rep.nome;
     document.getElementById("repEscala").value = rep.escala||"";
-    document.getElementById("repClasse").value = rep.classe||"";
+    document.getElementById("repClasse").value = repClasse(rep);
     document.getElementById("repAdmissao").value = rep.admissao||"";
     document.getElementById("repAcessoHV").value = rep.acessoHV||"nao";
     document.getElementById("repTerceiraContagem").value = rep.terceiraContagem||"nao";
@@ -291,7 +317,7 @@
     document.getElementById("repFormTitle").textContent = "Adicionar rep";
     document.getElementById("repNome").value = "";
     document.getElementById("repEscala").value = "A";
-    document.getElementById("repClasse").value = "";
+    document.getElementById("repClasse").value = "rep";
     document.getElementById("repAdmissao").value = "";
     document.getElementById("repAcessoHV").value = "nao";
     document.getElementById("repTerceiraContagem").value = "nao";
@@ -713,7 +739,9 @@
     var btn = e.target.closest("[data-act]");
     if(!btn) return;
     var act = btn.dataset.act, id = btn.dataset.id;
-    if(act==="edit-rep"){ startRepEdit(state.reps.find(function(r){return r.id===id;})); }
+    if(act==="ficha"){ openFicha(id); }
+    else if(act==="close-ficha"){ closeFicha(); }
+    else if(act==="edit-rep"){ startRepEdit(state.reps.find(function(r){return r.id===id;})); }
     else if(act==="del-rep"){ pendingDelete(btn, deleteRep, id); }
     else if(act==="edit-task"){ startTaskEdit(state.tasks.find(function(t){return t.id===id;})); }
     else if(act==="del-task"){ pendingDelete(btn, deleteTask, id); }
@@ -723,12 +751,10 @@
     else if(act==="del-lost"){ pendingDelete(btn, deleteLost, id); }
   });
 
+  document.getElementById("fichaOverlay").addEventListener("click", function(e){ if(e.target.id==="fichaOverlay") closeFicha(); });
+  document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeFicha(); });
+
   document.addEventListener("change", function(e){
-    if(e.target.classList.contains("rep-classe-select")){
-      var rep = state.reps.find(function(r){return r.id===e.target.dataset.id;});
-      if(rep){ rep.classe = e.target.value; scheduleSave(); renderAll(); }
-      return;
-    }
     if(e.target.id==="repFiltroClasse"){ renderEquipe(); return; }
     if(e.target.classList.contains("task-rep-toggle")){
       toggleTaskRep(e.target.dataset.task, e.target.dataset.rep);
