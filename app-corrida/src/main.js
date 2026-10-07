@@ -70,6 +70,27 @@ function repTipo(nome){
   for(var i=0;i<S.reps.length;i++) if(S.reps[i].nome===nome) return S.reps[i].tipo||"REP";
   return "REP";
 }
+var ESCALAS = ["A","B","C","D"];
+function escRank(e){ if(!e) return 1000; var i=ESCALAS.indexOf(e); return i>-1?i:100; }
+function sortReps(list){
+  return list.slice().sort(function(a,b){
+    var ea=a.escala||"", eb=b.escala||"", ra=escRank(ea), rb=escRank(eb);
+    if(ra!==rb) return ra-rb;
+    if(ra===100 && ea!==eb) return ea.localeCompare(eb,"pt-BR");
+    return String(a.nome).localeCompare(String(b.nome),"pt-BR",{sensitivity:"base"});
+  });
+}
+function psTag(classe){
+  if(classe==="PS Operações") return '<span class="type-tag tag-ps-op">PS Operações</span>';
+  if(classe==="PS ICQA") return '<span class="type-tag tag-ps-icqa">PS ICQA</span>';
+  return classe?'<span class="type-tag tag-esc">'+classe+'</span>':"";
+}
+function setSel(id,val){
+  var el=document.getElementById(id); val=val||"";
+  var ok=false; for(var i=0;i<el.options.length;i++){ if(el.options[i].value===val){ok=true;break;} }
+  if(!ok){ var o=document.createElement("option"); o.value=val; o.textContent=val; el.appendChild(o); }
+  el.value=val;
+}
 function ballSvg(c){
   return '<svg viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg"><circle cx="14" cy="14" r="12" fill="white" stroke="#ccc" stroke-width=".5"/>'
     +'<polygon points="14,4 17.5,9 13,12.5 9.5,9" fill="'+c+'" opacity=".92"/>'
@@ -140,14 +161,16 @@ function initSels() {
   var repEl=document.getElementById("f-rep");
   var curRep=repEl.value;
   var repsNorm=(S.reps||[]).map(function(r){
-    if(typeof r==="string") return {nome:r,tipo:"REP"};
-    return {nome:(r&&r.nome)||"",tipo:(r&&r.tipo)||"REP"};
+    if(typeof r==="string") return {nome:r,tipo:"REP",escala:"",classe:""};
+    return {nome:(r&&r.nome)||"",tipo:(r&&r.tipo)||"REP",escala:(r&&r.escala)||"",classe:(r&&r.classe)||""};
   }).filter(function(r){ return r.nome; });
+  repsNorm=sortReps(repsNorm);
   if(!repsNorm.length){
     repEl.innerHTML='<option value="" disabled selected>Nenhum REP cadastrado</option>';
   } else {
     repEl.innerHTML=repsNorm.map(function(r){
-      return '<option value="'+r.nome+'">'+r.nome+' ('+r.tipo+')</option>';
+      var extra=(r.escala?" · Escala "+r.escala:"")+(r.classe?" · "+r.classe:"");
+      return '<option value="'+r.nome+'">'+r.nome+' ('+r.tipo+extra+')</option>';
     }).join("");
     if(curRep){ for(var i=0;i<repsNorm.length;i++){ if(repsNorm[i].nome===curRep){repEl.value=curRep;break;} } }
   }
@@ -393,32 +416,40 @@ function renderReps(){
     return;
   }
 
-  var html='<div style="display:flex;flex-direction:column;gap:10px">';
-  reps.forEach(function(r,i){
-    var isOp = r.tipo==="Operador de Máquina";
-    var col  = avc(i);
-    var tagCls = isOp?"tag-op":"tag-rep";
-    var tagTxt = isOp?"Operador de Máquina":"REP";
+  var sorted=sortReps(reps), groups=[], gi={};
+  sorted.forEach(function(r){
+    var k=r.escala||"";
+    if(!(k in gi)){ gi[k]=groups.length; groups.push({k:k,list:[]}); }
+    groups[gi[k]].list.push(r);
+  });
 
-    html += '<div class="rep-card">';
-    // Avatar
-    html += '<div class="av" style="background:'+col+';width:44px;height:44px;font-size:14px;flex-shrink:0">'+ini(r.nome)+'</div>';
-    // Info
-    html += '<div class="rep-card-info">';
-    html += '<div class="rep-card-name">'+r.nome+'</div>';
-    html += '<div class="rep-card-meta">';
-    html += '<span class="type-tag '+tagCls+'">'+tagTxt+'</span>';
-    if(r.cargo){
-      html += '<span class="rep-card-cargo">'+r.cargo+'</span>';
-    }
-    html += '</div>';
-    html += '</div>';
-    // Actions
-    html += '<div style="display:flex;gap:6px;flex-shrink:0">';
-    html += '<button class="btn btn-sm" style="font-size:12px" data-click="openEditModal(\''+r.nome.replace(/\'/g,"\\'")+'\')" title="Editar">✏️ Editar</button>';
-    html += '<button class="btn btn-d btn-sm" data-click="removeRep(\''+r.nome.replace(/\'/g,"\\'")+'\')">🗑</button>';
-    html += '</div>';
-    html += '</div>'; // rep-card
+  var html='<div style="display:flex;flex-direction:column;gap:10px">';
+  groups.forEach(function(g){
+    html += '<div class="esc-head">'+(g.k?"Escala "+g.k:"Sem escala")+' <span class="esc-n">· '+g.list.length+' '+(g.list.length!==1?"membros":"membro")+'</span></div>';
+    g.list.forEach(function(r){
+      var isOp = r.tipo==="Operador de Máquina";
+      var col  = avci(r.nome);
+      var tagCls = isOp?"tag-op":"tag-rep";
+      var tagTxt = isOp?"Operador de Máquina":"REP";
+
+      html += '<div class="rep-card">';
+      html += '<div class="av" style="background:'+col+';width:44px;height:44px;font-size:14px;flex-shrink:0">'+ini(r.nome)+'</div>';
+      html += '<div class="rep-card-info">';
+      html += '<div class="rep-card-name">'+r.nome+'</div>';
+      html += '<div class="rep-card-meta">';
+      html += '<span class="type-tag '+tagCls+'">'+tagTxt+'</span>';
+      html += psTag(r.classe);
+      if(r.cargo){
+        html += '<span class="rep-card-cargo">'+r.cargo+'</span>';
+      }
+      html += '</div>';
+      html += '</div>';
+      html += '<div style="display:flex;gap:6px;flex-shrink:0">';
+      html += '<button class="btn btn-sm" style="font-size:12px" data-click="openEditModal(\''+r.nome.replace(/\'/g,"\\'")+'\')" title="Editar">✏️ Editar</button>';
+      html += '<button class="btn btn-d btn-sm" data-click="removeRep(\''+r.nome.replace(/\'/g,"\\'")+'\')">🗑</button>';
+      html += '</div>';
+      html += '</div>'; // rep-card
+    });
   });
   html += '</div>';
   el.innerHTML = html;
@@ -639,9 +670,11 @@ function addRep(){
   var tipo=document.getElementById("new-tipo").value;
   var cargo=(document.getElementById("new-cargo")||{}).value||"";
   cargo=cargo.trim();
+  var escala=document.getElementById("new-escala").value;
+  var classe=document.getElementById("new-classe").value;
   if(!nome){ showAlt("ralt","Digite um nome.","err"); return; }
   showLoad("Adicionando…");
-  callApi("addRep",{nome:nome,tipo:tipo,cargo:cargo},
+  callApi("addRep",{nome:nome,tipo:tipo,cargo:cargo,escala:escala,classe:classe},
     function(){
       hideLoad();
       document.getElementById("new-rep").value="";
@@ -679,6 +712,8 @@ function openEditModal(nome){
   document.getElementById("edit-nome").value  = rep.nome;
   document.getElementById("edit-tipo").value  = rep.tipo || "REP";
   document.getElementById("edit-cargo").value = rep.cargo || "";
+  setSel("edit-escala", rep.escala);
+  setSel("edit-classe", rep.classe);
 
   hideAlt("modal-alert");
   document.getElementById("modal-overlay").classList.add("on");
@@ -699,12 +734,14 @@ function saveEditRep(){
   var novoNome  = document.getElementById("edit-nome").value.trim();
   var novoTipo  = document.getElementById("edit-tipo").value;
   var novoCargo = document.getElementById("edit-cargo").value.trim();
+  var novaEscala = document.getElementById("edit-escala").value;
+  var novaClasse = document.getElementById("edit-classe").value;
   if(!novoNome){ showAlt("modal-alert","Digite um nome.","err"); return; }
 
   var btn = document.getElementById("btn-modal-save");
   btn.disabled = true;
   showLoad("Salvando…");
-  callApi("editRep",{nome:_editNomeAtual, novoNome:novoNome, tipo:novoTipo, cargo:novoCargo},
+  callApi("editRep",{nome:_editNomeAtual, novoNome:novoNome, tipo:novoTipo, cargo:novoCargo, escala:novaEscala, classe:novaClasse},
     function(){
       btn.disabled=false; hideLoad();
       closeModalBtn();

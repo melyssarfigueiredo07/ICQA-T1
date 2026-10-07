@@ -1,4 +1,6 @@
 export const TASKS = ["Contagem", "Inbound Audit", "Stock Audit", "Busca Lost", "Transfer"]
+export const ESCALAS = ["A", "B", "C", "D"]
+export const CLASSES = ["PS Operações", "PS ICQA"]
 export const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
 
 function newId() {
@@ -34,7 +36,9 @@ export function defaultMeta() {
 export function normalizeDb(db) {
   const meta = (db && db.meta) || defaultMeta()
   meta.reps = (meta.reps || [])
-    .map((r) => (typeof r === "string" ? { nome: r, tipo: "REP", cargo: "" } : { nome: r.nome || "", tipo: r.tipo || "REP", cargo: r.cargo || "" }))
+    .map((r) => (typeof r === "string"
+      ? { nome: r, tipo: "REP", cargo: "", escala: "", classe: "" }
+      : { nome: r.nome || "", tipo: r.tipo || "REP", cargo: r.cargo || "", escala: r.escala || "", classe: r.classe || "" }))
     .filter((r) => r.nome)
   if (!meta.destaques) meta.destaques = []
   if (!meta.mes) meta.mes = MESES[new Date().getMonth()]
@@ -77,7 +81,7 @@ export function getData(db, p) {
       if (sTotal > bestTotal) { bestTotal = sTotal; bestSem = sem }
       TASKS.forEach((t) => { if (sT[t] > bestTask[t]) bestTask[t] = sT[t] })
     })
-    const row = { nome: rep.nome, tipo: rep.tipo || "REP", cargo: rep.cargo || "", total: bestTotal, bestSem }
+    const row = { nome: rep.nome, tipo: rep.tipo || "REP", cargo: rep.cargo || "", escala: rep.escala || "", classe: rep.classe || "", total: bestTotal, bestSem }
     TASKS.forEach((t) => { row[t] = bestTask[t] })
     return row
   })
@@ -143,9 +147,11 @@ export function addRep(db, p) {
   const nome = (p.nome || "").trim()
   const tipo = (p.tipo || "REP").trim()
   const cargo = (p.cargo || "").trim()
+  const escala = (p.escala || "").trim()
+  const classe = (p.classe || "").trim()
   if (!nome) return { ok: false, error: "Nome inválido." }
   if (db.meta.reps.some((r) => r.nome === nome)) return { ok: false, error: "REP já existe." }
-  db.meta.reps.push({ nome, tipo, cargo })
+  db.meta.reps.push({ nome, tipo, cargo, escala, classe })
   return { ok: true }
 }
 
@@ -166,6 +172,8 @@ export function editRep(db, p) {
       r.nome = novoNome
       r.tipo = (p.tipo || r.tipo || "REP").trim()
       r.cargo = (p.cargo !== undefined ? p.cargo : r.cargo || "").trim()
+      r.escala = (p.escala !== undefined ? p.escala : r.escala || "").trim()
+      r.classe = (p.classe !== undefined ? p.classe : r.classe || "").trim()
     }
   })
   if (novoNome !== nomeAtual) db.entries.forEach((e) => { if (e.rep === nomeAtual) e.rep = novoNome })

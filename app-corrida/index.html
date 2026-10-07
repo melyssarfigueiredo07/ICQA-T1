@@ -69,6 +69,9 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--t);min-heigh
 /* TYPE TAGS */
 .type-tag{font-size:9px;font-weight:700;padding:2px 6px;border-radius:20px;text-transform:uppercase;letter-spacing:.3px;flex-shrink:0}
 .tag-rep{background:var(--bll);color:var(--bld)}.tag-op{background:var(--pul);color:var(--pu)}
+.tag-ps-op{background:#FAEEDA;color:#854F0B}.tag-ps-icqa{background:#E6F6F0;color:#0F6E56}.tag-esc{background:#EFEFEB;color:#444;border:1px solid var(--bor)}
+.esc-head{display:flex;align-items:center;gap:10px;font-size:11px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;margin:6px 0 2px}
+.esc-head::after{content:'';flex:1;height:1px;background:var(--bor)}.esc-head .esc-n{font-weight:500;color:var(--t3);text-transform:none;letter-spacing:0}
 /* TYPE PILLS */
 .type-pills{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
 .type-pill{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--bor);background:var(--card);color:var(--t2);transition:all .14s;font-family:'Sora',sans-serif}
@@ -439,6 +442,22 @@ button{font-family:'Sora',sans-serif;cursor:pointer}
             <option value="Operador de Máquina">Operador de Máquina</option>
           </select>
         </div>
+        <div class="fg"><label>Escala</label>
+          <select id="new-escala">
+            <option value="">Sem escala</option>
+            <option value="A">Escala A</option>
+            <option value="B">Escala B</option>
+            <option value="C">Escala C</option>
+            <option value="D">Escala D</option>
+          </select>
+        </div>
+        <div class="fg"><label>Classificação</label>
+          <select id="new-classe">
+            <option value="">Sem classificação</option>
+            <option value="PS Operações">PS Operações</option>
+            <option value="PS ICQA">PS ICQA</option>
+          </select>
+        </div>
         <div class="fg" style="grid-column:1/-1"><label>Cargo (opcional)</label>
           <input type="text" id="new-cargo" placeholder="Ex: Analista de Logística, Operador Sênior…" maxlength="80">
         </div>
@@ -472,6 +491,24 @@ button{font-family:'Sora',sans-serif;cursor:pointer}
       <select id="edit-tipo">
         <option value="REP">REP</option>
         <option value="Operador de Máquina">Operador de Máquina</option>
+      </select>
+    </div>
+    <div class="fg" style="margin-bottom:12px">
+      <label>Escala</label>
+      <select id="edit-escala">
+        <option value="">Sem escala</option>
+            <option value="A">Escala A</option>
+            <option value="B">Escala B</option>
+            <option value="C">Escala C</option>
+            <option value="D">Escala D</option>
+      </select>
+    </div>
+    <div class="fg" style="margin-bottom:12px">
+      <label>Classificação</label>
+      <select id="edit-classe">
+        <option value="">Sem classificação</option>
+            <option value="PS Operações">PS Operações</option>
+            <option value="PS ICQA">PS ICQA</option>
       </select>
     </div>
     <div class="fg" style="margin-bottom:4px">
