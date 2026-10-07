@@ -254,7 +254,19 @@
         <div class="form-error" id="taskFormError" style="display:none;"></div>
       </div>
 
+      <div class="dim-toolbar">
+        <div class="seg" role="group" aria-label="Visualização">
+          <button class="seg-btn on" data-act="dim-view" data-mode="cards" aria-pressed="true">Cards</button>
+          <button class="seg-btn" data-act="dim-view" data-mode="matriz" aria-pressed="false">Matriz</button>
+        </div>
+        <button class="btn" data-act="fill-skills" title="Marca cada rep nas tarefas que ele sabe realizar (respeitando área e PS)">Preencher pelas habilidades</button>
+        <button class="btn" id="dimUndoBtn" data-act="undo" disabled>↩ Desfazer</button>
+        <button class="btn" id="dimClearAll" data-act="clear-all">Limpar todas as marcações</button>
+        <span class="hint" id="dimMsg" style="display:none;"></span>
+      </div>
+
       <div class="card-grid" id="taskGrid"></div>
+      <div id="taskMatrix" style="display:none;"></div>
       <div class="empty" id="taskEmpty" style="display:none;">
         <b>Nenhuma tarefa cadastrada</b>
         Adicione a primeira tarefa acima e marque os reps responsáveis direto no card.

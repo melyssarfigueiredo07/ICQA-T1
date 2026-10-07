@@ -21,6 +21,7 @@
   var STATUS_TAG = {ativo:"tag-green", folga:"tag-folga", ferias:"tag-ferias", licenca:"tag-licenca", afastado:"tag-rust"};
   var ESC_COR = {A:"var(--rust)", B:"var(--escB)", C:"var(--escC)", D:"var(--escD)"};
   var dimDate = null, dimFollow = true, dimFiltro = "todos", lastToday = null;
+  var dimView = "cards", dimUndo = null, dimMsg = "";
   var CATEGORIA_LABEL = {inventario:"Inventário", qualidade:"Qualidade", ps_operacoes:"PS Operações", ps_icqa:"PS ICQA"};
   var CLASSE_LABEL = {rep:"Rep", ps:"PS"};
   var CLASSE_TAG = {rep:"tag-teal", ps:"tag-amber"};
@@ -142,7 +143,8 @@
   var TAREFA_AREA_FIXA = {
     "internas":"qualidade", "qp":"qualidade", "rk":"qualidade", "pdd":"qualidade", "pd":"qualidade", "cem":"qualidade",
     "inbound":"qualidade",
-    "inbound audit":"inventario"
+    "inbound audit":"inventario",
+    "contagem":"inventario"
   };
   function normNome(s){
     return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
@@ -158,11 +160,15 @@
   }
   function repMotivoFora(r){ return repEhPS(r) ? "PS não considerado" : "fora da área"; }
   function migrateTasks(){
-    var ps = {};
-    (state.reps||[]).forEach(function(r){ if(repEhPS(r)){ ps[r.id] = true; if((r.skills||[]).length) r.skills = []; } });
+    var ps = {}, byId = {};
+    (state.reps||[]).forEach(function(r){ byId[r.id] = r; if(repEhPS(r)){ ps[r.id] = true; if((r.skills||[]).length) r.skills = []; } });
     (state.tasks||[]).forEach(function(t){
       var f = areaFixa(t.nome); if(f) t.categoria = f;
       if((t.repIds||[]).some(function(rid){return ps[rid];})) t.repIds = t.repIds.filter(function(rid){return !ps[rid];});
+      // tarefa de área fixa: reps de outra área saem das marcações
+      if(f && (t.repIds||[]).some(function(rid){ return byId[rid] && !repElegivel(t, byId[rid]); })){
+        t.repIds = t.repIds.filter(function(rid){ return !byId[rid] || repElegivel(t, byId[rid]); });
+      }
     });
   }
   function repName(id){
@@ -581,17 +587,177 @@
     var st = effStatus(r, dimDate);
     return '<span class="nm st-'+st+'">'+esc(r.nome)+'</span>' + (st!=="ativo" ? ' <small>('+esc(statusNote(r, dimDate))+')</small>' : "");
   }
+  // ----- preenchimento dinâmico -----
+  function elegiveis(t){ return sortReps(state.reps).filter(function(r){ return repElegivel(t, r); }); }
+  function subconjunto(t, modo){
+    var el = elegiveis(t);
+    if(modo==="disp") return el.filter(function(r){ return effStatus(r, dimDate)==="ativo"; });
+    if(modo.indexOf("esc:")===0) return el.filter(function(r){ return r.escala===modo.slice(4); });
+    return el;
+  }
+  function todosMarcados(t, lista){
+    var ids = t.repIds||[];
+    return lista.length>0 && lista.every(function(r){ return ids.indexOf(r.id)>-1; });
+  }
+  function snapshotMarcacoes(){
+    var m = {};
+    state.tasks.forEach(function(t){ m[t.id] = (t.repIds||[]).slice(); });
+    return m;
+  }
+  // Aplica uma alteração em massa guardando um nível de "Desfazer" (só se algo mudou).
+  function mutarMarcacoes(label, fn){
+    var antes = snapshotMarcacoes(), json = JSON.stringify(antes);
+    var extra = fn();
+    var mudou = JSON.stringify(snapshotMarcacoes()) !== json;
+    if(mudou){
+      dimUndo = {label:label, snap:antes};
+      scheduleSave();
+    }
+    dimMsg = extra || (mudou ? label : "Nada a alterar.");
+    renderTasks();
+    return mudou;
+  }
+  function addIds(t, lista){
+    t.repIds = t.repIds || [];
+    lista.forEach(function(r){ if(t.repIds.indexOf(r.id)<0) t.repIds.push(r.id); });
+  }
+  function removeIds(t, lista){
+    var rm = {}; lista.forEach(function(r){ rm[r.id] = true; });
+    t.repIds = (t.repIds||[]).filter(function(rid){ return !rm[rid]; });
+  }
+  function fillTask(t, modo){
+    var lista = subconjunto(t, modo);
+    if(!lista.length) return;
+    var nome = modo==="todos" ? "todos" : (modo==="disp" ? "disponíveis na data" : "Escala "+modo.slice(4));
+    if(todosMarcados(t, lista)) mutarMarcacoes(t.nome+": "+nome+" desmarcados", function(){ removeIds(t, lista); });
+    else mutarMarcacoes(t.nome+": "+nome+" marcados", function(){ addIds(t, lista); });
+  }
+  function clearTask(t){
+    mutarMarcacoes(t.nome+": marcações limpas", function(){ t.repIds = []; });
+  }
+  function clearAll(){
+    mutarMarcacoes("Todas as marcações limpas", function(){ state.tasks.forEach(function(t){ t.repIds = []; }); });
+  }
+  function fillBySkills(){
+    var n = 0, ignoradas = 0;
+    mutarMarcacoes("Preenchido pelas habilidades", function(){
+      state.reps.forEach(function(r){
+        if(repEhPS(r)) return;
+        (r.skills||[]).forEach(function(tid){
+          var t = state.tasks.find(function(x){ return x.id===tid; });
+          if(!t) return;
+          if(!repElegivel(t, r)){ ignoradas++; return; }
+          t.repIds = t.repIds || [];
+          if(t.repIds.indexOf(r.id)<0){ t.repIds.push(r.id); n++; }
+        });
+      });
+      return n ? "Preenchido pelas habilidades: "+n+" marcação(ões) adicionada(s)"+(ignoradas?" ("+ignoradas+" fora da área ignorada(s))":"")+"." :
+        "Nenhuma marcação nova: as habilidades já estão marcadas"+(ignoradas?" ou ficam fora da área":"")+".";
+    });
+  }
+  function undoMarcacoes(){
+    if(!dimUndo) return;
+    var u = dimUndo; dimUndo = null;
+    state.tasks.forEach(function(t){ if(u.snap[t.id]) t.repIds = u.snap[t.id].slice(); });
+    scheduleSave();
+    dimMsg = "Desfeito: "+u.label;
+    renderTasks();
+  }
+  function taskTools(t){
+    var ids = t.repIds||[];
+    function b(modo, texto, lista){
+      var on = todosMarcados(t, lista);
+      return '<button class="chip-btn'+(on?' on':'')+'" data-act="task-fill" data-mode="'+modo+'" data-id="'+t.id+'"'+(lista.length?'':' disabled')+
+        ' title="'+(on?'Desmarcar':'Marcar')+' '+esc(texto)+'">'+texto+' <small>'+lista.length+'</small></button>';
+    }
+    return '<div class="task-tools"><span class="tt-label">Marcar:</span>' +
+      b("todos", "Todos", subconjunto(t, "todos")) +
+      ESCALAS.map(function(e){
+        return b("esc:"+e, '<span class="esc-dot" style="background:'+ESC_COR[e]+'"></span>'+e, subconjunto(t, "esc:"+e));
+      }).join("") +
+      b("disp", "Disponíveis", subconjunto(t, "disp")) +
+      '<button class="chip-btn clear" data-act="task-clear" data-id="'+t.id+'"'+(ids.length?'':' disabled')+'>Limpar</button>' +
+    '</div>';
+  }
+  function repVisivelNoFiltro(r){
+    if(repEhPS(r)) return false;
+    if(dimFiltro==="resp") return state.tasks.some(function(t){ return (t.repIds||[]).indexOf(r.id)>-1; });
+    if(dimFiltro==="disp") return effStatus(r, dimDate)==="ativo";
+    return true;
+  }
+  function renderMatriz(){
+    var wrap = document.getElementById("taskMatrix");
+    var reps = sortReps(state.reps).filter(repVisivelNoFiltro);
+    if(!reps.length){
+      wrap.innerHTML = '<div class="hint">Nenhum rep nesse filtro.</div>';
+      return;
+    }
+    var head = '<tr><th class="mx-corner">Rep \\ Tarefa</th>' + state.tasks.map(function(t){
+      var ids = t.repIds||[], fixa = areaFixa(t.nome);
+      var resp = state.reps.filter(function(r){ return ids.indexOf(r.id)>-1 && repElegivel(t, r); });
+      var disp = resp.filter(function(r){ return effStatus(r, dimDate)==="ativo"; }).length;
+      return '<th class="mx-col"><button class="mx-colbtn" data-act="mx-col" data-id="'+t.id+'" title="Marcar/desmarcar todos os elegíveis de '+esc(t.nome)+'">'+
+        esc(t.nome)+'<small>'+(CATEGORIA_LABEL[tarefaArea(t)]||"")+(fixa?" · fixa":"")+'</small><small class="mx-cnt">'+disp+'/'+resp.length+' disp.</small></button></th>';
+    }).join("") + '</tr>';
+    var body = reps.map(function(r){
+      var st = effStatus(r, dimDate);
+      var cells = state.tasks.map(function(t){
+        if(!repElegivel(t, r)) return '<td class="mx-cell na" title="Fora da área desta tarefa">—</td>';
+        var on = (t.repIds||[]).indexOf(r.id)>-1;
+        return '<td class="mx-cell"><button class="mx-btn'+(on?' on st-'+st:'')+'" data-act="mx-cell" data-task="'+t.id+'" data-rep="'+r.id+'" aria-pressed="'+(on?"true":"false")+'">'+(on?'✓':'')+'</button></td>';
+      }).join("");
+      return '<tr><th class="mx-row st-'+st+'"><button class="mx-rowbtn" data-act="mx-row" data-id="'+r.id+'" title="Marcar/desmarcar todas as tarefas elegíveis deste rep">'+
+        (r.escala?'<span class="esc-dot" style="background:'+ESC_COR[r.escala]+'"></span>':'')+esc(r.nome)+
+        (st!=="ativo"?' <small>'+esc(statusNote(r, dimDate))+'</small>':'')+'</button></th>'+cells+'</tr>';
+    }).join("");
+    wrap.innerHTML = '<div class="mx-scroll"><table class="mx">'+'<thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>' +
+      '<div class="hint" style="margin-top:8px;">Clique numa célula para marcar/desmarcar · no nome da tarefa para marcar todos os elegíveis · no nome do rep para marcar todas as tarefas dele. “—” = fora da área; PS não aparecem.</div>';
+  }
+  function toggleMatrizCol(t){
+    var lista = elegiveis(t);
+    if(!lista.length) return;
+    if(todosMarcados(t, lista)) mutarMarcacoes(t.nome+": todos desmarcados", function(){ removeIds(t, lista); });
+    else mutarMarcacoes(t.nome+": todos marcados", function(){ addIds(t, lista); });
+  }
+  function toggleMatrizRow(r){
+    var ts = state.tasks.filter(function(t){ return repElegivel(t, r); });
+    if(!ts.length) return;
+    var tudo = ts.every(function(t){ return (t.repIds||[]).indexOf(r.id)>-1; });
+    mutarMarcacoes(r.nome+": "+(tudo?"desmarcado de todas":"marcado em todas")+" as tarefas", function(){
+      ts.forEach(function(t){ if(tudo) removeIds(t, [r]); else addIds(t, [r]); });
+    });
+  }
+  function renderDimToolbar(){
+    Array.prototype.forEach.call(document.querySelectorAll("[data-act='dim-view']"), function(b){
+      var on = b.dataset.mode===dimView;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    document.getElementById("dimUndoBtn").disabled = !dimUndo;
+    document.getElementById("dimUndoBtn").title = dimUndo ? "Desfazer: "+dimUndo.label : "Nada para desfazer";
+    document.getElementById("dimClearAll").disabled = !state.tasks.some(function(t){ return (t.repIds||[]).length; });
+    var m = document.getElementById("dimMsg");
+    m.textContent = dimMsg;
+    m.style.display = dimMsg ? "inline" : "none";
+  }
   function renderTasks(){
     document.getElementById("taskMeta").textContent = state.tasks.length + " tarefa(s)";
     var grid = document.getElementById("taskGrid");
     var empty = document.getElementById("taskEmpty");
+    var matriz = document.getElementById("taskMatrix");
+    renderDimToolbar();
     if(state.tasks.length===0){
       grid.innerHTML = "";
+      matriz.innerHTML = "";
       empty.style.display = "block";
       renderResumo();
       return;
     }
     empty.style.display = "none";
+    grid.style.display = dimView==="cards" ? "" : "none";
+    matriz.style.display = dimView==="matriz" ? "block" : "none";
+    if(dimView==="matriz"){ renderMatriz(); grid.innerHTML = ""; renderResumo(); return; }
+    matriz.innerHTML = "";
     grid.innerHTML = state.tasks.map(function(t){
       var ids = t.repIds||[];
       var area = tarefaArea(t), fixa = areaFixa(t.nome);
@@ -633,6 +799,7 @@
         '<div class="card-tags"><span class="tag tag-dark">'+(CATEGORIA_LABEL[area]||"—")+'</span>' +
           (fixa ? '<span class="tag tag-folga">só reps de '+CATEGORIA_LABEL[fixa]+' (sem PS)</span>' : '') + '</div>' +
         cov +
+        taskTools(t) +
         '<div class="card-section-label">Reps responsáveis</div>' +
         '<div class="check-list">'+repChecks+'</div>' +
         (fora.length ? '<div class="hint" style="margin-top:8px;">'+fora.length+' rep(s) de outra área ou PS estão atribuídos e são ignorados no cálculo. Desmarque para limpar.</div>' : '') +
@@ -743,6 +910,7 @@
     t.repIds = t.repIds || [];
     var idx = t.repIds.indexOf(repId);
     if(idx>-1) t.repIds.splice(idx,1); else t.repIds.push(repId);
+    dimMsg = "";
     scheduleSave();
     renderTasks();
   }
@@ -986,11 +1154,41 @@
     }, 2500);
   }
 
+  // Botão de duas etapas (sem confirm(), que o iframe do Grid bloqueia).
+  function pendingAction(btn, fn){
+    function reset(){
+      btn.dataset.confirm = "";
+      if(btn.dataset.orig) btn.textContent = btn.dataset.orig;
+      btn.classList.remove("btn-danger-confirm");
+    }
+    if(btn.dataset.confirm){ reset(); fn(); return; }
+    btn.dataset.orig = btn.textContent;
+    btn.dataset.confirm = "1";
+    btn.textContent = "Confirmar?";
+    btn.classList.add("btn-danger-confirm");
+    setTimeout(function(){ if(btn.isConnected && btn.dataset.confirm) reset(); }, 2500);
+  }
+  function handleDimAct(act, btn){
+    var t, r;
+    if(act==="dim-view"){ dimView = btn.dataset.mode==="matriz" ? "matriz" : "cards"; renderTasks(); }
+    else if(act==="fill-skills"){ fillBySkills(); }
+    else if(act==="undo"){ undoMarcacoes(); }
+    else if(act==="clear-all"){ pendingAction(btn, clearAll); }
+    else if(act==="task-fill"){ t = state.tasks.find(function(x){return x.id===btn.dataset.id;}); if(t) fillTask(t, btn.dataset.mode); }
+    else if(act==="task-clear"){ t = state.tasks.find(function(x){return x.id===btn.dataset.id;}); if(t) pendingAction(btn, function(){ clearTask(t); }); }
+    else if(act==="mx-col"){ t = state.tasks.find(function(x){return x.id===btn.dataset.id;}); if(t) toggleMatrizCol(t); }
+    else if(act==="mx-row"){ r = state.reps.find(function(x){return x.id===btn.dataset.id;}); if(r && !repEhPS(r)) toggleMatrizRow(r); }
+    else if(act==="mx-cell"){ toggleTaskRep(btn.dataset.task, btn.dataset.rep); }
+    else return false;
+    return true;
+  }
+
   document.addEventListener("click", function(e){
     var btn = e.target.closest("[data-act]");
     if(!btn) return;
     var act = btn.dataset.act, id = btn.dataset.id;
     if(act==="dim-dia"){ setDimDate(btn.dataset.iso); return; }
+    if(handleDimAct(act, btn)) return;
     if(act==="ficha"){ openFicha(id); }
     else if(act==="close-ficha"){ closeFicha(); }
     else if(act==="edit-rep"){ startRepEdit(state.reps.find(function(r){return r.id===id;})); }
