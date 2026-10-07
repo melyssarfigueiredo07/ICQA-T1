@@ -292,6 +292,47 @@
   .ficha-row span{color:var(--text-dim);}
   .ficha-row b{font-weight:600; text-align:right; word-break:break-word;}
   .ficha-foot{display:flex; justify-content:flex-end; margin-top:18px;}
+  .calc-out{padding:9px 11px; border:1px dashed var(--line); border-radius:6px; background:var(--panel-2); font-size:13px; font-weight:600; min-height:37px; display:flex; align-items:center;}
+  .date-nav{display:flex; gap:6px; align-items:center;}
+  .date-nav input{width:auto; min-width:150px;}
+  .date-nav .btn{padding:7px 12px;}
+  .tag-ferias{background:#FCE4EE; color:#8E1B4A; border-color:#F2B3CB;}
+  .tag-licenca{background:#DDF2F7; color:#0B5F73; border-color:#9FD3E0;}
+  .tag-folga{background:var(--panel-2); color:var(--text-dim); border-color:var(--line);}
+  .strip-cell.b-ferias{border-left-color:#C2185B;} .strip-value.ferias{color:#C2185B;}
+  .strip-cell.b-licenca{border-left-color:#0E7490;} .strip-value.licenca{color:#0E7490;}
+  .strip-cell.b-folga{border-left-color:var(--text-faint);} .strip-value.folga{color:var(--text-dim);}
+  .card.rep-card.st-ferias{background:repeating-linear-gradient(135deg,#FFF4F9 0 9px,#FCE4EE 9px 18px); border:1.5px dashed #C2185B; border-left:5px solid #C2185B;}
+  .card.rep-card.st-licenca{background:repeating-linear-gradient(135deg,#F1FAFC 0 9px,#DDF2F7 9px 18px); border:1.5px dashed #0E7490; border-left:5px solid #0E7490;}
+  .card.rep-card.st-folga{opacity:.82;}
+  .sq-period{grid-column:1/-1;}
+  .dim-panel .strip{margin-top:18px; margin-bottom:6px;}
+  .esc-week{margin:14px 0 6px; overflow-x:auto;}
+  .esc-week table{width:100%; border-collapse:separate; border-spacing:4px; font-size:12px;}
+  .esc-week th{font-weight:600; color:var(--text-faint); font-size:10.5px; text-transform:uppercase; padding:2px 0;}
+  .esc-week td.lbl{font-weight:700; white-space:nowrap; padding-right:8px;}
+  .esc-week td.d{text-align:center; padding:7px 4px; border-radius:6px; font-weight:600; cursor:pointer; min-width:54px; border:1px solid transparent;}
+  .esc-week td.d.on{background:var(--green-dim); color:#116B41;}
+  .esc-week td.d.off{background:var(--panel-2); color:var(--text-faint);}
+  .esc-week td.d.sel{border-color:var(--text); box-shadow:0 0 0 1px var(--text);}
+  .esc-dot{display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:-1px;}
+  .dim-legend{display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; font-size:11.5px; color:var(--text-dim);}
+  .rep-box{display:inline-flex; align-items:center; gap:6px; padding:5px 9px; border:1px solid var(--line); border-radius:8px; background:var(--panel); font-size:12px; cursor:pointer;}
+  .rep-box input{margin:0;}
+  .rep-box small{font-size:10.5px; opacity:.85;}
+  .rep-box.is-resp{border-color:var(--text); font-weight:600;}
+  .rep-box.st-ativo{background:var(--green-dim); border-color:#A6DEC1; color:#116B41;}
+  .rep-box.st-folga{background:var(--panel-2); color:var(--text-faint);}
+  .rep-box.st-ferias{background:repeating-linear-gradient(135deg,#FFF4F9 0 7px,#FCE4EE 7px 14px); border:1px dashed #C2185B; color:#8E1B4A;}
+  .rep-box.st-licenca{background:repeating-linear-gradient(135deg,#F1FAFC 0 7px,#DDF2F7 7px 14px); border:1px dashed #0E7490; color:#0B5F73;}
+  .rep-box.st-afastado{background:var(--rust-dim); border-color:#F0B3AC; color:#8A1F17;}
+  .rep-box.is-resp.st-ativo,.rep-box.is-resp.st-folga,.rep-box.is-resp.st-afastado{border-color:var(--text);}
+  .cov{margin:2px 0 10px;}
+  .cov-head{display:flex; justify-content:space-between; font-size:12px; margin-bottom:4px;}
+  .cov-bar{height:7px; background:var(--panel-2); border-radius:4px; overflow:hidden; border:1px solid var(--line);}
+  .cov-fill{height:100%; border-radius:4px;}
+  .cov-ok{background:var(--green);} .cov-mid{background:var(--amber);} .cov-bad{background:var(--rust);}
+  .nm.st-ferias{color:#8E1B4A; font-weight:600;} .nm.st-licenca{color:#0B5F73; font-weight:600;} .nm.st-folga{color:var(--text-faint);} .nm.st-afastado{color:#8A1F17; text-decoration:line-through;}
   .card-head{display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:10px;}
   .card-title{font-size:15.5px; font-weight:700;}
   .card-tags{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:12px; padding-bottom:12px; border-bottom:1px solid var(--line-soft);}

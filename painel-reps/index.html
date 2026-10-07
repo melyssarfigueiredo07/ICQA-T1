@@ -105,8 +105,21 @@
             <select id="repStatus">
               <option value="ativo">Ativo</option>
               <option value="ferias">Férias</option>
+              <option value="licenca">Licença</option>
               <option value="afastado">Afastado</option>
             </select>
+          </div>
+          <div class="field period-field" style="display:none;">
+            <label id="repAfastInicioLabel">Início</label>
+            <input type="date" id="repAfastInicio">
+          </div>
+          <div class="field period-field" style="display:none;">
+            <label>Duração (dias)</label>
+            <input type="number" id="repAfastDias" min="1" step="1" placeholder="Ex.: 30">
+          </div>
+          <div class="field period-field" style="display:none;">
+            <label>Data final (calculada)</label>
+            <div class="calc-out" id="repAfastFim">—</div>
           </div>
           <div class="field" style="flex-basis:100%; height:0; margin:0; padding:0;"></div>
           <div class="field">
@@ -179,6 +192,40 @@
           <div class="view-sub">Tarefas por área (Inventário/Qualidade) e os reps responsáveis por cada uma</div>
         </div>
         <div class="view-meta" id="taskMeta"></div>
+      </div>
+
+      <div class="form-panel dim-panel">
+        <div class="form-panel-title">Painel do dia</div>
+        <div class="form-row">
+          <div class="field" style="flex:0 0 auto;">
+            <label>Data de referência</label>
+            <div class="date-nav">
+              <button class="btn" id="dimPrev" title="Dia anterior">‹</button>
+              <input type="date" id="dimData">
+              <button class="btn" id="dimNext" title="Próximo dia">›</button>
+              <button class="btn" id="dimHoje">Hoje</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Dias marcados nos calendários das escalas são</label>
+            <select id="escalaModo">
+              <option value="folga">Folga (a escala não trabalha)</option>
+              <option value="trabalho">Dia de trabalho</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Reps exibidos nos cards</label>
+            <select id="dimFiltro">
+              <option value="todos">Todos</option>
+              <option value="resp">Só responsáveis</option>
+              <option value="disp">Só disponíveis na data</option>
+            </select>
+          </div>
+        </div>
+        <div class="strip" id="dimStrip"></div>
+        <div class="esc-week" id="dimSemana"></div>
+        <div class="dim-legend" id="dimLegenda"></div>
+        <div class="hint" id="dimHint" style="display:none; margin-top:8px;"></div>
       </div>
 
       <div class="form-panel">
@@ -352,6 +399,7 @@
   <div class="ficha" id="fichaBox"></div>
 </div>
 
+<script src="escalas.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

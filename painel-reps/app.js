@@ -2,8 +2,8 @@
   "use strict";
 
   // ---------- window.GRID.state: armazenamento nativo do Grid, compartilhado e ao vivo ----------
-  var DEFAULT_STATE = { teamName:"", reps:[], tasks:[], pontos:[], lost:[] };
-  var state = { teamName:"", reps:[], tasks:[], pontos:[], lost:[] };
+  var DEFAULT_STATE = { teamName:"", reps:[], tasks:[], pontos:[], lost:[], escalaModo:"folga" };
+  var state = { teamName:"", reps:[], tasks:[], pontos:[], lost:[], escalaModo:"folga" };
   var editing = { rep:null, ponto:null, lost:null, task:null };
   var pollTimer = null;
   var saveTimer = null;
@@ -16,8 +16,11 @@
     {key:"lost", label:"Controle de Lost"}
   ];
 
-  var STATUS_LABEL = {ativo:"Ativo", ferias:"Férias", afastado:"Afastado"};
-  var STATUS_TAG = {ativo:"tag-green", ferias:"tag-amber", afastado:"tag-mute"};
+  var Cal = window.EscalaCal;
+  var STATUS_LABEL = {ativo:"Ativo", folga:"Folga", ferias:"Férias", licenca:"Licença", afastado:"Afastado"};
+  var STATUS_TAG = {ativo:"tag-green", folga:"tag-folga", ferias:"tag-ferias", licenca:"tag-licenca", afastado:"tag-rust"};
+  var ESC_COR = {A:"var(--rust)", B:"var(--escB)", C:"var(--escC)", D:"var(--escD)"};
+  var dimDate = null, dimFollow = true, dimFiltro = "todos", lastToday = null;
   var CATEGORIA_LABEL = {inventario:"Inventário", qualidade:"Qualidade", ps_operacoes:"PS Operações", ps_icqa:"PS ICQA"};
   var CLASSE_LABEL = {rep:"Rep", ps:"PS"};
   var CLASSE_TAG = {rep:"tag-teal", ps:"tag-amber"};
@@ -83,6 +86,37 @@
       var t = state.tasks.find(function(x){return x.id===tid;});
       return t ? t.nome : "";
     }).filter(Boolean);
+  }
+  // Fim inclusivo: início + duração - 1 (ex.: 10/10 com 30 dias termina em 08/11; retorno em 09/11).
+  function afastFim(r){
+    if(!r || !r.afastInicio || !(Number(r.afastDias)>0)) return "";
+    return Cal.addDays(r.afastInicio, Number(r.afastDias)-1);
+  }
+  function periodoTexto(r){
+    var fim = afastFim(r);
+    return fim ? fmtDate(r.afastInicio)+" → "+fmtDate(fim)+" · "+Number(r.afastDias)+" d" : "";
+  }
+  // Situação do rep em uma data: férias/licença (dentro do período), afastado, ou conforme a escala (ativo/folga).
+  function effStatus(r, iso){
+    var st = r.status || "ativo";
+    if(st==="afastado") return "afastado";
+    if(st==="ferias" || st==="licenca"){
+      var fim = afastFim(r);
+      if(!fim) return st;
+      if(iso>=r.afastInicio && iso<=fim) return st;
+    }
+    if(ESCALAS.indexOf(r.escala)>-1){
+      var marcado = Cal.isMarcado(r.escala, iso);
+      var folga = state.escalaModo==="trabalho" ? !marcado : marcado;
+      return folga ? "folga" : "ativo";
+    }
+    return "ativo";
+  }
+  function statusNote(r, iso){
+    var st = effStatus(r, iso);
+    if(st==="ativo") return "";
+    var fim = (st==="ferias"||st==="licenca") ? afastFim(r) : "";
+    return STATUS_LABEL[st] + (fim ? " até "+fmtDate(fim) : "");
   }
   function repName(id){
     var r = state.reps.find(function(x){return x.id===id;});
@@ -164,6 +198,13 @@
     var d = new Date();
     document.getElementById("clockFoot").textContent = d.toLocaleDateString("pt-BR", {weekday:"short", day:"2-digit", month:"short", year:"numeric"});
     document.getElementById("equipeMeta").textContent = d.toLocaleDateString("pt-BR", {weekday:"short", day:"2-digit", month:"short"}) + " · " + d.toLocaleTimeString("pt-BR", {hour:"2-digit", minute:"2-digit"});
+    var t = todayISO();
+    if(lastToday!==null && t!==lastToday){
+      lastToday = t;
+      if(dimFollow) dimDate = t;
+      renderAll();
+    }
+    lastToday = t;
   }
 
   // =====================================================================
@@ -194,12 +235,13 @@
 
   function renderEquipe(){
     var strip = document.getElementById("equipeStrip");
-    var ativos = state.reps.filter(function(r){return r.status==="ativo";}).length;
+    var hoje = todayISO();
+    var ativos = state.reps.filter(function(r){return effStatus(r, hoje)==="ativo";}).length;
     var inv = state.reps.filter(function(r){return r.categoria==="inventario";}).length;
     var qlt = state.reps.filter(function(r){return r.categoria==="qualidade";}).length;
     strip.innerHTML =
       stripCell("Total HC", state.reps.length, "", "teal", "Reps cadastrados") +
-      stripCell("Ativos", ativos, "green", "green", "Em atividade agora") +
+      stripCell("Ativos", ativos, "green", "green", "Trabalhando hoje") +
       stripCell("Inventário", inv, "", "teal", "Reps na área") +
       stripCell("Qualidade", qlt, "", "amber", "Reps na área") +
       stripCell("PS Operações", state.reps.filter(function(r){return r.categoria==="ps_operacoes";}).length, "amber", "amber", "Reps na área") +
@@ -243,15 +285,20 @@
     var cl = repClasse(r);
     return '<span class="tag '+CLASSE_TAG[cl]+'">'+CLASSE_LABEL[cl]+'</span>' +
       (CATEGORIA_LABEL[r.categoria] ? '<span class="tag tag-dark">'+CATEGORIA_LABEL[r.categoria]+'</span>' : "") +
-      (STATUS_LABEL[r.status] ? '<span class="tag '+STATUS_TAG[r.status]+'">'+STATUS_LABEL[r.status]+'</span>' : "");
+      (function(){ var eff = effStatus(r, todayISO()); return '<span class="tag '+STATUS_TAG[eff]+'">'+STATUS_LABEL[eff]+'</span>'; })();
   }
   function repCardHTML(r){
     var escCls = ESCALAS.indexOf(r.escala)>-1 ? " esc-"+r.escala.toLowerCase() : "";
     var info = field("Escala", r.escala) + field("Admissão", r.admissao ? fmtDate(r.admissao) : "", "num") +
                field("LDAP", r.ldap) + field("RE", r.re, "num");
+    var eff = effStatus(r, todayISO());
+    var stCls = (eff==="ferias"||eff==="licenca"||eff==="folga") ? " st-"+eff : "";
+    if((r.status==="ferias"||r.status==="licenca") && periodoTexto(r)){
+      info += '<div class="sq-field sq-period"><span class="sq-label">'+(r.status==="licenca"?"Licença":"Férias")+'</span><span class="sq-val">'+periodoTexto(r)+'</span></div>';
+    }
     var flags = repFlags(r);
     var skills = repSkillNames(r), shown = skills.slice(0,3), more = skills.length - shown.length;
-    return '<div class="card rep-card'+escCls+'">' +
+    return '<div class="card rep-card'+escCls+stCls+'">' +
       '<div class="rep-top"><div class="rep-avatar">'+esc(repInitials(r.nome))+'</div><div class="rep-name">'+esc(r.nome)+'</div></div>' +
       '<div class="card-tags">'+repTags(r)+'</div>' +
       (info ? '<div class="sq-grid">'+info+'</div>' : "") +
@@ -272,7 +319,10 @@
     if(!r) return;
     function row(label, val, cls){ return val ? '<div class="ficha-row"><span>'+label+'</span><b class="'+(cls||"")+'">'+esc(val)+'</b></div>' : ""; }
     function sec(title, inner){ return inner ? '<div class="ficha-sec"><div class="ficha-sec-title">'+title+'</div>'+inner+'</div>' : ""; }
-    var trabalho = row("Escala", r.escala) + row("Admissão", r.admissao ? fmtDate(r.admissao) : "", "num");
+    var effHoje = effStatus(r, todayISO());
+    var trabalho = row("Escala", r.escala) + row("Admissão", r.admissao ? fmtDate(r.admissao) : "", "num") +
+      row("Situação hoje", STATUS_LABEL[effHoje]) +
+      ((r.status==="ferias"||r.status==="licenca") ? row(r.status==="licenca"?"Licença":"Férias", periodoTexto(r)) : "");
     var flags = repFlags(r);
     var contato = row("CPF", r.cpf, "num") + row("Aniversário", r.aniversario ? fmtDate(r.aniversario) : "", "num") +
       row("LDAP", r.ldap) + row("RE", r.re, "num") + row("Email", r.email) + row("Telefone", r.telefone, "num") + row("Endereço", r.endereco);
@@ -288,6 +338,16 @@
   }
   function closeFicha(){ document.getElementById("fichaOverlay").style.display = "none"; }
 
+  function updatePeriodUI(){
+    var st = document.getElementById("repStatus").value;
+    var show = (st==="ferias" || st==="licenca");
+    document.querySelectorAll(".period-field").forEach(function(el){ el.style.display = show ? "" : "none"; });
+    document.getElementById("repAfastInicioLabel").textContent = st==="licenca" ? "Início da licença" : "Início das férias";
+    var ini = document.getElementById("repAfastInicio").value;
+    var dias = Number(document.getElementById("repAfastDias").value)||0;
+    var fim = (ini && dias>0) ? Cal.addDays(ini, dias-1) : "";
+    document.getElementById("repAfastFim").textContent = fim ? fmtDate(fim)+" · retorno em "+fmtDate(Cal.addDays(fim,1)) : "—";
+  }
   function startRepEdit(rep){
     editing.rep = rep.id;
     document.getElementById("repFormTitle").textContent = "Editar rep";
@@ -299,7 +359,11 @@
     document.getElementById("repTerceiraContagem").value = rep.terceiraContagem||"nao";
     document.getElementById("repMaquina").value = rep.maquina||"nao";
     document.getElementById("repCategoria").value = rep.categoria||"inventario";
-    document.getElementById("repStatus").value = rep.status;
+    document.getElementById("repStatus").value = rep.status || "ativo";
+    document.getElementById("repAfastInicio").value = rep.afastInicio || "";
+    document.getElementById("repAfastDias").value = Number(rep.afastDias)>0 ? rep.afastDias : "";
+    clearFormError("repFormError");
+    updatePeriodUI();
     document.getElementById("repCpf").value = rep.cpf||"";
     document.getElementById("repAniversario").value = rep.aniversario||"";
     document.getElementById("repLdap").value = rep.ldap||"";
@@ -324,6 +388,10 @@
     document.getElementById("repMaquina").value = "nao";
     document.getElementById("repCategoria").value = "inventario";
     document.getElementById("repStatus").value = "ativo";
+    document.getElementById("repAfastInicio").value = "";
+    document.getElementById("repAfastDias").value = "";
+    clearFormError("repFormError");
+    updatePeriodUI();
     document.getElementById("repCpf").value = "";
     document.getElementById("repAniversario").value = "";
     document.getElementById("repLdap").value = "";
@@ -348,6 +416,8 @@
       maquina: document.getElementById("repMaquina").value,
       categoria: document.getElementById("repCategoria").value,
       status: document.getElementById("repStatus").value,
+      afastInicio: "",
+      afastDias: 0,
       cpf: document.getElementById("repCpf").value.trim(),
       aniversario: document.getElementById("repAniversario").value,
       ldap: document.getElementById("repLdap").value.trim(),
@@ -357,6 +427,17 @@
       telefone: document.getElementById("repTelefone").value.trim(),
       skills: getCheckedRepSkills()
     };
+    if(data.status==="ferias" || data.status==="licenca"){
+      var ini = document.getElementById("repAfastInicio").value;
+      var dias = Number(document.getElementById("repAfastDias").value)||0;
+      if(!ini || dias<1){
+        showFormError("repFormError", "Informe a data de início e a duração (em dias) "+(data.status==="ferias"?"das férias":"da licença")+", ou mude o status.");
+        return;
+      }
+      data.afastInicio = ini;
+      data.afastDias = dias;
+    }
+    clearFormError("repFormError");
     if(editing.rep){
       var rep = state.reps.find(function(r){return r.id===editing.rep;});
       if(rep){ Object.assign(rep, data); }else{ data.id = uid(); state.reps.push(data); }
@@ -381,6 +462,65 @@
   // =====================================================================
   // DIMENSIONAMENTO (cards por tarefa)
   // =====================================================================
+  function dimDiaLabel(iso){
+    var p = iso.split("-");
+    return new Date(Date.UTC(+p[0], +p[1]-1, +p[2])).toLocaleDateString("pt-BR", {weekday:"short", day:"2-digit", month:"2-digit", timeZone:"UTC"});
+  }
+  function escalaTrabalha(esc, iso){
+    var marcado = Cal.isMarcado(esc, iso);
+    return state.escalaModo==="trabalho" ? marcado : !marcado;
+  }
+  function renderDim(){
+    if(!dimDate) dimDate = todayISO();
+    var inp = document.getElementById("dimData");
+    if(inp.value!==dimDate) inp.value = dimDate;
+    document.getElementById("escalaModo").value = state.escalaModo==="trabalho" ? "trabalho" : "folga";
+
+    var c = {ativo:0, folga:0, ferias:0, licenca:0, afastado:0};
+    state.reps.forEach(function(r){ c[effStatus(r, dimDate)]++; });
+    document.getElementById("dimStrip").innerHTML =
+      stripCell("Trabalhando", c.ativo, "green", "green", "Ativos na data") +
+      stripCell("Folga", c.folga, "folga", "folga", "Pela escala") +
+      stripCell("Férias", c.ferias, "ferias", "ferias", "Em férias") +
+      stripCell("Licença", c.licenca, "licenca", "licenca", "Em licença") +
+      stripCell("Afastados", c.afastado, "rust", "rust", "Afastados");
+
+    var dias = [];
+    for(var i=-3;i<=3;i++) dias.push(Cal.addDays(dimDate, i));
+    var hoje = todayISO();
+    var html = '<table><thead><tr><th></th>' + dias.map(function(d){
+      return '<th>'+dimDiaLabel(d)+(d===hoje?'<br>hoje':'')+'</th>';
+    }).join("") + '</tr></thead><tbody>';
+    ESCALAS.forEach(function(e){
+      var membros = state.reps.filter(function(r){return r.escala===e;});
+      var disp = membros.filter(function(r){return effStatus(r, dimDate)==="ativo";}).length;
+      html += '<tr><td class="lbl"><span class="esc-dot" style="background:'+ESC_COR[e]+'"></span>Escala '+e+
+        ' <span class="hint">('+disp+'/'+membros.length+')</span></td>' + dias.map(function(d){
+        var on = escalaTrabalha(e, d);
+        return '<td class="d '+(on?'on':'off')+(d===dimDate?' sel':'')+'" data-act="dim-dia" data-iso="'+d+'">'+(on?'Trabalha':'Folga')+'</td>';
+      }).join("") + '</tr>';
+    });
+    document.getElementById("dimSemana").innerHTML = html + '</tbody></table>';
+
+    document.getElementById("dimLegenda").innerHTML =
+      ['ativo','folga','ferias','licenca','afastado'].map(function(k){
+        return '<span class="tag '+STATUS_TAG[k]+'">'+STATUS_LABEL[k]+'</span>';
+      }).join("") + '<span class="hint">· Escala marcada nos calendários = '+(state.escalaModo==="trabalho"?"dia de trabalho":"folga")+'</span>';
+
+    var hint = document.getElementById("dimHint");
+    if(Cal.foraDosCalendarios(dimDate)){
+      hint.textContent = "Data fora dos calendários enviados (set–dez/2026): a escala é projetada pelo ciclo de 52 semanas deduzido deles.";
+      hint.style.display = "block";
+    }else{
+      hint.style.display = "none";
+    }
+  }
+  function nmHTML(rid){
+    var r = state.reps.find(function(x){return x.id===rid;});
+    if(!r) return esc("(rep removido)");
+    var st = effStatus(r, dimDate);
+    return '<span class="nm st-'+st+'">'+esc(r.nome)+'</span>' + (st!=="ativo" ? ' <small>('+esc(statusNote(r, dimDate))+')</small>' : "");
+  }
   function renderTasks(){
     document.getElementById("taskMeta").textContent = state.tasks.length + " tarefa(s)";
     var grid = document.getElementById("taskGrid");
@@ -393,10 +533,30 @@
     }
     empty.style.display = "none";
     grid.innerHTML = state.tasks.map(function(t){
-      var repChecks = state.reps.length ? sortReps(state.reps).map(function(r){
-        var checked = (t.repIds||[]).indexOf(r.id)>-1 ? "checked" : "";
-        return '<label><input type="checkbox" class="task-rep-toggle" data-task="'+t.id+'" data-rep="'+r.id+'" '+checked+'>'+esc(r.nome)+'</label>';
-      }).join("") : '<span class="hint">Cadastre reps na aba Equipe.</span>';
+      var ids = t.repIds||[];
+      var resp = state.reps.filter(function(r){return ids.indexOf(r.id)>-1;});
+      var disp = resp.filter(function(r){return effStatus(r, dimDate)==="ativo";}).length;
+      var cov;
+      if(resp.length===0){
+        cov = '<div class="cov"><div class="cov-head"><span>Sem responsáveis</span></div></div>';
+      }else{
+        var pct = Math.round(disp/resp.length*100);
+        var cls = disp===0 ? "cov-bad" : (pct<50 ? "cov-mid" : "cov-ok");
+        cov = '<div class="cov"><div class="cov-head"><span>Disponíveis na data</span><b>'+disp+' de '+resp.length+'</b></div>' +
+          '<div class="cov-bar"><div class="cov-fill '+cls+'" style="width:'+pct+'%"></div></div></div>';
+      }
+      var lista = sortReps(state.reps).filter(function(r){
+        if(dimFiltro==="resp") return ids.indexOf(r.id)>-1;
+        if(dimFiltro==="disp") return effStatus(r, dimDate)==="ativo";
+        return true;
+      });
+      var repChecks = state.reps.length ? (lista.length ? lista.map(function(r){
+        var isResp = ids.indexOf(r.id)>-1;
+        var st = effStatus(r, dimDate);
+        var nota = [r.escala ? r.escala : "", statusNote(r, dimDate)].filter(Boolean).join(" · ");
+        return '<label class="rep-box st-'+st+(isResp?' is-resp':'')+'"><input type="checkbox" class="task-rep-toggle" data-task="'+t.id+'" data-rep="'+r.id+'" '+(isResp?"checked":"")+'>'+
+          esc(r.nome)+(nota?' <small>'+esc(nota)+'</small>':'')+'</label>';
+      }).join("") : '<span class="hint">Nenhum rep nesse filtro.</span>') : '<span class="hint">Cadastre reps na aba Equipe.</span>';
       return '<div class="card">' +
         '<div class="card-head">' +
           '<div class="card-title">'+esc(t.nome)+'</div>' +
@@ -406,6 +566,7 @@
           '</div>' +
         '</div>' +
         '<div class="card-tags"><span class="tag tag-dark">'+(CATEGORIA_LABEL[t.categoria]||"—")+'</span></div>' +
+        cov +
         '<div class="card-section-label">Reps responsáveis</div>' +
         '<div class="check-list">'+repChecks+'</div>' +
       '</div>';
@@ -419,8 +580,8 @@
 
     var invTasks = state.tasks.filter(function(t){ return t.categoria==="inventario"; });
     var invItems = invTasks.map(function(t){
-      var names = (t.repIds||[]).map(repName).join(", ") || "—";
-      return '<div class="resumo-item"><span class="dot">•</span><div><b>'+esc(t.nome)+':</b> '+esc(names)+'</div></div>';
+      var names = (t.repIds||[]).map(nmHTML).join(", ") || "—";
+      return '<div class="resumo-item"><span class="dot">•</span><div><b>'+esc(t.nome)+':</b> '+names+'</div></div>';
     }).join("") || '<div class="hint">Nenhuma tarefa nessa área ainda.</div>';
 
     var qltTasks = state.tasks.filter(function(t){ return t.categoria==="qualidade"; });
@@ -433,7 +594,7 @@
     });
     var qltRepIds = Object.keys(repTaskMap).sort(function(a,b){ return repName(a).localeCompare(repName(b)); });
     var qltItems = qltRepIds.map(function(rid){
-      return '<div class="resumo-item"><span class="dot check">✓</span><div><b>'+esc(repName(rid))+':</b> '+esc(repTaskMap[rid].join(", "))+'</div></div>';
+      return '<div class="resumo-item"><span class="dot check">✓</span><div><b>'+nmHTML(rid)+':</b> '+esc(repTaskMap[rid].join(", "))+'</div></div>';
     }).join("") || '<div class="hint">Nenhuma tarefa nessa área ainda.</div>';
 
     var cards = { inventario: invItems, qualidade: qltItems };
@@ -712,6 +873,7 @@
   // ---------- render all ----------
   function renderAll(){
     renderEquipe();
+    renderDim();
     renderTasks();
     renderPontos();
     renderLost();
@@ -739,6 +901,7 @@
     var btn = e.target.closest("[data-act]");
     if(!btn) return;
     var act = btn.dataset.act, id = btn.dataset.id;
+    if(act==="dim-dia"){ setDimDate(btn.dataset.iso); return; }
     if(act==="ficha"){ openFicha(id); }
     else if(act==="close-ficha"){ closeFicha(); }
     else if(act==="edit-rep"){ startRepEdit(state.reps.find(function(r){return r.id===id;})); }
@@ -761,6 +924,28 @@
     }
   });
 
+  function setDimDate(iso){
+    if(!iso) return;
+    dimDate = iso;
+    dimFollow = (iso===todayISO());
+    renderDim();
+    renderTasks();
+  }
+  document.getElementById("dimPrev").addEventListener("click", function(){ setDimDate(Cal.addDays(dimDate, -1)); });
+  document.getElementById("dimNext").addEventListener("click", function(){ setDimDate(Cal.addDays(dimDate, 1)); });
+  document.getElementById("dimHoje").addEventListener("click", function(){ setDimDate(todayISO()); });
+  document.getElementById("dimData").addEventListener("change", function(e){ setDimDate(e.target.value); });
+  document.getElementById("dimFiltro").addEventListener("change", function(e){ dimFiltro = e.target.value; renderTasks(); });
+  document.getElementById("escalaModo").addEventListener("change", function(e){
+    state.escalaModo = e.target.value==="trabalho" ? "trabalho" : "folga";
+    scheduleSave();
+    renderAll();
+  });
+  ["repStatus","repAfastInicio","repAfastDias"].forEach(function(id){
+    document.getElementById(id).addEventListener("input", updatePeriodUI);
+    document.getElementById(id).addEventListener("change", updatePeriodUI);
+  });
+
   document.getElementById("repSaveBtn").addEventListener("click", saveRep);
   document.getElementById("repCancelBtn").addEventListener("click", resetRepForm);
   document.getElementById("taskSaveBtn").addEventListener("click", saveTask);
@@ -780,6 +965,7 @@
   });
 
   // ---------- init ----------
+  dimDate = todayISO();
   buildNav();
   showView(VIEWS[0].key);
   resetRepForm();
