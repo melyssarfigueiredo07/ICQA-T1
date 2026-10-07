@@ -2,9 +2,23 @@
   "use strict";
 
   // ---------- window.GRID.state: armazenamento nativo do Grid, compartilhado e ao vivo ----------
-  // config.js (um por time) define nome da equipe, tarefas iniciais e regras de área; sem ele vale o padrão ICQA.
-  var CFG = window.PAINEL_CONFIG || {};
-  var DEFAULT_STATE = { teamName:CFG.teamName||"", reps:[], tasks:[], pontos:[], lost:[], escalaModo:"folga" };
+  var DEFAULT_STATE = { teamName:"", reps:[], tasks:[], pontos:[], lost:[], escalaModo:"folga" };
+  // O estado do Grid guarda um conjunto de dados por time: { times: { vinicius:{...}, harley:{...} } }.
+  // Dados antigos (sem "times", direto na raiz) são lidos como Time Vinicius. `state` = dados do time ativo.
+  var ICQA_AREA_FIXA = {
+    "internas":"qualidade", "qp":"qualidade", "rk":"qualidade", "pdd":"qualidade", "pd":"qualidade", "cem":"qualidade",
+    "inbound":"qualidade",
+    "inbound audit":"inventario",
+    "contagem":"inventario"
+  };
+  var TIMES = [
+    {key:"vinicius", nome:"Time Vinicius", areaFixa:ICQA_AREA_FIXA},
+    {key:"harley", nome:"Time Harley", areaFixa:{},
+     seedTasks:["Contagem","Stock Audit","Lost","RR/ER","Hunter"]}
+  ];
+  var timeAtual = TIMES[0].key;
+  var root = { times:{} };
+  function timeDef(key){ return TIMES.filter(function(t){ return t.key===(key||timeAtual); })[0] || TIMES[0]; }
   var state = { teamName:"", reps:[], tasks:[], pontos:[], lost:[], escalaModo:"folga" };
   var editing = { rep:null, ponto:null, lost:null, task:null };
   var pollTimer = null;
@@ -19,7 +33,6 @@
   ];
 
   var Cal = window.EscalaCal;
-  if(CFG.titulo) document.title = CFG.titulo;
   var STATUS_LABEL = {ativo:"Ativo", folga:"Folga", ferias:"Férias", licenca:"Licença", afastado:"Afastado"};
   var STATUS_TAG = {ativo:"tag-green", folga:"tag-folga", ferias:"tag-ferias", licenca:"tag-licenca", afastado:"tag-rust"};
   var ESC_COR = {A:"var(--rust)", B:"var(--escB)", C:"var(--escC)", D:"var(--escD)"};
@@ -143,16 +156,11 @@
     return STATUS_LABEL[st] + (fim ? " até "+fmtDate(fim) : "");
   }
   // Tarefas com área fixa: só reps dessa Área entram no dimensionamento (nome sem acento/maiúscula).
-  var TAREFA_AREA_FIXA = CFG.areaFixa || {
-    "internas":"qualidade", "qp":"qualidade", "rk":"qualidade", "pdd":"qualidade", "pd":"qualidade", "cem":"qualidade",
-    "inbound":"qualidade",
-    "inbound audit":"inventario",
-    "contagem":"inventario"
-  };
+
   function normNome(s){
     return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
   }
-  function areaFixa(nome){ return TAREFA_AREA_FIXA[normNome(nome)] || ""; }
+  function areaFixa(nome){ return timeDef().areaFixa[normNome(nome)] || ""; }
   function tarefaArea(t){ return areaFixa(t.nome) || t.categoria || "inventario"; }
   function repEhPS(r){ return repClasse(r)==="ps" || String(r.categoria||"").indexOf("ps_")===0; }
   // PS não participa de nenhuma tarefa. Em tarefa de área fixa, só reps daquela Área.
@@ -164,11 +172,12 @@
   function repMotivoFora(r){ return repEhPS(r) ? "PS não considerado" : "fora da área"; }
   // Time novo: cria as tarefas iniciais uma única vez (ids fixos, então dois acessos simultâneos não duplicam).
   function seedTasks(){
-    if(!CFG.seedTasks || state.seeded) return;
+    var seed = timeDef().seedTasks;
+    if(!seed || state.seeded) return;
     state.seeded = true;
     if(!(state.tasks||[]).length){
-      state.tasks = CFG.seedTasks.map(function(t){
-        return {id:"seed-"+normNome(t.nome).replace(/[^a-z0-9]+/g,"-"), nome:t.nome, categoria:t.categoria||"inventario", repIds:[]};
+      state.tasks = seed.map(function(nome){
+        return {id:"seed-"+normNome(nome).replace(/[^a-z0-9]+/g,"-"), nome:nome, categoria:"inventario", repIds:[]};
       });
     }
     scheduleSave();
@@ -207,11 +216,45 @@
     saveTimer = setTimeout(persist, 250);
   }
   function persist(){
-    window.GRID.state.set(state, lastUpdatedAt).then(function(res){
+    window.GRID.state.set(root, lastUpdatedAt).then(function(res){
       lastUpdatedAt = res.updated_at;
     }).catch(function(err){
       console.error("Falha ao salvar no Grid:", err);
     });
+  }
+  // Lê o estado cru do Grid (formato novo ou antigo) e deixa `state` apontando para os dados do time ativo.
+  function usarDados(raw){
+    raw = raw || {};
+    var migrou = false;
+    if(raw.times && typeof raw.times==="object"){
+      root = raw;
+    }else{
+      root = { times:{} };
+      if(Object.keys(raw).length){ root.times[TIMES[0].key] = raw; migrou = true; }
+    }
+    var novo = !root.times[timeAtual];
+    state = root.times[timeAtual] = Object.assign({}, DEFAULT_STATE, root.times[timeAtual]||{});
+    if(!state.teamName) state.teamName = timeDef().nome;
+    if(novo || migrou) scheduleSave();
+    migrateReps();
+    migrateTasks();
+    document.getElementById("teamNameInput").value = state.teamName || "";
+    var sel = document.getElementById("timeSel");
+    if(sel && sel.value!==timeAtual) sel.value = timeAtual;
+  }
+  function trocarTime(key){
+    if(key===timeAtual) return;
+    timeAtual = key;
+    dimUndo = null; dimMsg = "";
+    usarDados(root);
+    resetRepForm(); resetTaskForm(); resetPontoForm(); resetLostForm();
+    renderAll();
+  }
+  function buildTimeSel(){
+    var sel = document.getElementById("timeSel");
+    sel.innerHTML = TIMES.map(function(t){ return '<option value="'+t.key+'">'+t.nome+'</option>'; }).join("");
+    sel.value = timeAtual;
+    sel.addEventListener("change", function(e){ trocarTime(e.target.value); });
   }
   function startPolling(){
     if(pollTimer) return;
@@ -219,10 +262,7 @@
       window.GRID.state.get().then(function(res){
         if(res.updated_at !== lastUpdatedAt){
           lastUpdatedAt = res.updated_at;
-          state = Object.assign({}, DEFAULT_STATE, res.state||{});
-          migrateReps();
-          migrateTasks();
-          document.getElementById("teamNameInput").value = state.teamName || "";
+          usarDados(res.state);
           renderAll();
         }
       }).catch(function(){});
@@ -231,10 +271,7 @@
   function loadAndRender(){
     window.GRID.state.get().then(function(res){
       lastUpdatedAt = res.updated_at;
-      state = Object.assign({}, DEFAULT_STATE, res.state||{});
-      migrateReps();
-      migrateTasks();
-      document.getElementById("teamNameInput").value = state.teamName || "";
+      usarDados(res.state);
       renderAll();
       startPolling();
     }).catch(function(err){
@@ -1270,6 +1307,7 @@
   // ---------- init ----------
   dimDate = todayISO();
   buildNav();
+  buildTimeSel();
   showView(VIEWS[0].key);
   resetRepForm();
   resetTaskForm();

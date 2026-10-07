@@ -421,3 +421,7 @@ table.mx tbody th.mx-row{position:sticky; left:0; z-index:1; background:var(--pa
 .mx-btn.on.st-ferias{background:repeating-linear-gradient(135deg,#FFF4F9 0 7px,#FCE4EE 7px 14px); color:#8E1B4A;}
 .mx-btn.on.st-licenca{background:repeating-linear-gradient(135deg,#F1FAFC 0 7px,#DDF2F7 7px 14px); color:#0B5F73;}
 .mx-btn.on.st-afastado{background:var(--rust-dim); color:#8A1F17;}
+
+/* ---------- seletor de time ---------- */
+.time-sel{font:inherit; font-size:12.5px; font-weight:700; color:var(--text); background:rgba(20,20,20,0.08); border:none; border-radius:8px; padding:5px 8px; cursor:pointer; margin-right:6px; max-width:140px;}
+.time-sel:focus{outline:2px solid rgba(20,20,20,0.35);}
