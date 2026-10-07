@@ -2,7 +2,9 @@
   "use strict";
 
   // ---------- window.GRID.state: armazenamento nativo do Grid, compartilhado e ao vivo ----------
-  var DEFAULT_STATE = { teamName:"", reps:[], tasks:[], pontos:[], lost:[], escalaModo:"folga" };
+  // config.js (um por time) define nome da equipe, tarefas iniciais e regras de área; sem ele vale o padrão ICQA.
+  var CFG = window.PAINEL_CONFIG || {};
+  var DEFAULT_STATE = { teamName:CFG.teamName||"", reps:[], tasks:[], pontos:[], lost:[], escalaModo:"folga" };
   var state = { teamName:"", reps:[], tasks:[], pontos:[], lost:[], escalaModo:"folga" };
   var editing = { rep:null, ponto:null, lost:null, task:null };
   var pollTimer = null;
@@ -17,6 +19,7 @@
   ];
 
   var Cal = window.EscalaCal;
+  if(CFG.titulo) document.title = CFG.titulo;
   var STATUS_LABEL = {ativo:"Ativo", folga:"Folga", ferias:"Férias", licenca:"Licença", afastado:"Afastado"};
   var STATUS_TAG = {ativo:"tag-green", folga:"tag-folga", ferias:"tag-ferias", licenca:"tag-licenca", afastado:"tag-rust"};
   var ESC_COR = {A:"var(--rust)", B:"var(--escB)", C:"var(--escC)", D:"var(--escD)"};
@@ -140,7 +143,7 @@
     return STATUS_LABEL[st] + (fim ? " até "+fmtDate(fim) : "");
   }
   // Tarefas com área fixa: só reps dessa Área entram no dimensionamento (nome sem acento/maiúscula).
-  var TAREFA_AREA_FIXA = {
+  var TAREFA_AREA_FIXA = CFG.areaFixa || {
     "internas":"qualidade", "qp":"qualidade", "rk":"qualidade", "pdd":"qualidade", "pd":"qualidade", "cem":"qualidade",
     "inbound":"qualidade",
     "inbound audit":"inventario",
@@ -159,7 +162,19 @@
     return !f || r.categoria===f;
   }
   function repMotivoFora(r){ return repEhPS(r) ? "PS não considerado" : "fora da área"; }
+  // Time novo: cria as tarefas iniciais uma única vez (ids fixos, então dois acessos simultâneos não duplicam).
+  function seedTasks(){
+    if(!CFG.seedTasks || state.seeded) return;
+    state.seeded = true;
+    if(!(state.tasks||[]).length){
+      state.tasks = CFG.seedTasks.map(function(t){
+        return {id:"seed-"+normNome(t.nome).replace(/[^a-z0-9]+/g,"-"), nome:t.nome, categoria:t.categoria||"inventario", repIds:[]};
+      });
+    }
+    scheduleSave();
+  }
   function migrateTasks(){
+    seedTasks();
     var ps = {}, byId = {};
     (state.reps||[]).forEach(function(r){ byId[r.id] = r; if(repEhPS(r)){ ps[r.id] = true; if((r.skills||[]).length) r.skills = []; } });
     (state.tasks||[]).forEach(function(t){
