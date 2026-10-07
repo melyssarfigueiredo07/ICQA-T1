@@ -1,4 +1,4 @@
-# Corrida de Produtividade / Competição Mensal (versão GRID)
+# Corrida de Produtividade (versão GRID)
 
 Adaptação do app Google Apps Script "Corrida de Produtividade" para o GRID.
 A interface é a mesma; o `Código.gs` foi portado para `src/engine.js` e os dados
