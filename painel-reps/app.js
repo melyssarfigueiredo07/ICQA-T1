@@ -140,6 +140,7 @@
   // Tarefas com área fixa: só reps dessa Área entram no dimensionamento (nome sem acento/maiúscula).
   var TAREFA_AREA_FIXA = {
     "internas":"qualidade", "qp":"qualidade", "rk":"qualidade", "pdd":"qualidade", "pd":"qualidade", "cem":"qualidade",
+    "inbound":"qualidade",
     "inbound audit":"inventario"
   };
   function normNome(s){
@@ -147,7 +148,10 @@
   }
   function areaFixa(nome){ return TAREFA_AREA_FIXA[normNome(nome)] || ""; }
   function tarefaArea(t){ return areaFixa(t.nome) || t.categoria || "inventario"; }
-  function repElegivel(t, r){ var f = areaFixa(t.nome); return !f || r.categoria===f; }
+  function repEhPS(r){ return repClasse(r)==="ps" || String(r.categoria||"").indexOf("ps_")===0; }
+  // Em tarefa de área fixa só entram reps daquela Área e que não sejam PS.
+  function repElegivel(t, r){ var f = areaFixa(t.nome); return !f || (r.categoria===f && !repEhPS(r)); }
+  function repMotivoFora(r){ return repEhPS(r) ? "PS não considerado" : "fora da área"; }
   function migrateTasks(){
     (state.tasks||[]).forEach(function(t){ var f = areaFixa(t.nome); if(f) t.categoria = f; });
   }
@@ -598,10 +602,10 @@
         var isResp = ids.indexOf(r.id)>-1;
         var foraArea = !repElegivel(t, r);
         var st = foraArea ? "fora" : effStatus(r, dimDate);
-        var nota = foraArea ? "fora da área" : [r.escala ? r.escala : "", statusNote(r, dimDate)].filter(Boolean).join(" · ");
+        var nota = foraArea ? repMotivoFora(r) : [r.escala ? r.escala : "", statusNote(r, dimDate)].filter(Boolean).join(" · ");
         return '<label class="rep-box st-'+st+(isResp?' is-resp':'')+'"><input type="checkbox" class="task-rep-toggle" data-task="'+t.id+'" data-rep="'+r.id+'" '+(isResp?"checked":"")+'>'+
           esc(r.nome)+(nota?' <small>'+esc(nota)+'</small>':'')+'</label>';
-      }).join("") : '<span class="hint">Nenhum rep nesse filtro'+(fixa?' (só reps de '+CATEGORIA_LABEL[fixa]+')':'')+'.</span>') : '<span class="hint">Cadastre reps na aba Equipe.</span>';
+      }).join("") : '<span class="hint">Nenhum rep nesse filtro'+(fixa?' (só reps de '+CATEGORIA_LABEL[fixa]+', sem PS)':'')+'.</span>') : '<span class="hint">Cadastre reps na aba Equipe.</span>';
       return '<div class="card">' +
         '<div class="card-head">' +
           '<div class="card-title">'+esc(t.nome)+'</div>' +
@@ -611,11 +615,11 @@
           '</div>' +
         '</div>' +
         '<div class="card-tags"><span class="tag tag-dark">'+(CATEGORIA_LABEL[area]||"—")+'</span>' +
-          (fixa ? '<span class="tag tag-folga">só reps de '+CATEGORIA_LABEL[fixa]+'</span>' : '') + '</div>' +
+          (fixa ? '<span class="tag tag-folga">só reps de '+CATEGORIA_LABEL[fixa]+' (sem PS)</span>' : '') + '</div>' +
         cov +
         '<div class="card-section-label">Reps responsáveis</div>' +
         '<div class="check-list">'+repChecks+'</div>' +
-        (fora.length ? '<div class="hint" style="margin-top:8px;">'+fora.length+' rep(s) de outra área estão atribuídos e são ignorados no cálculo. Desmarque para limpar.</div>' : '') +
+        (fora.length ? '<div class="hint" style="margin-top:8px;">'+fora.length+' rep(s) de outra área ou PS estão atribuídos e são ignorados no cálculo. Desmarque para limpar.</div>' : '') +
       '</div>';
     }).join("");
 
@@ -667,7 +671,7 @@
     var sel = document.getElementById("taskCategoria"), hint = document.getElementById("taskAreaHint");
     if(f){
       sel.value = f; sel.disabled = true;
-      hint.textContent = "Área fixa desta tarefa: só reps de " + CATEGORIA_LABEL[f] + ".";
+      hint.textContent = "Área fixa desta tarefa: só reps de " + CATEGORIA_LABEL[f] + ", sem PS.";
       hint.style.display = "block";
     }else{
       sel.disabled = false;
