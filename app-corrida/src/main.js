@@ -239,7 +239,7 @@ function buildPodium(list,cid){
 }
 
 function renderPodio(){
-  document.getElementById("podio-per").textContent=S.mes+" "+S.ano;
+  document.getElementById("podio-per").textContent=S.mes+" "+S.ano+" · Turno "+Storage.getTurno();
   buildPodium(S.ranking,"podio-geral");
   buildPodium(S.rankingREP,"podio-rep");
   buildPodium(S.rankingOP,"podio-op");
@@ -591,7 +591,7 @@ function delDestaque(id){
 // ═══════════════════════════════════════
 function render(){
   initSels(); renderKPIs(); renderPodio(); renderDestaques(); renderRanking(); renderHist(); renderReps();
-  document.getElementById("upd-bar") && (document.getElementById("upd-bar").textContent="Atualizado: "+(S.updated||"—")+" · Dados: "+Storage.info().mode);
+  document.getElementById("upd-bar") && (document.getElementById("upd-bar").textContent="Atualizado: "+(S.updated||"—")+" · Turno "+Storage.getTurno()+" · Dados: "+Storage.info().mode);
   if(Storage.info().notice && !window.__noticeShown){ window.__noticeShown=true; showAlt("bk-alt",Storage.info().notice,"err"); toast("⚠ Dados salvos só neste navegador. Veja a aba Backup."); }
 }
 
@@ -609,6 +609,16 @@ function goTab(id,el){
   if(id==="hist")    { renderHist(); }
   if(id==="reps")    { renderReps(); }
   if(id==="destmes") { loadDestaques(); }
+}
+
+function changeTurno(){
+  var t=document.getElementById("hdr-turno").value;
+  Storage.setTurno(t);
+  // cada turno tem o seu próprio período e reps: limpa os seletores para recarregar do turno
+  ["hdr-mes","f-mes","dest-mes","hdr-ano","f-ano","dest-ano","f-rep"].forEach(function(id){ var el=document.getElementById(id); if(el) el.innerHTML=""; });
+  S.entries=[]; S.reps=[];
+  showLoad("Carregando turno "+t+"…");
+  loadData();
 }
 
 function changePeriod(){
@@ -792,7 +802,7 @@ function backupBaixar(){
       var blob = new Blob([JSON.stringify(db, null, 2)], {type:"application/json"});
       var url = URL.createObjectURL(blob);
       var a = document.createElement("a");
-      a.href = url; a.download = "corrida-produtividade-backup.json";
+      a.href = url; a.download = "corrida-produtividade-backup-"+Storage.getTurno()+".json";
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       URL.revokeObjectURL(url);
       showAlt("bk-alt","Se o download não iniciar, use \"Gerar backup\" e copie o texto.","info");
@@ -803,7 +813,7 @@ function backupRestaurar(){
   var parsed;
   try { parsed = JSON.parse(document.getElementById("bk-text").value); } catch(e) { showAlt("bk-alt","Texto inválido: cole um JSON.","err"); return; }
   if (!parsed || !parsed.meta || !Array.isArray(parsed.entries)) { showAlt("bk-alt","Formato esperado: {\"meta\":{...},\"entries\":[...]}","err"); return; }
-  askConfirm("Substituir TODOS os dados atuais por este backup?", function(){
+  askConfirm("Substituir TODOS os dados do turno "+Storage.getTurno()+" por este backup?", function(){
     showLoad("Restaurando…");
     Storage.replaceAll(Engine.normalizeDb(parsed)).then(function(){
       hideLoad(); showAlt("bk-alt","Backup restaurado.","ok"); loadData();
@@ -847,4 +857,4 @@ buildTaskGrid();
 loadData();
 setInterval(loadData, 60000);
 
-Object.assign(window, { addRep, askConfirm, avc, avci, backupBaixar, backupGerar, backupRestaurar, ballSvg, buildPodium, buildRegHTML, buildRkTable, buildTaskGrid, calcDestaque, callApi, changePeriod, clearForm, closeModal, closeModalBtn, delDestaque, delEntry, editEntry, goTab, hideAlt, hideLoad, ini, initSels, loadData, loadDestaques, onData, openEditModal, parseArgs, removeRep, render, renderDestaques, renderDestiquePreview, renderHist, renderHistDest, renderKPIs, renderPodio, renderRanking, renderReps, repTipo, runDebug, runHandler, saveEditRep, saveEntry, showAlt, showLoad, toast, toggleHist, toggleTipo });
+Object.assign(window, { changeTurno, addRep, askConfirm, avc, avci, backupBaixar, backupGerar, backupRestaurar, ballSvg, buildPodium, buildRegHTML, buildRkTable, buildTaskGrid, calcDestaque, callApi, changePeriod, clearForm, closeModal, closeModalBtn, delDestaque, delEntry, editEntry, goTab, hideAlt, hideLoad, ini, initSels, loadData, loadDestaques, onData, openEditModal, parseArgs, removeRep, render, renderDestaques, renderDestiquePreview, renderHist, renderHistDest, renderKPIs, renderPodio, renderRanking, renderReps, repTipo, runDebug, runHandler, saveEditRep, saveEntry, showAlt, showLoad, toast, toggleHist, toggleTipo });

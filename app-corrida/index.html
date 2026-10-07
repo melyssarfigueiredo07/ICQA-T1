@@ -269,6 +269,7 @@ button{font-family:'Sora',sans-serif;cursor:pointer}
     <div class="btxt">Competição <span>Mensal</span></div>
   </div>
   <div class="hdr-r">
+    <select class="psel" id="hdr-turno" data-change="changeTurno()" title="Turno"><option value="T1">T1</option><option value="T2">T2</option><option value="T3">T3</option></select>
     <select class="psel" id="hdr-mes" data-change="changePeriod()"></select>
     <select class="psel" id="hdr-ano" data-change="changePeriod()"></select>
     <div class="live">AO VIVO</div>
@@ -303,7 +304,7 @@ button{font-family:'Sora',sans-serif;cursor:pointer}
   <!-- BACKUP -->
   <section id="sec-backup" class="sec">
     <div class="card">
-      <div class="ch"><div><div class="ct">💾 Backup e migração</div><div class="cs">Gere um backup dos dados, ou cole um JSON para restaurar (também serve para importar os dados do Apps Script antigo).</div></div></div>
+      <div class="ch"><div><div class="ct">💾 Backup e migração</div><div class="cs">Gere um backup dos dados do turno selecionado no topo, ou cole um JSON para restaurar nele (também serve para importar os dados do Apps Script antigo).</div></div></div>
       <div id="bk-alt" class="alt"></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
         <button class="btn" data-click="backupGerar()">Gerar backup</button>

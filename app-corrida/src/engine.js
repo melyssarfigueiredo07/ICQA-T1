@@ -1,4 +1,5 @@
 export const TASKS = ["Contagem", "Inbound Audit", "Stock Audit", "Busca Lost", "Transfer"]
+export const TURNOS = ["T1", "T2", "T3"]
 export const ESCALAS = ["A", "B", "C", "D"]
 export const CLASSES = ["PS Operações", "PS ICQA"]
 export const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
@@ -46,8 +47,11 @@ export function normalizeDb(db) {
   return { meta, entries: Array.isArray(db && db.entries) ? db.entries : [] }
 }
 
-export function emptyDb() {
-  return { meta: defaultMeta(), entries: [] }
+export function emptyDb(turno) {
+  const db = { meta: defaultMeta(), entries: [] }
+  // turnos novos começam sem reps de exemplo (só o T1 original mantém o padrão)
+  if (turno && turno !== TURNOS[0]) db.meta.reps = []
+  return db
 }
 
 function trimEntries(db) {
