@@ -54,7 +54,27 @@
     return mk < PRIMEIRO_MES || mk > ULTIMO_MES;
   }
 
+  // Diferença de calendário entre duas datas ISO: anos, meses e dias completos (+ total de dias).
+  // Soma meses inteiros à data inicial (limitando ao último dia do mês, ex.: 31/01 + 1 mês = 28/02)
+  // e conta os dias que sobram. Se `ate` é anterior a `de`, devolve negativo=true com o total de dias.
+  function diferenca(deISO, ateISO){
+    var a = String(deISO||"").split("-").map(Number), b = String(ateISO||"").split("-").map(Number);
+    if(a.length!==3 || b.length!==3 || a.some(isNaN) || b.some(isNaN)) return null;
+    var de = Date.UTC(a[0], a[1]-1, a[2]), ate = Date.UTC(b[0], b[1]-1, b[2]);
+    if(isNaN(de) || isNaN(ate)) return null;
+    var total = Math.round((ate - de) / DAY);
+    if(total < 0) return {negativo:true, anos:0, meses:0, dias:0, totalDias:-total};
+    var meses = (b[0]-a[0])*12 + (b[1]-a[1]);
+    function ancora(n){
+      var m0 = a[1]-1+n, y = a[0] + Math.floor(m0/12), m = mod(m0, 12);
+      return Date.UTC(y, m, Math.min(a[2], diasNoMes(y, m+1)));
+    }
+    while(meses > 0 && ancora(meses) > ate) meses--;
+    return {negativo:false, anos:Math.floor(meses/12), meses:meses%12, dias:Math.round((ate - ancora(meses))/DAY), totalDias:total};
+  }
+
   root.EscalaCal = {
+    diferenca: diferenca,
     ESCALAS: ["A","B","C","D"],
     isMarcado: isMarcado,
     foraDosCalendarios: foraDosCalendarios,

@@ -92,6 +92,25 @@
     if(!r || !r.afastInicio || !(Number(r.afastDias)>0)) return "";
     return Cal.addDays(r.afastInicio, Number(r.afastDias)-1);
   }
+  function plural(n, um, varios){ return n + " " + (n===1 ? um : varios); }
+  // Tempo de casa até hoje, pela data de admissão. curto=true mostra só as duas maiores unidades (card).
+  function tempoCasaTexto(r, curto){
+    if(!r.admissao) return "";
+    var d = Cal.diferenca(r.admissao, todayISO());
+    if(!d) return "";
+    if(d.negativo) return "Começa em " + plural(d.totalDias, "dia", "dias");
+    var p = [];
+    if(d.anos>0) p.push(plural(d.anos, "ano", "anos"));
+    if(d.meses>0) p.push(plural(d.meses, "mês", "meses"));
+    if(d.dias>0) p.push(plural(d.dias, "dia", "dias"));
+    if(p.length===0) return "Admitido hoje";
+    if(curto) p = p.slice(0,2);
+    return p.length>1 ? p.slice(0,-1).join(", ") + " e " + p[p.length-1] : p[0];
+  }
+  function diasDeCasaTexto(r){
+    var d = r.admissao ? Cal.diferenca(r.admissao, todayISO()) : null;
+    return d && !d.negativo ? d.totalDias.toLocaleString("pt-BR") + " dias" : "";
+  }
   function periodoTexto(r){
     var fim = afastFim(r);
     return fim ? fmtDate(r.afastInicio)+" → "+fmtDate(fim)+" · "+Number(r.afastDias)+" d" : "";
@@ -287,23 +306,27 @@
       (CATEGORIA_LABEL[r.categoria] ? '<span class="tag tag-dark">'+CATEGORIA_LABEL[r.categoria]+'</span>' : "") +
       (function(){ var eff = effStatus(r, todayISO()); return '<span class="tag '+STATUS_TAG[eff]+'">'+STATUS_LABEL[eff]+'</span>'; })();
   }
+  function qrow(label, val, cls){
+    return val ? '<div class="sq-row"><span>'+label+'</span><b class="'+(cls||"")+'">'+esc(val)+'</b></div>' : "";
+  }
   function repCardHTML(r){
     var escCls = ESCALAS.indexOf(r.escala)>-1 ? " esc-"+r.escala.toLowerCase() : "";
-    var info = field("Escala", r.escala) + field("Admissão", r.admissao ? fmtDate(r.admissao) : "", "num") +
-               field("LDAP", r.ldap) + field("RE", r.re, "num");
     var eff = effStatus(r, todayISO());
     var stCls = (eff==="ferias"||eff==="licenca"||eff==="folga") ? " st-"+eff : "";
-    if((r.status==="ferias"||r.status==="licenca") && periodoTexto(r)){
-      info += '<div class="sq-field sq-period"><span class="sq-label">'+(r.status==="licenca"?"Licença":"Férias")+'</span><span class="sq-val">'+periodoTexto(r)+'</span></div>';
-    }
+    var afastado = (r.status==="ferias"||r.status==="licenca") ? periodoTexto(r) : "";
+    var rows = qrow("Escala", r.escala) +
+      qrow("Admissão", r.admissao ? fmtDate(r.admissao) : "", "num") +
+      qrow("Tempo de casa", tempoCasaTexto(r, true)) +
+      qrow(r.status==="licenca" ? "Licença" : "Férias", afastado, "num");
     var flags = repFlags(r);
-    var skills = repSkillNames(r), shown = skills.slice(0,3), more = skills.length - shown.length;
+    var skills = repSkillNames(r);
+    var tarefas = skills.length ? skills.slice(0,2).join(", ") + (skills.length>2 ? " +"+(skills.length-2) : "") : "";
     return '<div class="card rep-card'+escCls+stCls+'">' +
       '<div class="rep-top"><div class="rep-avatar">'+esc(repInitials(r.nome))+'</div><div class="rep-name">'+esc(r.nome)+'</div></div>' +
       '<div class="card-tags">'+repTags(r)+'</div>' +
-      (info ? '<div class="sq-grid">'+info+'</div>' : "") +
+      (rows ? '<div class="sq-rows">'+rows+'</div>' : "") +
       (flags.length ? '<div class="sq-flags">'+flags.map(function(f){return '<span class="flag">✓ '+f+'</span>';}).join("")+'</div>' : "") +
-      (skills.length ? '<div class="sq-skills">'+shown.map(function(n){return '<span class="chip">'+esc(n)+'</span>';}).join("")+(more>0?'<span class="chip chip-more">+'+more+'</span>':"")+'</div>' : "") +
+      (tarefas ? '<div class="sq-task-line" title="'+esc(skills.join(", "))+'"><span>Tarefas:</span> '+esc(tarefas)+'</div>' : "") +
       '<div class="sq-foot">' +
         '<button class="btn-ghost" data-act="ficha" data-id="'+r.id+'">Ver ficha</button>' +
         '<span class="row-actions">' +
@@ -321,6 +344,7 @@
     function sec(title, inner){ return inner ? '<div class="ficha-sec"><div class="ficha-sec-title">'+title+'</div>'+inner+'</div>' : ""; }
     var effHoje = effStatus(r, todayISO());
     var trabalho = row("Escala", r.escala) + row("Admissão", r.admissao ? fmtDate(r.admissao) : "", "num") +
+      row("Tempo de casa", tempoCasaTexto(r, false)) + row("Total de dias de casa", diasDeCasaTexto(r), "num") +
       row("Situação hoje", STATUS_LABEL[effHoje]) +
       ((r.status==="ferias"||r.status==="licenca") ? row(r.status==="licenca"?"Licença":"Férias", periodoTexto(r)) : "");
     var flags = repFlags(r);
