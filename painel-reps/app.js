@@ -82,6 +82,7 @@
     return f;
   }
   function repSkillNames(r){
+    if(repEhPS(r)) return [];
     return (r.skills||[]).map(function(tid){
       var t = state.tasks.find(function(x){return x.id===tid;});
       return t ? t.nome : "";
@@ -149,11 +150,20 @@
   function areaFixa(nome){ return TAREFA_AREA_FIXA[normNome(nome)] || ""; }
   function tarefaArea(t){ return areaFixa(t.nome) || t.categoria || "inventario"; }
   function repEhPS(r){ return repClasse(r)==="ps" || String(r.categoria||"").indexOf("ps_")===0; }
-  // Em tarefa de área fixa só entram reps daquela Área e que não sejam PS.
-  function repElegivel(t, r){ var f = areaFixa(t.nome); return !f || (r.categoria===f && !repEhPS(r)); }
+  // PS não participa de nenhuma tarefa. Em tarefa de área fixa, só reps daquela Área.
+  function repElegivel(t, r){
+    if(repEhPS(r)) return false;
+    var f = areaFixa(t.nome);
+    return !f || r.categoria===f;
+  }
   function repMotivoFora(r){ return repEhPS(r) ? "PS não considerado" : "fora da área"; }
   function migrateTasks(){
-    (state.tasks||[]).forEach(function(t){ var f = areaFixa(t.nome); if(f) t.categoria = f; });
+    var ps = {};
+    (state.reps||[]).forEach(function(r){ if(repEhPS(r)){ ps[r.id] = true; if((r.skills||[]).length) r.skills = []; } });
+    (state.tasks||[]).forEach(function(t){
+      var f = areaFixa(t.nome); if(f) t.categoria = f;
+      if((t.repIds||[]).some(function(rid){return ps[rid];})) t.repIds = t.repIds.filter(function(rid){return !ps[rid];});
+    });
   }
   function repName(id){
     var r = state.reps.find(function(x){return x.id===id;});
@@ -382,6 +392,10 @@
   }
   function closeFicha(){ document.getElementById("fichaOverlay").style.display = "none"; }
 
+  function updateSkillsVisibility(){
+    var ps = document.getElementById("repClasse").value==="ps" || /^ps_/.test(document.getElementById("repCategoria").value);
+    document.getElementById("repSkillsField").style.display = ps ? "none" : "";
+  }
   function updatePeriodUI(){
     var st = document.getElementById("repStatus").value;
     var show = (st==="ferias" || st==="licenca");
@@ -391,6 +405,7 @@
     var dias = Number(document.getElementById("repAfastDias").value)||0;
     var fim = (ini && dias>0) ? Cal.addDays(ini, dias-1) : "";
     document.getElementById("repAfastFim").textContent = fim ? fmtDate(fim)+" · retorno em "+fmtDate(Cal.addDays(fim,1)) : "—";
+    updateSkillsVisibility();
   }
   function startRepEdit(rep){
     editing.rep = rep.id;
@@ -469,7 +484,7 @@
       email: document.getElementById("repEmail").value.trim(),
       endereco: document.getElementById("repEndereco").value.trim(),
       telefone: document.getElementById("repTelefone").value.trim(),
-      skills: getCheckedRepSkills()
+      skills: (document.getElementById("repClasse").value==="ps" || /^ps_/.test(document.getElementById("repCategoria").value)) ? [] : getCheckedRepSkills()
     };
     if(data.status==="ferias" || data.status==="licenca"){
       var ini = document.getElementById("repAfastInicio").value;
@@ -489,6 +504,7 @@
       data.id = uid();
       state.reps.push(data);
     }
+    migrateTasks();
     resetRepForm();
     scheduleSave();
     renderAll();
@@ -521,7 +537,7 @@
     document.getElementById("escalaModo").value = state.escalaModo==="trabalho" ? "trabalho" : "folga";
 
     var c = {ativo:0, folga:0, ferias:0, licenca:0, afastado:0};
-    state.reps.forEach(function(r){ c[effStatus(r, dimDate)]++; });
+    state.reps.filter(function(r){return !repEhPS(r);}).forEach(function(r){ c[effStatus(r, dimDate)]++; });
     document.getElementById("dimStrip").innerHTML =
       stripCell("Trabalhando", c.ativo, "green", "green", "Ativos na data") +
       stripCell("Folga", c.folga, "folga", "folga", "Pela escala") +
@@ -536,7 +552,7 @@
       return '<th>'+dimDiaLabel(d)+(d===hoje?'<br>hoje':'')+'</th>';
     }).join("") + '</tr></thead><tbody>';
     ESCALAS.forEach(function(e){
-      var membros = state.reps.filter(function(r){return r.escala===e;});
+      var membros = state.reps.filter(function(r){return r.escala===e && !repEhPS(r);});
       var disp = membros.filter(function(r){return effStatus(r, dimDate)==="ativo";}).length;
       html += '<tr><td class="lbl"><span class="esc-dot" style="background:'+ESC_COR[e]+'"></span>Escala '+e+
         ' <span class="hint">('+disp+'/'+membros.length+')</span></td>' + dias.map(function(d){
@@ -549,7 +565,7 @@
     document.getElementById("dimLegenda").innerHTML =
       ['ativo','folga','ferias','licenca','afastado'].map(function(k){
         return '<span class="tag '+STATUS_TAG[k]+'">'+STATUS_LABEL[k]+'</span>';
-      }).join("") + '<span class="hint">· Escala marcada nos calendários = '+(state.escalaModo==="trabalho"?"dia de trabalho":"folga")+'</span>';
+      }).join("") + '<span class="hint">· Escala marcada nos calendários = '+(state.escalaModo==="trabalho"?"dia de trabalho":"folga")+' · PS não entram no dimensionamento</span>';
 
     var hint = document.getElementById("dimHint");
     if(Cal.foraDosCalendarios(dimDate)){
@@ -722,6 +738,8 @@
   function toggleTaskRep(taskId, repId){
     var t = state.tasks.find(function(x){return x.id===taskId;});
     if(!t) return;
+    var alvo = state.reps.find(function(x){return x.id===repId;});
+    if(alvo && repEhPS(alvo)) return;
     t.repIds = t.repIds || [];
     var idx = t.repIds.indexOf(repId);
     if(idx>-1) t.repIds.splice(idx,1); else t.repIds.push(repId);
@@ -1012,7 +1030,7 @@
     scheduleSave();
     renderAll();
   });
-  ["repStatus","repAfastInicio","repAfastDias"].forEach(function(id){
+  ["repStatus","repAfastInicio","repAfastDias","repClasse","repCategoria"].forEach(function(id){
     document.getElementById(id).addEventListener("input", updatePeriodUI);
     document.getElementById(id).addEventListener("change", updatePeriodUI);
   });
