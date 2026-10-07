@@ -330,6 +330,7 @@
   .rep-box.st-folga{background:var(--panel-2); color:var(--text-faint);}
   .rep-box.st-ferias{background:repeating-linear-gradient(135deg,#FFF4F9 0 7px,#FCE4EE 7px 14px); border:1px dashed #C2185B; color:#8E1B4A;}
   .rep-box.st-licenca{background:repeating-linear-gradient(135deg,#F1FAFC 0 7px,#DDF2F7 7px 14px); border:1px dashed #0E7490; color:#0B5F73;}
+  .rep-box.st-fora{background:var(--panel-2); border:1px dashed var(--text-faint); color:var(--text-faint);}
   .rep-box.st-afastado{background:var(--rust-dim); border-color:#F0B3AC; color:#8A1F17;}
   .rep-box.is-resp.st-ativo,.rep-box.is-resp.st-folga,.rep-box.is-resp.st-afastado{border-color:var(--text);}
   .cov{margin:2px 0 10px;}

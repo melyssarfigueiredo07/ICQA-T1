@@ -137,6 +137,20 @@
     var fim = (st==="ferias"||st==="licenca") ? afastFim(r) : "";
     return STATUS_LABEL[st] + (fim ? " até "+fmtDate(fim) : "");
   }
+  // Tarefas com área fixa: só reps dessa Área entram no dimensionamento (nome sem acento/maiúscula).
+  var TAREFA_AREA_FIXA = {
+    "internas":"qualidade", "qp":"qualidade", "rk":"qualidade", "pdd":"qualidade", "pd":"qualidade", "cem":"qualidade",
+    "inbound audit":"inventario"
+  };
+  function normNome(s){
+    return String(s||"").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  }
+  function areaFixa(nome){ return TAREFA_AREA_FIXA[normNome(nome)] || ""; }
+  function tarefaArea(t){ return areaFixa(t.nome) || t.categoria || "inventario"; }
+  function repElegivel(t, r){ var f = areaFixa(t.nome); return !f || r.categoria===f; }
+  function migrateTasks(){
+    (state.tasks||[]).forEach(function(t){ var f = areaFixa(t.nome); if(f) t.categoria = f; });
+  }
   function repName(id){
     var r = state.reps.find(function(x){return x.id===id;});
     return r ? r.nome : "(rep removido)";
@@ -172,6 +186,7 @@
           lastUpdatedAt = res.updated_at;
           state = Object.assign({}, DEFAULT_STATE, res.state||{});
           migrateReps();
+          migrateTasks();
           document.getElementById("teamNameInput").value = state.teamName || "";
           renderAll();
         }
@@ -183,6 +198,7 @@
       lastUpdatedAt = res.updated_at;
       state = Object.assign({}, DEFAULT_STATE, res.state||{});
       migrateReps();
+      migrateTasks();
       document.getElementById("teamNameInput").value = state.teamName || "";
       renderAll();
       startPolling();
@@ -558,11 +574,13 @@
     empty.style.display = "none";
     grid.innerHTML = state.tasks.map(function(t){
       var ids = t.repIds||[];
-      var resp = state.reps.filter(function(r){return ids.indexOf(r.id)>-1;});
+      var area = tarefaArea(t), fixa = areaFixa(t.nome);
+      var resp = state.reps.filter(function(r){return ids.indexOf(r.id)>-1 && repElegivel(t, r);});
+      var fora = state.reps.filter(function(r){return ids.indexOf(r.id)>-1 && !repElegivel(t, r);});
       var disp = resp.filter(function(r){return effStatus(r, dimDate)==="ativo";}).length;
       var cov;
       if(resp.length===0){
-        cov = '<div class="cov"><div class="cov-head"><span>Sem responsáveis</span></div></div>';
+        cov = '<div class="cov"><div class="cov-head"><span>Sem responsáveis'+(fixa?' de '+CATEGORIA_LABEL[fixa]:'')+'</span></div></div>';
       }else{
         var pct = Math.round(disp/resp.length*100);
         var cls = disp===0 ? "cov-bad" : (pct<50 ? "cov-mid" : "cov-ok");
@@ -570,17 +588,20 @@
           '<div class="cov-bar"><div class="cov-fill '+cls+'" style="width:'+pct+'%"></div></div></div>';
       }
       var lista = sortReps(state.reps).filter(function(r){
-        if(dimFiltro==="resp") return ids.indexOf(r.id)>-1;
-        if(dimFiltro==="disp") return effStatus(r, dimDate)==="ativo";
+        var elegivel = repElegivel(t, r), atribuido = ids.indexOf(r.id)>-1;
+        if(!elegivel && !atribuido) return false;
+        if(dimFiltro==="resp") return atribuido;
+        if(dimFiltro==="disp") return elegivel && effStatus(r, dimDate)==="ativo";
         return true;
       });
       var repChecks = state.reps.length ? (lista.length ? lista.map(function(r){
         var isResp = ids.indexOf(r.id)>-1;
-        var st = effStatus(r, dimDate);
-        var nota = [r.escala ? r.escala : "", statusNote(r, dimDate)].filter(Boolean).join(" · ");
+        var foraArea = !repElegivel(t, r);
+        var st = foraArea ? "fora" : effStatus(r, dimDate);
+        var nota = foraArea ? "fora da área" : [r.escala ? r.escala : "", statusNote(r, dimDate)].filter(Boolean).join(" · ");
         return '<label class="rep-box st-'+st+(isResp?' is-resp':'')+'"><input type="checkbox" class="task-rep-toggle" data-task="'+t.id+'" data-rep="'+r.id+'" '+(isResp?"checked":"")+'>'+
           esc(r.nome)+(nota?' <small>'+esc(nota)+'</small>':'')+'</label>';
-      }).join("") : '<span class="hint">Nenhum rep nesse filtro.</span>') : '<span class="hint">Cadastre reps na aba Equipe.</span>';
+      }).join("") : '<span class="hint">Nenhum rep nesse filtro'+(fixa?' (só reps de '+CATEGORIA_LABEL[fixa]+')':'')+'.</span>') : '<span class="hint">Cadastre reps na aba Equipe.</span>';
       return '<div class="card">' +
         '<div class="card-head">' +
           '<div class="card-title">'+esc(t.nome)+'</div>' +
@@ -589,10 +610,12 @@
             '<button class="btn-ghost" data-act="del-task" data-id="'+t.id+'">Excluir</button>' +
           '</div>' +
         '</div>' +
-        '<div class="card-tags"><span class="tag tag-dark">'+(CATEGORIA_LABEL[t.categoria]||"—")+'</span></div>' +
+        '<div class="card-tags"><span class="tag tag-dark">'+(CATEGORIA_LABEL[area]||"—")+'</span>' +
+          (fixa ? '<span class="tag tag-folga">só reps de '+CATEGORIA_LABEL[fixa]+'</span>' : '') + '</div>' +
         cov +
         '<div class="card-section-label">Reps responsáveis</div>' +
         '<div class="check-list">'+repChecks+'</div>' +
+        (fora.length ? '<div class="hint" style="margin-top:8px;">'+fora.length+' rep(s) de outra área estão atribuídos e são ignorados no cálculo. Desmarque para limpar.</div>' : '') +
       '</div>';
     }).join("");
 
@@ -601,17 +624,23 @@
   function renderResumo(){
     var wrap = document.getElementById("resumoGrid");
     var icons = {inventario:"📋", qualidade:"✅"};
+    function repsDaTarefa(t){
+      return (t.repIds||[]).filter(function(rid){
+        var r = state.reps.find(function(x){return x.id===rid;});
+        return r && repElegivel(t, r);
+      });
+    }
 
-    var invTasks = state.tasks.filter(function(t){ return t.categoria==="inventario"; });
+    var invTasks = state.tasks.filter(function(t){ return tarefaArea(t)==="inventario"; });
     var invItems = invTasks.map(function(t){
-      var names = (t.repIds||[]).map(nmHTML).join(", ") || "—";
+      var names = repsDaTarefa(t).map(nmHTML).join(", ") || "—";
       return '<div class="resumo-item"><span class="dot">•</span><div><b>'+esc(t.nome)+':</b> '+names+'</div></div>';
     }).join("") || '<div class="hint">Nenhuma tarefa nessa área ainda.</div>';
 
-    var qltTasks = state.tasks.filter(function(t){ return t.categoria==="qualidade"; });
+    var qltTasks = state.tasks.filter(function(t){ return tarefaArea(t)==="qualidade"; });
     var repTaskMap = {};
     qltTasks.forEach(function(t){
-      (t.repIds||[]).forEach(function(rid){
+      repsDaTarefa(t).forEach(function(rid){
         if(!repTaskMap[rid]) repTaskMap[rid] = [];
         repTaskMap[rid].push(t.nome);
       });
@@ -633,11 +662,24 @@
       '</div>';
     }).join("");
   }
+  function syncTaskAreaLock(){
+    var f = areaFixa(document.getElementById("taskNome").value);
+    var sel = document.getElementById("taskCategoria"), hint = document.getElementById("taskAreaHint");
+    if(f){
+      sel.value = f; sel.disabled = true;
+      hint.textContent = "Área fixa desta tarefa: só reps de " + CATEGORIA_LABEL[f] + ".";
+      hint.style.display = "block";
+    }else{
+      sel.disabled = false;
+      hint.style.display = "none";
+    }
+  }
   function startTaskEdit(t){
     editing.task = t.id;
     document.getElementById("taskFormTitle").textContent = "Editar tarefa";
     document.getElementById("taskNome").value = t.nome;
     document.getElementById("taskCategoria").value = t.categoria||"inventario";
+    syncTaskAreaLock();
     document.getElementById("taskSaveBtn").textContent = "Salvar";
     document.getElementById("taskCancelBtn").style.display = "inline-block";
     document.getElementById("taskNome").focus();
@@ -647,13 +689,14 @@
     document.getElementById("taskFormTitle").textContent = "Adicionar tarefa";
     document.getElementById("taskNome").value = "";
     document.getElementById("taskCategoria").value = "inventario";
+    syncTaskAreaLock();
     document.getElementById("taskSaveBtn").textContent = "Adicionar";
     document.getElementById("taskCancelBtn").style.display = "none";
   }
   function saveTask(){
     var nome = document.getElementById("taskNome").value.trim();
     if(!nome){ document.getElementById("taskNome").focus(); return; }
-    var categoria = document.getElementById("taskCategoria").value;
+    var categoria = areaFixa(nome) || document.getElementById("taskCategoria").value;
     if(editing.task){
       var t = state.tasks.find(function(x){return x.id===editing.task;});
       if(t){ t.nome = nome; t.categoria = categoria; }
@@ -970,6 +1013,7 @@
     document.getElementById(id).addEventListener("change", updatePeriodUI);
   });
 
+  document.getElementById("taskNome").addEventListener("input", syncTaskAreaLock);
   document.getElementById("repSaveBtn").addEventListener("click", saveRep);
   document.getElementById("repCancelBtn").addEventListener("click", resetRepForm);
   document.getElementById("taskSaveBtn").addEventListener("click", saveTask);
