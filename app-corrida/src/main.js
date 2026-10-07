@@ -19,7 +19,9 @@ var SD = { historico:[] };
 // ═══════════════════════════════════════
 //  API — motor local (engine.js) + armazenamento (storage.js)
 // ═══════════════════════════════════════
-var READS  = { getData:Engine.getData, getEntries:Engine.getEntries, getDestaques:Engine.getDestaques, debug:Engine.debugInfo };
+// "snapshot" lê dados e lançamentos da MESMA leitura (duas leituras separadas podiam mostrar versões diferentes).
+function snapshot(db, p){ return Object.assign({}, Engine.getData(db, p), { entries: db.entries }); }
+var READS  = { getData:Engine.getData, getEntries:Engine.getEntries, getDestaques:Engine.getDestaques, debug:Engine.debugInfo, snapshot:snapshot };
 var WRITES = { save:Engine.saveEntry, del:Engine.deleteEntry, addRep:Engine.addRep, delRep:Engine.delRep, editRep:Engine.editRep,
                period:Engine.setPeriod, calcDestaque:Engine.calcDestaque, delDestaque:Engine.delDestaque };
 
@@ -102,23 +104,33 @@ function hideAlt(id){ var el=document.getElementById(id); if(el){el.className="a
 // ═══════════════════════════════════════
 //  CARREGAR DADOS
 // ═══════════════════════════════════════
-function onData(d) {
+var _sig = "";
+function onData(d, silent) {
+  // atualização em segundo plano só redesenha se algo mudou
+  var sig = JSON.stringify(Object.assign({}, d, { updated: "" }));
+  if (silent && sig===_sig) return;
+  _sig = sig;
   S.mes=d.mes; S.ano=d.ano; S.reps=d.reps;
   S.ranking=d.ranking; S.rankingREP=d.rankingREP; S.rankingOP=d.rankingOP;
   S.hlArrays=d.hlArrays||[];
   S.hlArraysOP=d.hlArraysOP||[];
   S.rankingOPFull=d.rankingOPFull||[];
   S.years=d.years; S.updated=d.updated;
-  callApi("getEntries", {}, function(de){
-    hideLoad();
-    S.entries = de.entries || [];
-    render();
-  }, function(e){ hideLoad(); toast("⚠ Histórico: "+e); render(); });
+  S.entries = d.entries || [];
+  hideLoad();
+  render();
 }
 
-function loadData() {
-  showLoad("Carregando dados…");
-  callApi("getData", {}, onData, function(e){ hideLoad(); toast("⚠ "+e); });
+// silent=true: atualização automática (sem tela de carregamento, sem avisos de erro, sem concorrer com gravações)
+function loadData(silent) {
+  silent = silent === true;
+  if (silent && Storage.ocupado()) return;
+  if (!silent) showLoad("Carregando dados…");
+  var turnoPedido = Storage.getTurno();
+  callApi("snapshot", {}, function(d){
+    if (turnoPedido !== Storage.getTurno()) return; // trocou de turno enquanto carregava
+    onData(d, silent);
+  }, function(e){ if (!silent) { hideLoad(); toast("⚠ "+e); } });
 }
 
 // ═══════════════════════════════════════
@@ -829,6 +841,6 @@ document.addEventListener("keydown", function(e){ var el=e.target.closest("[data
 
 buildTaskGrid();
 loadData();
-setInterval(loadData, 60000);
+setInterval(function(){ loadData(true); }, 30000);
 
 Object.assign(window, { changeTurno, addRep, askConfirm, avc, avci, backupBaixar, backupGerar, backupRestaurar, ballSvg, buildPodium, buildRegHTML, buildRkTable, buildTaskGrid, calcDestaque, callApi, changePeriod, clearForm, closeModal, closeModalBtn, delDestaque, delEntry, editEntry, goTab, hideAlt, hideLoad, ini, initSels, loadData, loadDestaques, onData, openEditModal, parseArgs, removeRep, render, renderDestaques, renderDestiquePreview, renderHist, renderHistDest, renderKPIs, renderPodio, renderRanking, renderReps, repTipo, runDebug, runHandler, saveEditRep, saveEntry, showAlt, showLoad, toast, toggleHist, toggleTipo });
