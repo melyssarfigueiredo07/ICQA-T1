@@ -54,6 +54,11 @@ async function lerCru(st) {
     if (cache) return { raw: clone(cache.raw), updatedAt: cache.updatedAt, offline: true }
     throw e
   }
+  // Abertura com leitura vazia: o GRID às vezes devolve vazio por um instante. Confirma antes de aceitar.
+  for (let i = 0; i < 2 && !cache && semDados(out.state); i++) {
+    await new Promise((r) => setTimeout(r, 700))
+    try { out = await st.get() } catch (e) { break }
+  }
   const raw = out.state || {}
   if (cache && (maisAntigo(out.updated_at, cache.updatedAt) || (semDados(raw) && !semDados(cache.raw)))) {
     return { raw: clone(cache.raw), updatedAt: cache.updatedAt, offline: false }

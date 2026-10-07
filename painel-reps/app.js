@@ -180,7 +180,6 @@
         return {id:"seed-"+normNome(nome).replace(/[^a-z0-9]+/g,"-"), nome:nome, categoria:"inventario", repIds:[]};
       });
     }
-    scheduleSave();
   }
   function migrateTasks(){
     seedTasks();
@@ -215,33 +214,108 @@
     if(saveTimer) clearTimeout(saveTimer);
     saveTimer = setTimeout(persist, 250);
   }
+  var lido = false; // só grava depois de ter lido o estado do Grid com sucesso (senão sobrescreveria com vazio)
+  function aviso(msg){
+    var el = document.getElementById("avisoGrid");
+    if(!el) return;
+    el.textContent = msg || "";
+    el.style.display = msg ? "block" : "none";
+  }
   function persist(){
+    if(!lido){ aviso("Sem conexão com o Grid: a alteração NÃO foi salva. Aguarde a reconexão e repita."); return; }
     window.GRID.state.set(root, lastUpdatedAt).then(function(res){
       lastUpdatedAt = res.updated_at;
+      aviso("");
     }).catch(function(err){
       console.error("Falha ao salvar no Grid:", err);
+      aviso("Não foi possível salvar no Grid agora (outra pessoa pode ter alterado ao mesmo tempo). Recarregue a página antes de continuar.");
     });
+  }
+  // ---------- proteção contra leituras vazias/atrasadas do Grid ----------
+  // O Grid às vezes devolve estado vazio (ou uma versão antiga) por um instante. Nunca adotamos isso
+  // depois de já termos dados, e NADA é gravado por causa de uma leitura: só ações do usuário gravam.
+  var teveDados = false;
+  function temDados(r){
+    if(!r) return false;
+    var lista = r.times && typeof r.times==="object" ? Object.keys(r.times).map(function(k){ return r.times[k]; }) : [r];
+    return lista.some(function(t){ return t && ((t.reps||[]).length || (t.tasks||[]).length || (t.pontos||[]).length || (t.lost||[]).length); });
+  }
+  function tempo(v){ var n = Date.parse(v); return isNaN(n) ? null : n; }
+  function leituraValida(res){
+    if(!teveDados) return true;
+    var a = tempo(res.updated_at), b = tempo(lastUpdatedAt);
+    if(a!==null && b!==null && a<b) return false;
+    return temDados(res.state);
+  }
+  function lerGrid(tentativas){
+    return window.GRID.state.get().then(function(res){
+      if(!temDados(res.state) && tentativas>0){
+        return new Promise(function(ok){ setTimeout(ok, 700); }).then(function(){ return lerGrid(tentativas-1); });
+      }
+      return res;
+    });
+  }
+  function aplicarLeitura(res){
+    lastUpdatedAt = res.updated_at;
+    usarDados(res.state);
+    if(temDados(res.state)) teveDados = true;
   }
   // Lê o estado cru do Grid (formato novo ou antigo) e deixa `state` apontando para os dados do time ativo.
   function usarDados(raw){
     raw = raw || {};
-    var migrou = false;
     if(raw.times && typeof raw.times==="object"){
       root = raw;
     }else{
       root = { times:{} };
-      if(Object.keys(raw).length){ root.times[TIMES[0].key] = raw; migrou = true; }
+      if(Object.keys(raw).length){ root.times[TIMES[0].key] = raw; }
     }
-    var novo = !root.times[timeAtual];
     state = root.times[timeAtual] = Object.assign({}, DEFAULT_STATE, root.times[timeAtual]||{});
     if(!state.teamName) state.teamName = timeDef().nome;
-    if(novo || migrou) scheduleSave();
+    // (a estrutura nova só é gravada na próxima ação do usuário, nunca ao abrir)
     migrateReps();
     migrateTasks();
     document.getElementById("teamNameInput").value = state.teamName || "";
     var sel = document.getElementById("timeSel");
     if(sel && sel.value!==timeAtual) sel.value = timeAtual;
     ajustarAbas();
+  }
+  // ---------- backup / restauração (cópia fora do Grid) ----------
+  function backupTexto(){ return JSON.stringify(root, null, 1); }
+  function backupAbrir(){
+    document.getElementById("backupText").value = "";
+    document.getElementById("backupMsg").textContent = "";
+    document.getElementById("backupOverlay").style.display = "flex";
+  }
+  function backupFechar(){ document.getElementById("backupOverlay").style.display = "none"; }
+  function backupMsg(t){ document.getElementById("backupMsg").textContent = t; }
+  function backupGerar(){
+    var ta = document.getElementById("backupText");
+    ta.value = backupTexto(); ta.select();
+    backupMsg("Backup gerado (todos os times). Copie o texto e guarde num arquivo.");
+  }
+  function backupBaixar(){
+    try{
+      var blob = new Blob([backupTexto()], {type:"application/json"});
+      var url = URL.createObjectURL(blob);
+      var l = document.createElement("a");
+      l.href = url; l.download = "painel-reps-backup.json";
+      document.body.appendChild(l); l.click(); document.body.removeChild(l);
+      URL.revokeObjectURL(url);
+      backupMsg("Se o download não iniciar, use \"Gerar backup\" e copie o texto.");
+    }catch(e){ backupMsg("Download bloqueado aqui. Use \"Gerar backup\" e copie o texto."); }
+  }
+  function backupRestaurar(){
+    var dados;
+    try{ dados = JSON.parse(document.getElementById("backupText").value); }catch(e){ backupMsg("Texto inválido: cole o JSON do backup."); return; }
+    if(!dados || typeof dados!=="object" || !(dados.times || Array.isArray(dados.reps))){ backupMsg("Formato não reconhecido."); return; }
+    if(!temDados(dados)){ backupMsg("Esse backup está vazio; nada foi restaurado."); return; }
+    if(!lido){ backupMsg("Sem conexão com o Grid; tente de novo em instantes."); return; }
+    usarDados(dados);
+    teveDados = true;
+    persist();
+    resetRepForm(); resetTaskForm(); resetPontoForm(); resetLostForm();
+    renderAll();
+    backupMsg("Backup restaurado.");
   }
   function trocarTime(key){
     if(key===timeAtual) return;
@@ -261,24 +335,24 @@
     if(pollTimer) return;
     pollTimer = setInterval(function(){
       window.GRID.state.get().then(function(res){
-        if(res.updated_at !== lastUpdatedAt){
-          lastUpdatedAt = res.updated_at;
-          usarDados(res.state);
+        if(res.updated_at !== lastUpdatedAt && leituraValida(res)){
+          aplicarLeitura(res);
           renderAll();
         }
       }).catch(function(){});
     }, 5000);
   }
   function loadAndRender(){
-    window.GRID.state.get().then(function(res){
-      lastUpdatedAt = res.updated_at;
-      usarDados(res.state);
+    lerGrid(3).then(function(res){
+      aplicarLeitura(res);
+      lido = true;
+      aviso("");
       renderAll();
       startPolling();
     }).catch(function(err){
       console.error("Falha ao carregar do Grid:", err);
-      renderAll();
-      startPolling();
+      aviso("Não foi possível ler os dados do Grid. Nada será gravado até a conexão voltar; tentando de novo…");
+      setTimeout(loadAndRender, 3000);
     });
   }
 
@@ -1267,6 +1341,11 @@
     else if(act==="del-ponto"){ pendingDelete(btn, deletePonto, id); }
     else if(act==="edit-lost"){ startLostEdit(state.lost.find(function(l){return l.id===id;})); }
     else if(act==="del-lost"){ pendingDelete(btn, deleteLost, id); }
+    else if(act==="backup-open"){ backupAbrir(); }
+    else if(act==="backup-close"){ backupFechar(); }
+    else if(act==="backup-gerar"){ backupGerar(); }
+    else if(act==="backup-baixar"){ backupBaixar(); }
+    else if(act==="backup-restaurar"){ pendingAction(btn, backupRestaurar); }
   });
 
   document.getElementById("fichaOverlay").addEventListener("click", function(e){ if(e.target.id==="fichaOverlay") closeFicha(); });

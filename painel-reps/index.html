@@ -19,6 +19,7 @@
         <input class="team-name" id="teamNameInput" placeholder="nome da equipe (opcional)">
       </div>
       <div class="topbar-right-group">
+        <button class="btn-backup" data-act="backup-open" title="Backup e restauração dos dados">💾 Backup</button>
         <select class="time-sel" id="timeSel" title="Time" aria-label="Time"></select>
         <span class="live-badge"><span class="live-dot"></span>Ao vivo</span>
         <div class="date-pill" id="clockFoot">—</div>
@@ -29,6 +30,7 @@
     <div class="tabs" id="navList"></div>
   </div>
 
+  <div class="aviso-grid" id="avisoGrid" style="display:none;"></div>
   <div class="main">
 
     <!-- EQUIPE -->
@@ -409,6 +411,20 @@
   </div>
 </div>
 
+<div class="ficha-overlay" id="backupOverlay" style="display:none;">
+  <div class="ficha">
+    <div class="form-panel-title">Backup e restauração</div>
+    <div class="hint" style="margin-bottom:10px;">Guarda uma cópia de todos os times fora do Grid. Para restaurar, cole o texto do backup abaixo.</div>
+    <textarea id="backupText" style="width:100%; height:200px; font-family:var(--mono, monospace); font-size:11px;" spellcheck="false"></textarea>
+    <div class="hint" id="backupMsg" style="margin:8px 0; min-height:16px;"></div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn" data-act="backup-gerar">Gerar backup</button>
+      <button class="btn" data-act="backup-baixar">Baixar arquivo</button>
+      <button class="btn" data-act="backup-restaurar">Restaurar do texto</button>
+      <button class="btn" data-act="backup-close" style="margin-left:auto;">Fechar</button>
+    </div>
+  </div>
+</div>
 <div class="ficha-overlay" id="fichaOverlay" style="display:none;">
   <div class="ficha" id="fichaBox"></div>
 </div>
