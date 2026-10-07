@@ -13,7 +13,7 @@
   };
   var TIMES = [
     {key:"vinicius", nome:"Time Vinicius", areaFixa:ICQA_AREA_FIXA},
-    {key:"harley", nome:"Time Harley", areaFixa:{},
+    {key:"harley", nome:"Time Harley", areaFixa:{}, views:["equipe","dimensionamento"],
      seedTasks:["Contagem","Stock Audit","Lost","RR/ER","Hunter"]}
   ];
   var timeAtual = TIMES[0].key;
@@ -241,6 +241,7 @@
     document.getElementById("teamNameInput").value = state.teamName || "";
     var sel = document.getElementById("timeSel");
     if(sel && sel.value!==timeAtual) sel.value = timeAtual;
+    ajustarAbas();
   }
   function trocarTime(key){
     if(key===timeAtual) return;
@@ -282,11 +283,25 @@
   }
 
   // ---------- nav ----------
+  // Abas disponíveis no time ativo (sem `views` = todas). Os dados das abas ocultas ficam guardados.
+  var viewAtual = VIEWS[0].key, navTime = null;
+  function viewsDoTime(){
+    var permitidas = timeDef().views;
+    return VIEWS.filter(function(v){ return !permitidas || permitidas.indexOf(v.key)>-1; });
+  }
+  function ajustarAbas(){
+    if(navTime===timeAtual) return;
+    navTime = timeAtual;
+    buildNav();
+    var ok = viewsDoTime().some(function(v){ return v.key===viewAtual; });
+    showView(ok ? viewAtual : viewsDoTime()[0].key);
+  }
   function buildNav(){
     var nav = document.getElementById("navList");
-    VIEWS.forEach(function(v, i){
+    nav.innerHTML = "";
+    viewsDoTime().forEach(function(v){
       var el = document.createElement("div");
-      el.className = "tab-item" + (i===0 ? " active" : "");
+      el.className = "tab-item" + (v.key===viewAtual ? " active" : "");
       el.dataset.view = v.key;
       el.textContent = v.label;
       el.addEventListener("click", function(){ showView(v.key); });
@@ -294,6 +309,7 @@
     });
   }
   function showView(key){
+    viewAtual = key;
     document.querySelectorAll(".view").forEach(function(v){
       v.classList.toggle("active", v.dataset.view===key);
     });
