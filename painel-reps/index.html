@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Operações</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="app-shell">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-brand">
+        <div class="brand-title">Painel de Reps</div>
+        <input class="team-name" id="teamNameInput" placeholder="nome da equipe (opcional)">
+      </div>
+      <div class="topbar-right-group">
+        <span class="live-badge"><span class="live-dot"></span>Ao vivo</span>
+        <div class="date-pill" id="clockFoot">—</div>
+      </div>
+    </div>
+  </div>
+  <div class="subnav">
+    <div class="tabs" id="navList"></div>
+  </div>
+
+  <div class="main">
+
+    <!-- EQUIPE -->
+    <div class="view" data-view="equipe">
+      <div class="view-head">
+        <div>
+          <div class="view-title">Equipe</div>
+          <div class="view-sub">Reps, escala, admissão, acesso ao HV, área e tarefas que sabem realizar</div>
+        </div>
+        <div class="view-meta" id="equipeMeta"></div>
+      </div>
+
+      <div class="strip" id="equipeStrip"></div>
+
+      <div class="form-panel">
+        <div class="form-panel-title" id="repFormTitle">Adicionar rep</div>
+        <div class="form-row">
+          <div class="field grow2">
+            <label>Nome</label>
+            <input type="text" id="repNome" placeholder="Nome do rep">
+          </div>
+          <div class="field">
+            <label>Escala</label>
+            <select id="repEscala">
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+              <option value="D">D</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Admissão</label>
+            <input type="date" id="repAdmissao">
+          </div>
+          <div class="field">
+            <label>Acesso ao HV</label>
+            <select id="repAcessoHV">
+              <option value="nao">Não</option>
+              <option value="sim">Sim</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>3ª contagem</label>
+            <select id="repTerceiraContagem">
+              <option value="nao">Não</option>
+              <option value="sim">Sim</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Máquina</label>
+            <select id="repMaquina">
+              <option value="nao">Não</option>
+              <option value="sim">Sim</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Área</label>
+            <select id="repCategoria">
+              <option value="inventario">Inventário</option>
+              <option value="qualidade">Qualidade</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Status</label>
+            <select id="repStatus">
+              <option value="ativo">Ativo</option>
+              <option value="ferias">Férias</option>
+              <option value="afastado">Afastado</option>
+            </select>
+          </div>
+          <div class="field" style="flex-basis:100%; height:0; margin:0; padding:0;"></div>
+          <div class="field">
+            <label>CPF</label>
+            <input type="text" id="repCpf" placeholder="000.000.000-00">
+          </div>
+          <div class="field">
+            <label>Aniversário</label>
+            <input type="date" id="repAniversario">
+          </div>
+          <div class="field">
+            <label>LDAP</label>
+            <input type="text" id="repLdap" placeholder="usuario.ldap">
+          </div>
+          <div class="field">
+            <label>RE</label>
+            <input type="text" id="repRe" placeholder="Nº de registro">
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" id="repEmail" placeholder="nome@empresa.com">
+          </div>
+          <div class="field grow2">
+            <label>Endereço</label>
+            <input type="text" id="repEndereco" placeholder="Rua, número, bairro, cidade">
+          </div>
+          <div class="field">
+            <label>Telefone</label>
+            <input type="tel" id="repTelefone" placeholder="(00) 00000-0000">
+          </div>
+          <div class="field" style="flex:0;">
+            <label>&nbsp;</label>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-primary" id="repSaveBtn">Adicionar</button>
+              <button class="btn" id="repCancelBtn" style="display:none;">Cancelar</button>
+            </div>
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label>Tarefas que sabe realizar</label>
+          <div id="repSkills" class="check-list"></div>
+        </div>
+        <div class="form-error" id="repFormError" style="display:none;"></div>
+      </div>
+
+      <div class="card-grid" id="repGrid"></div>
+      <div class="empty" id="repEmpty" style="display:none;">
+        <b>Nenhum rep cadastrado</b>
+        Adicione o primeiro rep acima para começar a montar a equipe.
+      </div>
+    </div>
+
+    <!-- DIMENSIONAMENTO -->
+    <div class="view" data-view="dimensionamento">
+      <div class="view-head">
+        <div>
+          <div class="view-title">Dimensionamento</div>
+          <div class="view-sub">Tarefas por área (Inventário/Qualidade) e os reps responsáveis por cada uma</div>
+        </div>
+        <div class="view-meta" id="taskMeta"></div>
+      </div>
+
+      <div class="form-panel">
+        <div class="form-panel-title" id="taskFormTitle">Adicionar tarefa</div>
+        <div class="form-row">
+          <div class="field grow2">
+            <label>Nome da tarefa</label>
+            <input type="text" id="taskNome" placeholder="Ex.: 1º bip todos, Máquina, Inbound Audit">
+          </div>
+          <div class="field">
+            <label>Área</label>
+            <select id="taskCategoria">
+              <option value="inventario">Inventário</option>
+              <option value="qualidade">Qualidade</option>
+            </select>
+          </div>
+          <div class="field" style="flex:0;">
+            <label>&nbsp;</label>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-primary" id="taskSaveBtn">Adicionar</button>
+              <button class="btn" id="taskCancelBtn" style="display:none;">Cancelar</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-error" id="taskFormError" style="display:none;"></div>
+      </div>
+
+      <div class="card-grid" id="taskGrid"></div>
+      <div class="empty" id="taskEmpty" style="display:none;">
+        <b>Nenhuma tarefa cadastrada</b>
+        Adicione a primeira tarefa acima e marque os reps responsáveis direto no card.
+      </div>
+
+      <div class="form-panel-title" style="margin:32px 0 14px;">Resumo por área</div>
+      <div class="resumo-grid" id="resumoGrid"></div>
+    </div>
+
+    <!-- PONTOS ALINHADOS -->
+    <div class="view" data-view="pontos">
+      <div class="view-head">
+        <div>
+          <div class="view-title">Pontos alinhados</div>
+          <div class="view-sub">Combinados por área, com os reps incluídos em cada registro</div>
+        </div>
+        <div class="view-meta" id="pontosMeta"></div>
+      </div>
+
+      <div class="form-panel">
+        <div class="form-panel-title" id="pontoFormTitle">Registrar ponto</div>
+        <div class="form-row">
+          <div class="field">
+            <label>Área</label>
+            <select id="pontoCategoria">
+              <option value="inventario">Inventário</option>
+              <option value="qualidade">Qualidade</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Data</label>
+            <input type="date" id="pontoData">
+          </div>
+          <div class="field grow2" style="flex:3;">
+            <label>Combinado</label>
+            <textarea id="pontoTexto" placeholder="O que foi alinhado"></textarea>
+          </div>
+          <div class="field">
+            <label>Status</label>
+            <select id="pontoStatus">
+              <option value="pendente">Pendente</option>
+              <option value="concluido">Concluído</option>
+            </select>
+          </div>
+          <div class="field" style="flex:0;">
+            <label>&nbsp;</label>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-primary" id="pontoSaveBtn">Registrar</button>
+              <button class="btn" id="pontoCancelBtn" style="display:none;">Cancelar</button>
+            </div>
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label>Reps incluídos</label>
+          <div id="pontoReps" class="check-list"></div>
+        </div>
+        <div class="form-error" id="pontoFormError" style="display:none;"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Registros</div>
+        <table>
+          <thead><tr><th>Data</th><th>Área</th><th>Reps</th><th>Combinado</th><th>Status</th><th></th></tr></thead>
+          <tbody id="pontoTableBody"></tbody>
+        </table>
+        <div class="empty" id="pontoEmpty" style="display:none;">
+          <b>Nenhum ponto registrado</b>
+          Cadastre reps na aba Equipe e depois registre os combinados aqui.
+        </div>
+      </div>
+    </div>
+
+    <!-- LOST -->
+    <div class="view" data-view="lost">
+      <div class="view-head">
+        <div>
+          <div class="view-title">Controle de Lost</div>
+          <div class="view-sub">Perdas por rep e MU, com o total somado por unidade</div>
+        </div>
+        <div class="view-meta" id="lostMeta"></div>
+      </div>
+
+      <div class="strip" id="lostStrip"></div>
+
+      <div class="form-panel">
+        <div class="form-panel-title" id="lostFormTitle">Registrar lost</div>
+        <div class="form-row">
+          <div class="field">
+            <label>Rep</label>
+            <select id="lostRep"></select>
+          </div>
+          <div class="field">
+            <label>MU</label>
+            <input type="text" id="lostMu" placeholder="Ex.: MU01">
+          </div>
+          <div class="field">
+            <label>Quantidade</label>
+            <input type="number" id="lostQuantidade" min="0" step="1" placeholder="0">
+          </div>
+          <div class="field">
+            <label>Valor (R$)</label>
+            <input type="number" id="lostValor" min="0" step="0.01" placeholder="0,00">
+          </div>
+          <div class="field" style="flex:0;">
+            <label>&nbsp;</label>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-primary" id="lostSaveBtn">Registrar</button>
+              <button class="btn" id="lostCancelBtn" style="display:none;">Cancelar</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-error" id="lostFormError" style="display:none;"></div>
+      </div>
+
+      <div class="panel-grid">
+        <div class="panel">
+          <div class="panel-title">Total por MU</div>
+          <table>
+            <thead><tr><th>MU</th><th>Quantidade</th><th style="text-align:right;">Valor total</th></tr></thead>
+            <tbody id="lostMuTableBody"></tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Registros</div>
+          <table>
+            <thead><tr><th>Rep</th><th>MU</th><th>Quantidade</th><th style="text-align:right;">Valor</th><th></th></tr></thead>
+            <tbody id="lostTableBody"></tbody>
+          </table>
+          <div class="empty" id="lostEmpty" style="display:none;">
+            <b>Nenhum lost registrado</b>
+            Quando houver uma perda, registre aqui para acompanhar o total por MU.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
