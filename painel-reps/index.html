@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel de Operações</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body class="is-loading">
+
+<div class="load-bar" id="loadBar" aria-hidden="true"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<div class="app-shell">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="topbar-brand">
+        <div class="brand-title">Painel de Reps</div>
+        <input class="team-name" id="teamNameInput" placeholder="nome da equipe (opcional)">
+      </div>
+      <div class="topbar-right-group">
+        <span class="save-state" id="saveState" data-s="idle" title="Situação da gravação no Grid"><i class="ss-dot"></i><span class="ss-txt">Salvo</span></span>
+        <button class="btn-backup" data-act="backup-open" title="Backup e restauração dos dados">💾 Backup</button>
+        <select class="time-sel" id="timeSel" title="Time" aria-label="Time"></select>
+        <span class="live-badge"><span class="live-dot"></span>Ao vivo</span>
+        <div class="date-pill" id="clockFoot">—</div>
+      </div>
+    </div>
+  </div>
+  <div class="subnav" id="subnav">
+    <div class="tabs" id="navList" role="tablist" aria-label="Seções do painel"></div>
+  </div>
+
+  <div class="aviso-grid" id="avisoGrid" style="display:none;"></div>
+  <div class="main">
+
+    <!-- EQUIPE -->
+    <div class="view" data-view="equipe">
+      <div class="view-head">
+        <div>
+          <div class="view-title">Equipe</div>
+          <div class="view-sub">Quem está na equipe, a escala de cada um e o que sabe fazer</div>
+        </div>
+        <div class="view-meta" id="equipeMeta"></div>
+      </div>
+
+      <div class="team-card" id="equipeStrip" aria-busy="true">
+        <div class="tc-head">
+          <div><span class="skel" style="width:230px;height:22px;"></span><span class="skel" style="width:310px;height:13px;margin-top:9px;"></span></div>
+          <span class="skel" style="width:130px;height:38px;"></span>
+        </div>
+        <span class="skel" style="width:100%;height:12px;margin:16px 0 12px;"></span>
+        <span class="skel" style="width:58%;height:24px;"></span>
+      </div>
+
+      <div class="form-panel fc collapsed" id="repFormPanel" data-form="rep">
+        <button type="button" class="form-head" id="repFormToggle" data-act="toggle-form" data-form="rep" aria-expanded="false" aria-controls="repFormBody">
+          <span class="fh-plus" aria-hidden="true">+</span>
+          <span class="fh-title" id="repFormTitle">Adicionar rep</span>
+          <span class="fh-state" aria-hidden="true">Abrir</span>
+          <span class="fh-chev" aria-hidden="true"></span>
+        </button>
+        <div class="fbody" id="repFormBody"><div class="fbody-in"><div class="fbody-pad">
+        <div class="form-row">
+          <div class="form-sub">Cadastro</div>
+          <div class="field grow2">
+            <label>Nome</label>
+            <input type="text" id="repNome" placeholder="Nome do rep">
+          </div>
+          <div class="field">
+            <label>Classificação</label>
+            <select id="repClasse">
+              <option value="rep">Rep</option>
+              <option value="ps">PS</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Escala</label>
+            <select id="repEscala">
+              <option value="">Sem escala</option>
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="C">C</option>
+              <option value="D">D</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Admissão</label>
+            <input type="date" id="repAdmissao">
+          </div>
+          <div class="field">
+            <label>Acesso ao HV</label>
+            <select id="repAcessoHV">
+              <option value="nao">Não</option>
+              <option value="sim">Sim</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>3ª contagem</label>
+            <select id="repTerceiraContagem">
+              <option value="nao">Não</option>
+              <option value="sim">Sim</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Máquina</label>
+            <select id="repMaquina">
+              <option value="nao">Não</option>
+              <option value="sim">Sim</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Área</label>
+            <select id="repCategoria">
+              <option value="inventario">Inventário</option>
+              <option value="qualidade">Qualidade</option>
+              <option value="ps_operacoes">PS Operações</option>
+              <option value="ps_icqa">PS ICQA</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Status</label>
+            <select id="repStatus">
+              <option value="ativo">Ativo</option>
+              <option value="ferias">Férias</option>
+              <option value="licenca">Licença</option>
+              <option value="afastado">Afastado</option>
+            </select>
+          </div>
+          <div class="field period-field" style="display:none;">
+            <label id="repAfastInicioLabel">Início</label>
+            <input type="date" id="repAfastInicio">
+          </div>
+          <div class="field period-field" style="display:none;">
+            <label>Duração (dias)</label>
+            <input type="number" id="repAfastDias" min="1" step="1" placeholder="Ex.: 30">
+          </div>
+          <div class="field period-field" style="display:none;">
+            <label>Data final (calculada)</label>
+            <div class="calc-out" id="repAfastFim">—</div>
+          </div>
+          <div class="form-sub">Dados pessoais e contato</div>
+          <div class="field">
+            <label>CPF</label>
+            <input type="text" id="repCpf" placeholder="000.000.000-00">
+          </div>
+          <div class="field">
+            <label>Aniversário</label>
+            <input type="date" id="repAniversario">
+          </div>
+          <div class="field">
+            <label>LDAP</label>
+            <input type="text" id="repLdap" placeholder="usuario.ldap">
+          </div>
+          <div class="field">
+            <label>RE</label>
+            <input type="text" id="repRe" placeholder="Nº de registro">
+          </div>
+          <div class="field">
+            <label>Email</label>
+            <input type="email" id="repEmail" placeholder="nome@empresa.com">
+          </div>
+          <div class="field grow2">
+            <label>Endereço</label>
+            <input type="text" id="repEndereco" placeholder="Rua, número, bairro, cidade">
+          </div>
+          <div class="field">
+            <label>Telefone</label>
+            <input type="tel" id="repTelefone" placeholder="(00) 00000-0000">
+          </div>
+        </div>
+        <div class="field skills-field" id="repSkillsField">
+          <label>Tarefas que sabe realizar</label>
+          <div id="repSkills" class="check-list"></div>
+        </div>
+        <div class="form-error" id="repFormError" style="display:none;"></div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="repSaveBtn">Adicionar</button>
+          <button class="btn" id="repCancelBtn" style="display:none;">Cancelar</button>
+        </div>
+        </div></div></div>
+      </div>
+
+      <div class="toolbar" id="repToolbar" style="display:none;">
+        <div class="search"><input type="search" id="repBusca" placeholder="Buscar por nome, LDAP, RE ou tarefa" autocomplete="off" aria-label="Buscar rep"></div>
+        <div class="fchips" id="repChips" role="group" aria-label="Filtrar equipe"></div>
+        <div class="view-meta tb-info" id="repOrdemInfo">Ordenado por escala (A–D) e ordem alfabética</div>
+      </div>
+
+      <div class="card-grid" id="repGrid"></div>
+      <div class="empty" id="repEmpty" style="display:none;">
+        <b>Nenhum rep cadastrado</b>
+        Cadastre o primeiro rep para começar a montar a equipe.
+        <div><button class="btn btn-primary" data-act="open-form" data-form="rep">+ Adicionar o primeiro rep</button></div>
+      </div>
+    </div>
+
+    <!-- DIMENSIONAMENTO -->
+    <div class="view" data-view="dimensionamento">
+      <div class="view-head">
+        <div>
+          <div class="view-title">Dimensionamento</div>
+          <div class="view-sub">Quem é responsável por cada tarefa e quem está disponível na data</div>
+        </div>
+        <div class="view-meta" id="taskMeta"></div>
+      </div>
+
+      <div class="form-panel dim-bar">
+        <div class="form-row">
+          <div class="field" style="flex:0 0 auto;">
+            <label>Data de referência</label>
+            <div class="date-nav">
+              <button class="btn" data-act="dim-prev" title="Dia anterior">‹</button>
+              <input type="date" class="dim-data-input" id="dimData2">
+              <button class="btn" data-act="dim-next" title="Próximo dia">›</button>
+              <button class="btn" data-act="dim-hoje">Hoje</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Reps exibidos nos cards</label>
+            <select id="dimFiltro">
+              <option value="todos">Todos</option>
+              <option value="resp">Só responsáveis</option>
+              <option value="disp">Só disponíveis na data</option>
+            </select>
+          </div>
+          <div class="field grow2">
+            <label>Presentes na data (PS incluídos)</label>
+            <div class="calc-out" id="dimBarInfo">—</div>
+          </div>
+          <div class="field" style="flex:0;">
+            <label>&nbsp;</label>
+            <button class="btn" data-act="goto-view" data-view="calendario" title="Painel do dia, folgas, trocas e férias">Abrir Calendário</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-panel fc collapsed" id="taskFormPanel" data-form="task">
+        <button type="button" class="form-head" id="taskFormToggle" data-act="toggle-form" data-form="task" aria-expanded="false" aria-controls="taskFormBody">
+          <span class="fh-plus" aria-hidden="true">+</span>
+          <span class="fh-title" id="taskFormTitle">Adicionar tarefa</span>
+          <span class="fh-state" aria-hidden="true">Abrir</span>
+          <span class="fh-chev" aria-hidden="true"></span>
+        </button>
+        <div class="fbody" id="taskFormBody"><div class="fbody-in"><div class="fbody-pad">
+        <div class="form-row">
+          <div class="field grow2">
+            <label>Nome da tarefa</label>
+            <input type="text" id="taskNome" placeholder="Ex.: 1º bip todos, Máquina, Inbound Audit">
+          </div>
+          <div class="field">
+            <label>Área</label>
+            <select id="taskCategoria">
+              <option value="inventario">Inventário</option>
+              <option value="qualidade">Qualidade</option>
+            </select>
+            <span class="hint" id="taskAreaHint" style="display:none;"></span>
+          </div>
+          <div class="field" style="flex:0;">
+            <label>&nbsp;</label>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-primary" id="taskSaveBtn">Adicionar</button>
+              <button class="btn" id="taskCancelBtn" style="display:none;">Cancelar</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-error" id="taskFormError" style="display:none;"></div>
+        </div></div></div>
+      </div>
+
+      <div class="dim-toolbar">
+        <div class="seg" role="group" aria-label="Visualização">
+          <button class="seg-btn on" data-act="dim-view" data-mode="cards" aria-pressed="true">Cards</button>
+          <button class="seg-btn" data-act="dim-view" data-mode="matriz" aria-pressed="false">Matriz</button>
+        </div>
+        <button class="btn" data-act="fill-skills" title="Marca cada rep nas tarefas que ele sabe realizar (respeitando área e PS)">Preencher pelas habilidades</button>
+        <button class="btn" id="dimUndoBtn" data-act="undo" disabled>↩ Desfazer</button>
+        <button class="btn" id="dimClearAll" data-act="clear-all">Limpar todas as marcações</button>
+        <span class="hint" id="dimMsg" style="display:none;"></span>
+      </div>
+      <div class="legend-row" id="taskLegend" aria-label="Legenda das cores">
+        <span class="lg"><i class="lg-dot st-ativo"></i>Trabalha na data</span>
+        <span class="lg"><i class="lg-dot st-folga"></i>Folga</span>
+        <span class="lg"><i class="lg-dot st-ferias"></i>Férias</span>
+        <span class="lg"><i class="lg-dot st-licenca"></i>Licença</span>
+        <span class="lg"><i class="lg-dot st-afastado"></i>Afastado</span>
+        <span class="lg"><i class="lg-dot st-fora"></i>Fora da área</span>
+        <span class="lg"><i class="lg-dot is-resp"></i>Borda escura = responsável pela tarefa</span>
+      </div>
+
+      <div class="card-grid" id="taskGrid"></div>
+      <div id="taskMatrix" style="display:none;"></div>
+      <div class="empty" id="taskEmpty" style="display:none;">
+        <b>Nenhuma tarefa cadastrada</b>
+        Adicione a primeira tarefa acima e marque os reps responsáveis direto no card.
+      </div>
+
+      <div class="section-title">Resumo por área</div>
+      <div class="resumo-grid" id="resumoGrid"></div>
+    </div>
+
+    <!-- CALENDÁRIO (Painel do dia + folgas extras + férias) -->
+    <div class="view" data-view="calendario">
+      <div class="view-head">
+        <div>
+          <div class="view-title">Calendário</div>
+          <div class="view-sub">Quantas pessoas trabalham por dia, com folgas extras, trocas e férias</div>
+        </div>
+        <div class="view-meta" id="folgasMeta"></div>
+      </div>
+
+      <nav class="sec-index" id="calIndex" aria-label="Seções do Calendário">
+        <button type="button" class="fchip on" data-act="goto-sec" data-sec="sec-dia">Painel do dia</button>
+        <button type="button" class="fchip" data-act="goto-sec" data-sec="sec-agendar">Agendar</button>
+        <button type="button" class="fchip" data-act="goto-sec" data-sec="sec-lista">Agendamentos <b id="calIdxN"></b></button>
+      </nav>
+
+      <div class="form-panel dim-panel" id="sec-dia" data-sec data-mesview="blocos">
+        <div class="mes-head">
+          <div class="form-panel-title">Painel do dia</div>
+          <div class="seg" role="group" aria-label="Como ver o mês">
+            <button type="button" class="seg-btn on" data-act="mes-view" data-mode="blocos" aria-pressed="true" title="Um bloco por dia, com as áreas em cores">Blocos</button>
+            <button type="button" class="seg-btn" data-act="mes-view" data-mode="tabela" aria-pressed="false" title="Tabela dia a dia com os nomes de quem está fora">Tabela</button>
+          </div>
+        </div>
+        <div class="form-row dia-ctl">
+          <div class="field" style="flex:0 0 auto;">
+            <label>Data de referência</label>
+            <div class="date-nav">
+              <button class="btn" id="dimPrev" data-act="dim-prev" title="Dia anterior">‹</button>
+              <input type="date" class="dim-data-input" id="dimData">
+              <button class="btn" id="dimNext" data-act="dim-next" title="Próximo dia">›</button>
+              <button class="btn" id="dimHoje" data-act="dim-hoje">Hoje</button>
+            </div>
+          </div>
+          <div class="field" style="flex:0 0 auto;">
+            <label>Mês exibido</label>
+            <div class="date-nav">
+              <button class="btn" id="folgasPrev" title="Mês anterior">‹</button>
+              <input type="month" id="folgasMesInput" aria-label="Mês">
+              <button class="btn" id="folgasNext" title="Próximo mês">›</button>
+              <button class="btn" id="folgasHoje">Este mês</button>
+            </div>
+          </div>
+          <div class="field">
+            <label>Dias marcados nos calendários das escalas são</label>
+            <select id="escalaModo">
+              <option value="folga">Folga (a escala não trabalha)</option>
+              <option value="trabalho">Dia de trabalho</option>
+            </select>
+          </div>
+        </div>
+        <div class="strip" id="dimStrip"></div>
+        <div id="mesAreasBox">
+          <div class="sub-title">Por área <small>quantas pessoas trabalham no dia · as barras mostram o mês, dia a dia (clique para ver o dia)</small></div>
+          <div class="area-blocks" id="mesAreas"></div>
+        </div>
+        <div class="sub-title">Escalas <small>a semana em torno da data</small></div>
+        <div class="esc-week" id="dimSemana"></div>
+        <div class="dim-legend" id="dimLegenda"></div>
+        <div class="hint" id="dimHint" style="display:none; margin-top:8px;"></div>
+        <div class="sub-title mes-sub" id="mesSub">Mês</div>
+        <div class="strip compact" id="folgasStrip"></div>
+        <div id="mesBlocos">
+          <div class="area-legend" id="mesLegAreas"></div>
+          <div class="hint" id="mesDica" style="display:none; margin:0 0 10px;">Clique num dia do calendário para ver quem trabalha e quem está fora em cada área.</div>
+          <div class="cal-wrap">
+            <div class="cal-head" aria-hidden="true"><span class="fds">Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span class="fds">Sáb</span></div>
+            <div class="cal-grid" id="calGrid"></div>
+          </div>
+        </div>
+        <div class="fd-wrap" id="folgasDias"></div>
+        <div class="dim-legend" id="folgasLegenda"></div>
+        <div class="hint" id="folgasHint" style="display:none; margin-top:8px;"></div>
+      </div>
+
+      <div class="form-panel fc collapsed" id="folgaFormPanel" data-form="folga" data-sec>
+        <button type="button" class="form-head" id="folgaFormToggle" data-act="toggle-form" data-form="folga" aria-expanded="false" aria-controls="folgaFormBody">
+          <span class="fh-plus" aria-hidden="true">+</span>
+          <span class="fh-title" id="folgaFormTitle">Agendar</span>
+          <span class="fh-sub">banco de horas · troca de folga · férias</span>
+          <span class="fh-state" aria-hidden="true">Abrir</span>
+          <span class="fh-chev" aria-hidden="true"></span>
+        </button>
+        <div class="fbody" id="folgaFormBody"><div class="fbody-in"><div class="fbody-pad">
+        <div class="form-row">
+          <div class="field">
+            <label>Tipo</label>
+            <select id="folgaTipo">
+              <option value="banco">Banco de horas</option>
+              <option value="troca">Troca de folga</option>
+              <option value="ferias">Férias</option>
+            </select>
+          </div>
+          <div class="field grow2">
+            <label>Pessoa</label>
+            <select id="folgaRep"></select>
+          </div>
+          <div class="field" data-folga="banco">
+            <label>Data da folga</label>
+            <input type="date" id="folgaData">
+          </div>
+          <div class="field" data-folga="banco">
+            <label>Até (opcional)</label>
+            <input type="date" id="folgaDataFim">
+          </div>
+          <div class="field" data-folga="troca" style="display:none;">
+            <label>Trabalha em (era folga)</label>
+            <input type="date" id="folgaTrabalha">
+          </div>
+          <div class="field" data-folga="troca" style="display:none;">
+            <label>Folga em (era dia de trabalho)</label>
+            <input type="date" id="folgaFolgaEm">
+          </div>
+          <div class="field" data-folga="ferias" style="display:none;">
+            <label>Início das férias</label>
+            <input type="date" id="folgaFeriasIni">
+          </div>
+          <div class="field" data-folga="ferias" style="display:none;">
+            <label>Duração (dias)</label>
+            <input type="number" id="folgaFeriasDias" min="1" max="90" step="1" placeholder="30">
+          </div>
+          <div class="field wide" data-folga="ferias" style="display:none;">
+            <label>Fim · retorno</label>
+            <div class="calc-out" id="folgaFeriasFim">—</div>
+          </div>
+          <div class="field grow2">
+            <label>Observação (opcional)</label>
+            <input type="text" id="folgaObs" maxlength="120" placeholder="Ex.: combinado com o gestor">
+          </div>
+          <div class="field" style="flex:0;">
+            <label>&nbsp;</label>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-primary" id="folgaSaveBtn">Agendar</button>
+              <button class="btn" id="folgaCancelBtn" style="display:none;">Cancelar</button>
+            </div>
+          </div>
+        </div>
+        <div class="hint" style="margin-top:10px;"><b>Banco de horas:</b> a pessoa folga num dia que seria de trabalho (−1 pessoa naquele dia; dá para informar um período). <b>Troca de folga:</b> trabalha num dia que seria folga (+1) e folga em outro dia que seria de trabalho (−1). <b>Férias:</b> início e duração; a pessoa sai da contagem durante o período.</div>
+        <div class="folga-preview" id="folgaPreview"></div>
+        <div class="form-error" id="folgaFormError" style="display:none;"></div>
+        </div></div></div>
+      </div>
+
+      <div class="panel" id="sec-lista" data-sec>
+        <div class="panel-title">Agendamentos</div>
+        <div class="filter-row" style="justify-content:flex-start;">
+          <div class="field">
+            <label>Pessoa</label>
+            <select id="folgaFiltroRep"></select>
+          </div>
+          <div class="field">
+            <label>Período</label>
+            <select id="folgaFiltroPer">
+              <option value="mes">Mês exibido acima</option>
+              <option value="futuras">De hoje em diante</option>
+              <option value="todas">Todos</option>
+            </select>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Pessoa</th><th>Tipo</th><th>Datas</th><th>Efeito na contagem</th><th>Observação</th><th></th></tr></thead>
+          <tbody id="folgasLista"></tbody>
+        </table>
+        <div class="empty" id="folgasEmpty" style="display:none;"></div>
+      </div>
+    </div>
+
+    <!-- PONTOS ALINHADOS -->
+    <div class="view" data-view="pontos">
+      <div class="view-head">
+        <div>
+          <div class="view-title">Pontos alinhados</div>
+          <div class="view-sub">Combinados por área e o que ainda está pendente</div>
+        </div>
+        <div class="view-meta" id="pontosMeta"></div>
+      </div>
+
+      <div class="strip" id="pontosStrip"></div>
+
+      <div class="form-panel fc collapsed" id="pontoFormPanel" data-form="ponto">
+        <button type="button" class="form-head" id="pontoFormToggle" data-act="toggle-form" data-form="ponto" aria-expanded="false" aria-controls="pontoFormBody">
+          <span class="fh-plus" aria-hidden="true">+</span>
+          <span class="fh-title" id="pontoFormTitle">Registrar ponto</span>
+          <span class="fh-state" aria-hidden="true">Abrir</span>
+          <span class="fh-chev" aria-hidden="true"></span>
+        </button>
+        <div class="fbody" id="pontoFormBody"><div class="fbody-in"><div class="fbody-pad">
+        <div class="form-row">
+          <div class="field">
+            <label>Área</label>
+            <select id="pontoCategoria">
+              <option value="inventario">Inventário</option>
+              <option value="qualidade">Qualidade</option>
+              <option value="ps_operacoes">PS Operações</option>
+              <option value="ps_icqa">PS ICQA</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Data</label>
+            <input type="date" id="pontoData">
+          </div>
+          <div class="field grow2" style="flex:3;">
+            <label>Combinado</label>
+            <textarea id="pontoTexto" placeholder="O que foi alinhado"></textarea>
+          </div>
+          <div class="field">
+            <label>Status</label>
+            <select id="pontoStatus">
+              <option value="pendente">Pendente</option>
+              <option value="concluido">Concluído</option>
+            </select>
+          </div>
+          <div class="field" style="flex:0;">
+            <label>&nbsp;</label>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-primary" id="pontoSaveBtn">Registrar</button>
+              <button class="btn" id="pontoCancelBtn" style="display:none;">Cancelar</button>
+            </div>
+          </div>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label>Reps incluídos</label>
+          <div id="pontoReps" class="check-list"></div>
+        </div>
+        <div class="form-error" id="pontoFormError" style="display:none;"></div>
+        </div></div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Registros</div>
+        <div class="toolbar tb-in" id="pontoToolbar">
+          <div class="fchips" id="pontoChips" role="group" aria-label="Filtrar pontos"></div>
+          <div class="search"><input type="search" id="pontoBusca" placeholder="Buscar no combinado ou por rep" autocomplete="off" aria-label="Buscar pontos"></div>
+        </div>
+        <table>
+          <thead><tr><th>Data</th><th>Área</th><th>Reps</th><th>Combinado</th><th>Status</th><th></th></tr></thead>
+          <tbody id="pontoTableBody"></tbody>
+        </table>
+        <div class="empty" id="pontoEmpty" style="display:none;">
+          <b>Nenhum ponto registrado</b>
+          Cadastre reps na aba Equipe e depois registre os combinados aqui.
+        </div>
+      </div>
+    </div>
+
+    <!-- LOST -->
+    <div class="view" data-view="lost">
+      <div class="view-head">
+        <div>
+          <div class="view-title">Controle de Lost</div>
+          <div class="view-sub">Perdas por MU e por rep, com o total de cada unidade</div>
+        </div>
+        <div class="view-meta" id="lostMeta"></div>
+      </div>
+
+      <div class="strip" id="lostStrip"></div>
+
+      <div class="form-panel fc collapsed" id="lostFormPanel" data-form="lost">
+        <button type="button" class="form-head" id="lostFormToggle" data-act="toggle-form" data-form="lost" aria-expanded="false" aria-controls="lostFormBody">
+          <span class="fh-plus" aria-hidden="true">+</span>
+          <span class="fh-title" id="lostFormTitle">Registrar lost</span>
+          <span class="fh-state" aria-hidden="true">Abrir</span>
+          <span class="fh-chev" aria-hidden="true"></span>
+        </button>
+        <div class="fbody" id="lostFormBody"><div class="fbody-in"><div class="fbody-pad">
+        <div class="form-row">
+          <div class="field">
+            <label>Rep</label>
+            <select id="lostRep"></select>
+          </div>
+          <div class="field">
+            <label>MU</label>
+            <input type="text" id="lostMu" placeholder="Ex.: MU01">
+          </div>
+          <div class="field">
+            <label>Quantidade</label>
+            <input type="number" id="lostQuantidade" min="0" step="1" placeholder="0">
+          </div>
+          <div class="field">
+            <label>Valor (R$)</label>
+            <input type="number" id="lostValor" min="0" step="0.01" placeholder="0,00">
+          </div>
+          <div class="field" style="flex:0;">
+            <label>&nbsp;</label>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-primary" id="lostSaveBtn">Registrar</button>
+              <button class="btn" id="lostCancelBtn" style="display:none;">Cancelar</button>
+            </div>
+          </div>
+        </div>
+        <div class="form-error" id="lostFormError" style="display:none;"></div>
+        </div></div></div>
+      </div>
+
+      <div class="panel-grid">
+        <div class="panel">
+          <div class="panel-title">Total por MU</div>
+          <table>
+            <thead><tr><th>MU</th><th>Quantidade</th><th style="text-align:right;">Valor total</th></tr></thead>
+            <tbody id="lostMuTableBody"></tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <div class="panel-title">Registros</div>
+          <table>
+            <thead><tr><th>Rep</th><th>MU</th><th>Quantidade</th><th style="text-align:right;">Valor</th><th></th></tr></thead>
+            <tbody id="lostTableBody"></tbody>
+          </table>
+          <div class="empty" id="lostEmpty" style="display:none;">
+            <b>Nenhum lost registrado</b>
+            Quando houver uma perda, registre aqui para acompanhar o total por MU.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="ficha-overlay" id="backupOverlay" style="display:none;">
+  <div class="ficha">
+    <div class="form-panel-title">Backup e restauração</div>
+    <div class="hint" style="margin-bottom:10px;">Guarda uma cópia de todos os times fora do Grid. Para restaurar, cole o texto do backup abaixo.</div>
+    <textarea id="backupText" style="width:100%; height:200px; font-family:var(--mono, monospace); font-size:11px;" spellcheck="false"></textarea>
+    <div class="hint" id="backupMsg" style="margin:8px 0; min-height:16px;"></div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <button class="btn" data-act="backup-gerar">Gerar backup</button>
+      <button class="btn" data-act="backup-baixar">Baixar arquivo</button>
+      <button class="btn" data-act="backup-restaurar">Restaurar do texto</button>
+      <button class="btn" data-act="backup-close" style="margin-left:auto;">Fechar</button>
+    </div>
+  </div>
+</div>
+<div class="ficha-overlay" id="fichaOverlay" style="display:none;">
+  <div class="ficha" id="fichaBox"></div>
+</div>
+
+<script src="escalas.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
