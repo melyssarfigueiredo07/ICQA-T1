@@ -636,6 +636,7 @@
       n.setAttribute("aria-selected", on ? "true" : "false");
       n.tabIndex = on ? 0 : -1;
     });
+    if(key==="calendario" && calSujo){ calSujo = false; renderDim(); renderMes(); }
     if(mudou && window.pageYOffset>0) window.scrollTo(0, 0);
     atualizarScroll();
   }
@@ -646,7 +647,7 @@
     var t = todayISO();
     if(lastToday!==null && t!==lastToday){
       lastToday = t;
-      if(dimFollow) dimDate = t;
+      if(dimFollow){ dimDate = t; folgasMes = t.slice(0,7); }
       renderAll();
     }
     lastToday = t;
@@ -1016,30 +1017,31 @@
     var marcado = Cal.isMarcado(esc, iso);
     return state.escalaModo==="trabalho" ? marcado : !marcado;
   }
+  // Painel do dia (aba Calendário) só é desenhado com a aba aberta; ao abri-la, showView desenha o que ficou pendente.
+  var calSujo = false;
+  function calAtiva(){ return viewAtual==="calendario"; }
   function renderDim(){
     if(!dimDate) dimDate = todayISO();
     document.querySelectorAll(".dim-data-input").forEach(function(inp){ if(inp.value!==dimDate) inp.value = dimDate; });
     document.getElementById("escalaModo").value = state.escalaModo==="trabalho" ? "trabalho" : "folga";
 
-    // Contadores com TODOS (reps e PS); logo abaixo, os presentes separados por Área cadastrada.
+    // barra da aba Dimensionamento: presentes na data (todos, PS incluídos) por área
+    var cdDia = contagemDia(dimDate), areasDia = areasDoDia(cdDia);
+    document.getElementById("dimBarInfo").textContent = (state.reps.length ? cdDia.total+" de "+state.reps.length+" presentes · "+areasDia.map(function(ar){ return AREA_CURTA[ar.key]+" "+ar.total; }).join(" · ") : "Nenhum rep cadastrado");
+    if(!calAtiva()){ calSujo = true; return; }
+
+    // contadores do dia com TODOS (reps e PS); os presentes por área ficam nos blocos por área (renderMes)
     var c = {ativo:0, folga:0, ferias:0, licenca:0, afastado:0};
     state.reps.forEach(function(r){ c[effStatus(r, dimDate)]++; });
-    var cdDia = contagemDia(dimDate), extraFolga = cdDia.banco.length + cdDia.trocaFolga.length;
+    var extraFolga = cdDia.banco.length + cdDia.trocaFolga.length;
     document.getElementById("dimStrip").innerHTML =
       stripCell("Trabalhando", c.ativo, "green", "green", "Presentes na data" + (cdDia.trocaTrab.length ? " · "+cdDia.trocaTrab.length+" em troca" : "")) +
       stripCell("Folga", c.folga, "folga", "folga", extraFolga ? "Escala + "+extraFolga+" folga"+(extraFolga>1?"s":"")+" extra"+(extraFolga>1?"s":"") : "Pela escala") +
       stripCell("Férias", c.ferias, "ferias", "ferias", "Em férias") +
       stripCell("Licença", c.licenca, "licenca", "licenca", "Em licença") +
       stripCell("Afastados", c.afastado, "rust", "rust", "Afastados");
-    var areasDia = areasDoDia(cdDia);
-    document.getElementById("dimBarInfo").textContent = (state.reps.length ? cdDia.total+" de "+state.reps.length+" presentes · "+areasDia.map(function(ar){ return AREA_CURTA[ar.key]+" "+ar.total; }).join(" · ") : "Nenhum rep cadastrado");
-    document.getElementById("dimAreasTitle").textContent = areasDia.length ? "Presentes por área em "+fmtDate(dimDate)+" (quem está trabalhando, PS incluídos)" : "";
-    document.getElementById("dimAreas").innerHTML = areasDia.map(function(a){
-      var dl = a.total - a.base;
-      var cap = "de "+a.cad+" cadastrado"+(a.cad>1?"s":"") + (a.ps && !areaEhPS(a.key) ? " · "+a.ps+" PS" : "") + (dl ? " · "+(dl<0?"−":"+")+Math.abs(dl)+" por folga extra/troca" : "");
-      return stripCell(esc(areaNome(a.key)), a.total, "", areaCls(a.key), cap);
-    }).join("");
 
+    // escalas A–D na semana em torno da data (quem a escala manda trabalhar); contagens por dia e por área ficam no calendário
     var dias = [];
     for(var i=-3;i<=3;i++) dias.push(Cal.addDays(dimDate, i));
     var hoje = todayISO();
@@ -1055,31 +1057,12 @@
         return '<td class="d '+(on?'on':'off')+(d===dimDate?' sel':'')+'" data-act="dim-dia" data-iso="'+d+'">'+(on?'Trabalha':'Folga')+'</td>';
       }).join("") + '</tr>';
     });
-    // Presentes por dia, separados por Área cadastrada (PS incluídos) e o total, já com banco de horas e trocas
-    var cds = dias.map(contagemDia);
-    var saldo = function(dl){ return dl ? ' <small class="'+(dl<0?'neg':'pos')+'">'+(dl<0?'−':'+')+Math.abs(dl)+'</small>' : ''; };
-    var areasSemana = areasDoDia(cds[0]);
-    if(areasSemana.length){
-      html += '<tr class="sub-row"><td class="lbl sub" colspan="'+(dias.length+1)+'">Presentes por área</td></tr>';
-      areasSemana.forEach(function(ar){
-        html += '<tr class="area-row"><td class="lbl"><span class="esc-dot" style="background:'+areaCor(ar.key)+'"></span>'+esc(areaNome(ar.key))+
-          ' <span class="hint">('+ar.cad+')</span></td>' + cds.map(function(cd){
-          var a = cd.areas[ar.key];
-          return '<td class="d area'+(cd.iso===dimDate?' sel':'')+'" data-act="dim-dia" data-iso="'+cd.iso+'"><b>'+a.total+'</b>'+saldo(a.total-a.base)+'</td>';
-        }).join("") + '</tr>';
-      });
-    }
-    html += '<tr class="tot-row"><td class="lbl">Pessoas trabalhando</td>' + cds.map(function(cd){
-      var tip = "Pela escala "+cd.base+(cd.banco.length?" − "+cd.banco.length+" banco de horas":"")+(cd.trocaFolga.length?" − "+cd.trocaFolga.length+" troca (folga)":"")+(cd.trocaTrab.length?" + "+cd.trocaTrab.length+" troca (trabalha)":"")+" = "+cd.total+
-        " · "+areasDoDia(cd).map(function(ar){ return AREA_CURTA[ar.key]+" "+ar.total; }).join(" · ");
-      return '<td class="d tot'+(cd.iso===dimDate?' sel':'')+'" data-act="dim-dia" data-iso="'+cd.iso+'" title="'+esc(tip)+'"><b>'+cd.total+'</b>'+saldo(cd.total-cd.base)+'</td>';
-    }).join("") + '</tr>';
     document.getElementById("dimSemana").innerHTML = html + '</tbody></table>';
 
     document.getElementById("dimLegenda").innerHTML =
       ['ativo','folga','ferias','licenca','afastado'].map(function(k){
         return '<span class="tag '+STATUS_TAG[k]+'">'+STATUS_LABEL[k]+'</span>';
-      }).join("") + '<span class="hint">· Escala marcada nos calendários = '+(state.escalaModo==="trabalho"?"dia de trabalho":"folga")+' · PS contam nos presentes (separados por área), mas não entram nas tarefas · "Pessoas trabalhando" já desconta banco de horas e trocas de folga</span>';
+      }).join("") + '<span class="hint">· Escala marcada nos calendários = '+(state.escalaModo==="trabalho"?"dia de trabalho":"folga")+' · PS contam nos presentes (separados por área), mas não entram nas tarefas · o total do dia já desconta banco de horas e trocas de folga</span>';
 
     var hint = document.getElementById("dimHint");
     if(Cal.foraDosCalendarios(dimDate)){
@@ -2054,7 +2037,7 @@
   // =====================================================================
   var mesView = "blocos"; // "blocos" (calendário com um bloco por dia) | "tabela" (dia a dia detalhado)
   function aplicarMesView(){
-    var p = document.getElementById("sec-mes");
+    var p = document.getElementById("sec-dia");
     p.dataset.mesview = mesView;
     Array.prototype.forEach.call(p.querySelectorAll("[data-act='mes-view']"), function(b){
       var on = b.dataset.mode===mesView;
@@ -2088,10 +2071,13 @@
         return '<button type="button" class="ab-bar'+(ehFimDeSemana(cd.iso)?' fds':'')+(cd.iso===hoje?' hoje':'')+(cd.iso===sel?' sel':'')+'" data-act="dim-dia" data-iso="'+cd.iso+'" title="'+esc(dica)+'" aria-label="'+esc(areaNome(k)+", "+dica)+'">' +
           '<span class="bs"><i class="b-ok" style="height:'+h(ok)+'"></i>'+(perdeu ? '<i class="b-lost" style="height:'+h(perdeu)+'"></i>' : '')+(ganhou ? '<i class="b-gain" style="height:'+h(ganhou)+'"></i>' : '')+'</span></button>';
       }).join("");
-      var noDia = dias[Number(ref.slice(8))-1].areas[k].total;
+      var aRef = dias[Number(ref.slice(8))-1].areas[k], dlRef = aRef.total - aRef.base, subs = [];
+      if(aRef.ps && !areaEhPS(k)) subs.push(aRef.ps+" PS");
+      if(dlRef) subs.push('<span class="dn">'+(dlRef<0 ? "−" : "+")+Math.abs(dlRef)+" por folga extra/troca</span>");
       return '<div class="area-block '+areaCls(k)+'" data-area="'+k+'">' +
         '<div class="ab-head"><span class="ab-dot"></span>'+esc(areaNome(k))+'<span class="ab-cad">'+plural(cad, "cadastrado", "cadastrados")+'</span></div>' +
-        '<div class="ab-main"><b>'+noDia+'</b><span>trabalhando em '+esc(diaSemana(ref)+" "+diaMes(ref))+'</span></div>' +
+        '<div class="ab-main"><b>'+aRef.total+'</b><span>de '+cad+' trabalhando em '+esc(diaSemana(ref)+" "+diaMes(ref))+'</span></div>' +
+        (subs.length ? '<div class="ab-sub">'+subs.join(" · ")+'</div>' : '') +
         '<div class="ab-bars">'+barras+'</div>' +
         '<div class="ab-foot"><span>Menor: <b>'+min+'</b> · '+esc(diaSemana(diaMin)+" "+diaMes(diaMin))+'</span><span>Maior: <b>'+max+'</b> · '+esc(diaSemana(diaMax)+" "+diaMes(diaMax))+'</span></div>' +
         (alterados ? '<div class="ab-foot"><span class="dn">'+plural(alterados, "dia", "dias")+' com folga extra ou troca na área</span></div>' : '') +
@@ -2176,9 +2162,11 @@
     if(centralizar || r.top < alturaNav()+8 || r.bottom > vh-8) d.scrollIntoView({block: centralizar ? "center" : "nearest", behavior: reduzMov() ? "auto" : "smooth"});
   }
   function renderMes(){
+    if(!calAtiva()){ calSujo = true; return; } // ao abrir a aba, showView desenha
     var hoje = todayISO();
     if(!/^\d{4}-\d{2}$/.test(folgasMes)) folgasMes = hoje.slice(0,7);
     var ym = folgasMes, nd = diasDoMes(ym);
+    document.getElementById("mesSub").innerHTML = 'Mês · '+esc(mesLabel(ym))+' <small>folgas extras, trocas e férias já descontadas</small>';
     var inpMes = document.getElementById("folgasMesInput");
     if(inpMes.value!==ym) inpMes.value = ym;
     aplicarMesView();
@@ -2195,7 +2183,7 @@
     if(!equipe){
       wrap.innerHTML = '<div class="hint" style="padding:10px 2px;">Cadastre reps na aba Equipe para ver quantas pessoas trabalham em cada dia.</div>';
       wrap.style.display = "block"; blocos.style.display = "none"; areasBox.style.display = "none";
-      strip.innerHTML = "";
+      strip.innerHTML = ""; document.getElementById("mesAreas").innerHTML = ""; document.getElementById("calGrid").innerHTML = "";
     }else{
       wrap.style.display = ""; blocos.style.display = ""; areasBox.style.display = "";
       var dias = [], nBanco = 0, nTF = 0, nTT = 0, menor = null, maior = null, feriasPessoas = {}, feriasPD = 0;
@@ -2218,10 +2206,14 @@
       // ----- blocos por área, calendário de blocos e detalhe do dia -----
       var sel = (dimDate && dimDate.slice(0,7)===ym) ? dimDate : "";
       document.getElementById("mesAreas").innerHTML = blocosAreaHTML(dias, sel, hoje);
-      document.getElementById("mesLegAreas").innerHTML = legendaAreasHTML(dias);
-      var ctx = {hoje:hoje, sel:sel, min:(menor.total<maior.total ? menor.total : null)};
-      document.getElementById("calGrid").innerHTML = calendarioHTML(dias, ym, ctx, sel ? {idx:Number(sel.slice(8))-1, html:detalheDiaHTML(sel, dias[Number(sel.slice(8))-1], hoje)} : null);
-      document.getElementById("mesDica").style.display = sel ? "none" : "block";
+      if(mesView==="blocos"){
+        document.getElementById("mesLegAreas").innerHTML = legendaAreasHTML(dias);
+        var ctx = {hoje:hoje, sel:sel, min:(menor.total<maior.total ? menor.total : null)};
+        document.getElementById("calGrid").innerHTML = calendarioHTML(dias, ym, ctx, sel ? {idx:Number(sel.slice(8))-1, html:detalheDiaHTML(sel, dias[Number(sel.slice(8))-1], hoje)} : null);
+        document.getElementById("mesDica").style.display = sel ? "none" : "block";
+        wrap.innerHTML = ""; // a tabela só é montada quando a visão Tabela está escolhida
+      }else{
+      document.getElementById("calGrid").innerHTML = ""; document.getElementById("mesLegAreas").innerHTML = "";
 
       // ----- tabela dia a dia -----
       function chips(lista, rotulo){
@@ -2253,6 +2245,7 @@
         '</tr>';
       }).join("");
       wrap.innerHTML = '<table class="fd-table"><thead><tr><th>Dia</th><th title="Pessoas com dia de trabalho pela escala (sem férias, licença e afastados)">Pela escala</th><th>Folgas extras</th><th>Trabalham em troca</th><th title="Pessoas em férias ou licença no dia (já fora da contagem pela escala)">Férias / licença</th><th>Pessoas trabalhando <span class="fd-th-sub">(por área)</span></th></tr></thead><tbody>'+linhas+'</tbody></table>';
+      }
     }
     document.getElementById("folgasLegenda").innerHTML =
       '<span class="hint"><b>'+esc(mesLabel(ym))+'</b> · Pela escala = reps com dia de trabalho (já sem férias/licença/afastados) · − folga extra (banco de horas ou troca) · + trabalha em dia de folga (troca) · férias agendadas saem da contagem pela escala · PS incluídos, separados por área (Inv, Qual, PS Op, PS ICQA)</span>';
@@ -2328,19 +2321,22 @@
   }
 
   // ---------- Calendário: índice das seções (fica visível ao rolar e marca onde você está) ----------
-  var SEC_IDS = {"sec-dia":"sec-dia", "sec-agendar":"folgaFormPanel", "sec-mes":"sec-mes", "sec-lista":"sec-lista"};
+  var SEC_IDS = {"sec-dia":"sec-dia", "sec-agendar":"folgaFormPanel", "sec-lista":"sec-lista"};
   function secAtiva(key){
     Array.prototype.forEach.call(document.querySelectorAll("#calIndex .fchip"), function(c){ c.classList.toggle("on", c.dataset.sec===key); });
   }
+  var calSpyTrava = false, calSpyTimer = null;
   function irParaSecao(key){
     var el = document.getElementById(SEC_IDS[key]);
     if(!el) return;
+    calSpyTrava = true; if(calSpyTimer) clearTimeout(calSpyTimer);
+    calSpyTimer = setTimeout(function(){ calSpyTrava = false; }, 900); // a rolagem do próprio clique não troca a seção marcada
     if(key==="sec-agendar") abrirForm("folga", false);
     el.scrollIntoView({block:"start", behavior: reduzMov() ? "auto" : "smooth"});
     secAtiva(key);
   }
   function calSpy(){
-    if(viewAtual!=="calendario") return;
+    if(viewAtual!=="calendario" || calSpyTrava) return;
     var idx = document.getElementById("calIndex"), limite = alturaNav() + (idx ? idx.offsetHeight : 0) + 36, atual = "sec-dia";
     Object.keys(SEC_IDS).forEach(function(k){
       var el = document.getElementById(SEC_IDS[k]);
@@ -2415,7 +2411,7 @@
     var act = btn.dataset.act, id = btn.dataset.id;
     if(act==="dim-dia"){
       // (a posição do clique é lida antes: setDimDate redesenha a seção e o botão clicado sai da página)
-      var naSecao = !!btn.closest("#sec-mes"), nasBarras = !!btn.closest("#mesAreas");
+      var naSecao = !!btn.closest("#mesAreas, #calGrid"), nasBarras = !!btn.closest("#mesAreas");
       setDimDate(btn.dataset.iso);
       if(naSecao) mostrarDetalheDia(nasBarras); // vindo das barras (no alto da seção) centraliza; vindo do calendário só garante que apareça
       return;
@@ -2438,8 +2434,8 @@
     else if(act==="ponto-filtro"){ pontoFiltro = btn.dataset.v; renderPontos(); }
     else if(act==="toggle-ponto"){ togglePonto(id); }
     else if(act==="goto-sec"){ irParaSecao(btn.dataset.sec); }
-    else if(act==="mes-view"){ mesView = btn.dataset.mode==="tabela" ? "tabela" : "blocos"; aplicarMesView(); }
-    else if(act==="mes-dia"){ setDimDate(Cal.addDays(dimDate, Number(btn.dataset.d)||0), true); }
+    else if(act==="mes-view"){ mesView = btn.dataset.mode==="tabela" ? "tabela" : "blocos"; renderMes(); }
+    else if(act==="mes-dia"){ setDimDate(Cal.addDays(dimDate, Number(btn.dataset.d)||0)); }
     else if(act==="edit-folga"){ startFolgaEdit((state.folgas||[]).find(function(f){return f.id===id;})); }
     else if(act==="del-folga"){ pendingDelete(btn, deleteFolga, id); }
     else if(act==="backup-open"){ backupAbrir(); }
@@ -2483,6 +2479,8 @@
     rafScroll = window.requestAnimationFrame(function(){ rafScroll = 0; atualizarScroll(); });
   }, {passive:true});
   window.addEventListener("resize", function(){ medirNav(); atualizarScroll(); });
+  // se a pessoa rolar por conta própria logo depois de clicar numa seção do índice, a marcação volta a acompanhar a rolagem
+  ["wheel","touchstart","keydown"].forEach(function(ev){ window.addEventListener(ev, function(){ calSpyTrava = false; }, {passive:true}); });
   document.getElementById("repBusca").addEventListener("input", function(e){ repBusca = e.target.value; renderRepGrid(); });
   document.getElementById("pontoBusca").addEventListener("input", function(e){ pontoBusca = e.target.value; renderPontos(); });
 
@@ -2493,11 +2491,11 @@
     }
   });
 
-  function setDimDate(iso, seguirMes){
+  function setDimDate(iso){
     if(!iso) return;
     dimDate = iso;
     dimFollow = (iso===todayISO());
-    if(seguirMes) folgasMes = iso.slice(0,7); // as setas do detalhe do dia levam o calendário junto para o mês do dia
+    folgasMes = iso.slice(0,7); // o painel é um só: mudar a data de referência leva o calendário para o mês dela
     renderDim();
     renderTasks();
     renderMes();
