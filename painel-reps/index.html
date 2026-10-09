@@ -279,6 +279,106 @@
       <div class="resumo-grid" id="resumoGrid"></div>
     </div>
 
+    <!-- FOLGAS EXTRAS -->
+    <div class="view" data-view="folgas">
+      <div class="view-head">
+        <div>
+          <div class="view-title">Folgas extras</div>
+          <div class="view-sub">Banco de horas e troca de folga por pessoa — o total de pessoas trabalhando em cada dia já considera esses ajustes</div>
+        </div>
+        <div class="view-meta" id="folgasMeta"></div>
+      </div>
+
+      <div class="form-panel" id="folgaFormPanel">
+        <div class="form-panel-title" id="folgaFormTitle">Agendar folga</div>
+        <div class="form-row">
+          <div class="field">
+            <label>Tipo</label>
+            <select id="folgaTipo">
+              <option value="banco">Banco de horas</option>
+              <option value="troca">Troca de folga</option>
+            </select>
+          </div>
+          <div class="field grow2">
+            <label>Pessoa</label>
+            <select id="folgaRep"></select>
+          </div>
+          <div class="field" data-folga="banco">
+            <label>Data da folga</label>
+            <input type="date" id="folgaData">
+          </div>
+          <div class="field" data-folga="banco">
+            <label>Até (opcional)</label>
+            <input type="date" id="folgaDataFim">
+          </div>
+          <div class="field" data-folga="troca" style="display:none;">
+            <label>Trabalha em (era folga)</label>
+            <input type="date" id="folgaTrabalha">
+          </div>
+          <div class="field" data-folga="troca" style="display:none;">
+            <label>Folga em (era dia de trabalho)</label>
+            <input type="date" id="folgaFolgaEm">
+          </div>
+          <div class="field grow2">
+            <label>Observação (opcional)</label>
+            <input type="text" id="folgaObs" maxlength="120" placeholder="Ex.: combinado com o gestor">
+          </div>
+          <div class="field" style="flex:0;">
+            <label>&nbsp;</label>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-primary" id="folgaSaveBtn">Agendar</button>
+              <button class="btn" id="folgaCancelBtn" style="display:none;">Cancelar</button>
+            </div>
+          </div>
+        </div>
+        <div class="hint" style="margin-top:10px;"><b>Banco de horas:</b> a pessoa folga num dia que seria de trabalho (−1 pessoa naquele dia; dá para informar um período). <b>Troca de folga:</b> trabalha num dia que seria folga (+1) e folga em outro dia que seria de trabalho (−1).</div>
+        <div class="folga-preview" id="folgaPreview"></div>
+        <div class="form-error" id="folgaFormError" style="display:none;"></div>
+      </div>
+
+      <div class="form-panel">
+        <div class="form-panel-title">Pessoas trabalhando por dia</div>
+        <div class="form-row">
+          <div class="field" style="flex:0 0 auto;">
+            <label>Mês</label>
+            <div class="date-nav">
+              <button class="btn" id="folgasPrev" title="Mês anterior">‹</button>
+              <input type="month" id="folgasMesInput">
+              <button class="btn" id="folgasNext" title="Próximo mês">›</button>
+              <button class="btn" id="folgasHoje">Este mês</button>
+            </div>
+          </div>
+        </div>
+        <div class="strip" id="folgasStrip"></div>
+        <div class="fd-wrap" id="folgasDias"></div>
+        <div class="dim-legend" id="folgasLegenda"></div>
+        <div class="hint" id="folgasHint" style="display:none; margin-top:8px;"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title">Agendamentos</div>
+        <div class="filter-row" style="justify-content:flex-start;">
+          <div class="field">
+            <label>Pessoa</label>
+            <select id="folgaFiltroRep"></select>
+          </div>
+          <div class="field">
+            <label>Período</label>
+            <select id="folgaFiltroPer">
+              <option value="mes">Mês exibido acima</option>
+              <option value="futuras">De hoje em diante</option>
+              <option value="todas">Todos</option>
+            </select>
+          </div>
+        </div>
+        <table>
+          <thead><tr><th>Pessoa</th><th>Tipo</th><th>Datas</th><th>Efeito na contagem</th><th>Observação</th><th></th></tr></thead>
+          <tbody id="folgasLista"></tbody>
+        </table>
+        <div class="empty" id="folgasEmpty" style="display:none;"></div>
+      </div>
+    </div>
+
     <!-- PONTOS ALINHADOS -->
     <div class="view" data-view="pontos">
       <div class="view-head">

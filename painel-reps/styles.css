@@ -431,3 +431,42 @@ table.mx tbody th.mx-row{position:sticky; left:0; z-index:1; background:var(--pa
 .btn-backup:hover{background:rgba(20,20,20,0.15);}
 .aviso-grid{background:var(--rust-dim); color:#8A1F17; border-bottom:1px solid var(--rust); padding:10px 36px; font-size:13px; font-weight:600;}
 #backupOverlay textarea{border:1px solid var(--line); border-radius:8px; padding:8px;}
+
+/* ---------- Folgas extras (banco de horas e troca de folga) ---------- */
+.folga-preview{margin-top:12px; display:flex; flex-direction:column; gap:4px;}
+.fp-line{font-size:12.5px; padding:5px 10px; border-radius:6px; border:1px solid var(--line-soft); background:var(--panel-2); color:var(--text-dim);}
+.fp-line span{color:var(--text-faint);}
+.fp-line.ok{background:var(--green-dim); border-color:#A6DEC1; color:#116B41;}
+.fp-line.ok span{color:#3C8F66;}
+.fp-line.bad{background:var(--rust-dim); border-color:#F0B3AC; color:#8A1F17; font-weight:600;}
+.fp-line.mute{color:var(--text-faint);}
+.fd-wrap{overflow-x:auto; margin-top:4px;}
+.fd-table{border-collapse:collapse; width:100%; min-width:680px;}
+.fd-table tbody td{padding:7px 12px; font-size:13px;}
+.fd-table th{white-space:normal;}
+.fd-row.fd-hoje{background:#FFFBE0;}
+.fd-dia{white-space:nowrap;}
+.fd-dia b{font-family:'IBM Plex Mono',monospace; font-size:14px;}
+.fd-dia span{color:var(--text-faint); font-size:11.5px; margin-left:4px;}
+.fd-dia em{font-style:normal; font-size:10px; font-weight:700; text-transform:uppercase; background:var(--text); color:#fff; border-radius:999px; padding:1px 7px; margin-left:6px;}
+.fd-n{text-align:center; width:90px;}
+.fd-neg b{color:var(--rust); margin-right:4px;}
+.fd-pos b{color:var(--green); margin-right:4px;}
+.fd-nada{color:var(--line);}
+.fd-chip{display:inline-block; font-size:11.5px; background:var(--panel-2); border:1px solid var(--line); border-radius:999px; padding:1px 9px; margin:1px 4px 1px 0; white-space:nowrap;}
+.fd-chip i{font-style:normal; font-size:10px; color:var(--text-faint); margin-left:3px;}
+.fd-total{min-width:170px;}
+.fd-tot-n b{font-size:17px; font-family:'IBM Plex Mono',monospace;}
+.fd-tot-n small, .esc-week td.tot small{font-size:11px; font-weight:700; margin-left:3px;}
+small.neg{color:var(--rust);} small.pos{color:var(--green);}
+.fd-bar{display:flex; height:7px; background:var(--panel-2); border:1px solid var(--line); border-radius:4px; overflow:hidden; margin-top:4px;}
+.fd-bar i{display:block; height:100%;}
+.fd-bar .fd-ok{background:var(--green);}
+.fd-bar .fd-lost{background:repeating-linear-gradient(135deg,#F0B3AC 0 4px,#FBE3E1 4px 8px);}
+.fd-bar .fd-gain{background:var(--teal);}
+tr.fd-passado td{opacity:.6;}
+.esc-week tr.tot-row td.lbl{border-top:1px solid var(--line);}
+.esc-week td.d.tot{background:var(--panel-2); color:var(--text); border-color:var(--line);}
+.esc-week td.d.tot b{font-family:'IBM Plex Mono',monospace; font-size:14px;}
+.rep-box.ex-folga{border-style:dashed; border-color:var(--amber); background:var(--amber-dim); color:#8A4B04;}
+.rep-box.ex-trab{border-left:4px solid var(--teal);}

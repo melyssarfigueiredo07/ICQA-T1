@@ -2,7 +2,9 @@
   "use strict";
 
   // ---------- window.GRID.state: armazenamento nativo do Grid, compartilhado e ao vivo ----------
-  var DEFAULT_STATE = { teamName:"", reps:[], tasks:[], pontos:[], lost:[], escalaModo:"folga" };
+  // Estado vazio de um time. Sempre listas NOVAS: reaproveitar um objeto padrão faria times novos
+  // compartilharem as mesmas listas (e o que se cadastra num aparece no outro).
+  function novoEstado(){ return { teamName:"", reps:[], tasks:[], pontos:[], lost:[], folgas:[], escalaModo:"folga" }; }
   // O estado do Grid guarda um conjunto de dados por time: { times: { vinicius:{...}, harley:{...} } }.
   // Dados antigos (sem "times", direto na raiz) são lidos como Time Vinicius. `state` = dados do time ativo.
   var ICQA_AREA_FIXA = {
@@ -13,14 +15,14 @@
   };
   var TIMES = [
     {key:"vinicius", nome:"Time Vinicius", areaFixa:ICQA_AREA_FIXA},
-    {key:"harley", nome:"Time Harley", areaFixa:{}, views:["equipe","dimensionamento"],
+    {key:"harley", nome:"Time Harley", areaFixa:{}, views:["equipe","dimensionamento","folgas"],
      seedTasks:["Contagem","Stock Audit","Lost","RR/ER","Hunter"]}
   ];
   var timeAtual = TIMES[0].key;
   var root = { times:{} };
   function timeDef(key){ return TIMES.filter(function(t){ return t.key===(key||timeAtual); })[0] || TIMES[0]; }
-  var state = { teamName:"", reps:[], tasks:[], pontos:[], lost:[], escalaModo:"folga" };
-  var editing = { rep:null, ponto:null, lost:null, task:null };
+  var state = novoEstado();
+  var editing = { rep:null, ponto:null, lost:null, task:null, folga:null };
   var pollTimer = null;
   var saveTimer = null;
   var lastUpdatedAt = null;
@@ -28,6 +30,7 @@
   var VIEWS = [
     {key:"equipe", label:"Equipe"},
     {key:"dimensionamento", label:"Dimensionamento"},
+    {key:"folgas", label:"Folgas extras"},
     {key:"pontos", label:"Pontos alinhados"},
     {key:"lost", label:"Controle de Lost"}
   ];
@@ -133,8 +136,9 @@
     var fim = afastFim(r);
     return fim ? fmtDate(r.afastInicio)+" → "+fmtDate(fim)+" · "+Number(r.afastDias)+" d" : "";
   }
-  // Situação do rep em uma data: férias/licença (dentro do período), afastado, ou conforme a escala (ativo/folga).
-  function effStatus(r, iso){
+  // Situação PELA ESCALA em uma data: férias/licença (dentro do período), afastado, ou conforme a escala (ativo/folga).
+  // Não considera as folgas extras (banco de horas / troca de folga): ver effStatus.
+  function baseStatus(r, iso){
     var st = r.status || "ativo";
     if(st==="afastado") return "afastado";
     if(st==="ferias" || st==="licenca"){
@@ -149,11 +153,71 @@
     }
     return "ativo";
   }
+  // ---------- folgas extras: banco de horas e troca de folga ----------
+  // state.folgas: { id, repId, tipo:"banco", data, dataFim?, obs }  → folga extra em [data, dataFim]
+  //               { id, repId, tipo:"troca", dataFolga, dataTrabalho, obs } → trabalha em dataTrabalho (era folga)
+  //                                                                            e folga em dataFolga (era dia de trabalho)
+  // O efeito é sempre calculado sobre a situação pela escala (nunca soma/subtrai "no escuro"): folga extra só
+  // vale em dia de trabalho e a troca só vale em dia de folga; fora disso o agendamento fica "sem efeito".
+  var folgaIgnorar = ""; // id ignorado ao simular (edição/prévia no formulário)
+  function ajusteAplicado(r, iso, base){
+    var L = state.folgas || [];
+    for(var i=0;i<L.length;i++){
+      var f = L[i], tipo = null;
+      if(f.repId!==r.id || f.id===folgaIgnorar) continue;
+      if(f.tipo==="troca"){
+        if(iso===f.dataFolga) tipo = "troca-folga";
+        else if(iso===f.dataTrabalho) tipo = "troca-trabalho";
+      }else if(f.data && iso>=f.data && iso<=(f.dataFim||f.data)){
+        tipo = "banco";
+      }
+      if(!tipo) continue;
+      if(tipo==="troca-trabalho" ? base==="folga" : base==="ativo") return {tipo:tipo, f:f};
+    }
+    return null;
+  }
+  // Ajuste extra que está valendo para o rep nessa data (ou null).
+  function extraDe(r, iso){
+    var base = baseStatus(r, iso);
+    return (base==="ativo" || base==="folga") ? ajusteAplicado(r, iso, base) : null;
+  }
+  // Situação real em uma data: a da escala, já contando folga de banco de horas e troca de folga.
+  function effStatus(r, iso){
+    var base = baseStatus(r, iso);
+    if(base!=="ativo" && base!=="folga") return base;
+    var aj = ajusteAplicado(r, iso, base);
+    if(!aj) return base;
+    return aj.tipo==="troca-trabalho" ? "ativo" : "folga";
+  }
+  var EXTRA_NOTA = {"banco":"Folga extra · banco de horas", "troca-folga":"Folga extra · troca de folga", "troca-trabalho":"Trabalha · troca de folga"};
   function statusNote(r, iso){
+    var ex = extraDe(r, iso);
+    if(ex) return EXTRA_NOTA[ex.tipo];
     var st = effStatus(r, iso);
     if(st==="ativo") return "";
     var fim = (st==="ferias"||st==="licenca") ? afastFim(r) : "";
     return STATUS_LABEL[st] + (fim ? " até "+fmtDate(fim) : "");
+  }
+  // Rótulo curto da situação (tags): troca "Folga" por "Folga extra" / "Trabalha (troca)" quando for o caso.
+  function statusRotulo(r, iso){
+    var ex = extraDe(r, iso);
+    if(ex) return ex.tipo==="troca-trabalho" ? "Trabalha (troca)" : "Folga extra";
+    return STATUS_LABEL[effStatus(r, iso)];
+  }
+  // Pessoas trabalhando em um dia (sem PS): pela escala, folgas extras, trocas e total.
+  // Invariante: total = base − banco − trocaFolga + trocaTrab.
+  function contagemDia(iso){
+    var c = {iso:iso, base:0, total:0, banco:[], trocaFolga:[], trocaTrab:[]};
+    sortReps(state.reps).forEach(function(r){
+      if(repEhPS(r)) return;
+      var b = baseStatus(r, iso);
+      var ex = (b==="ativo" || b==="folga") ? ajusteAplicado(r, iso, b) : null;
+      if(b==="ativo") c.base++;
+      var eff = ex ? (ex.tipo==="troca-trabalho" ? "ativo" : "folga") : b;
+      if(eff==="ativo") c.total++;
+      if(ex) (ex.tipo==="banco" ? c.banco : ex.tipo==="troca-folga" ? c.trocaFolga : c.trocaTrab).push({r:r, f:ex.f});
+    });
+    return c;
   }
   // Tarefas com área fixa: só reps dessa Área entram no dimensionamento (nome sem acento/maiúscula).
 
@@ -269,7 +333,8 @@
       root = { times:{} };
       if(Object.keys(raw).length){ root.times[TIMES[0].key] = raw; }
     }
-    state = root.times[timeAtual] = Object.assign({}, DEFAULT_STATE, root.times[timeAtual]||{});
+    state = root.times[timeAtual] = Object.assign(novoEstado(), root.times[timeAtual]||{});
+    if(!Array.isArray(state.folgas)) state.folgas = [];
     if(!state.teamName) state.teamName = timeDef().nome;
     // (a estrutura nova só é gravada na próxima ação do usuário, nunca ao abrir)
     migrateReps();
@@ -313,7 +378,7 @@
     usarDados(dados);
     teveDados = true;
     persist();
-    resetRepForm(); resetTaskForm(); resetPontoForm(); resetLostForm();
+    resetRepForm(); resetTaskForm(); resetPontoForm(); resetLostForm(); resetFolgaForm();
     renderAll();
     backupMsg("Backup restaurado.");
   }
@@ -322,7 +387,7 @@
     timeAtual = key;
     dimUndo = null; dimMsg = "";
     usarDados(root);
-    resetRepForm(); resetTaskForm(); resetPontoForm(); resetLostForm();
+    resetRepForm(); resetTaskForm(); resetPontoForm(); resetLostForm(); resetFolgaForm();
     renderAll();
   }
   function buildTimeSel(){
@@ -482,7 +547,7 @@
     var cl = repClasse(r);
     return '<span class="tag '+CLASSE_TAG[cl]+'">'+CLASSE_LABEL[cl]+'</span>' +
       (CATEGORIA_LABEL[r.categoria] ? '<span class="tag tag-dark">'+CATEGORIA_LABEL[r.categoria]+'</span>' : "") +
-      (function(){ var eff = effStatus(r, todayISO()); return '<span class="tag '+STATUS_TAG[eff]+'">'+STATUS_LABEL[eff]+'</span>'; })();
+      (function(){ var eff = effStatus(r, todayISO()); return '<span class="tag '+STATUS_TAG[eff]+'">'+statusRotulo(r, todayISO())+'</span>'; })();
   }
   function qrow(label, val, cls){
     return val ? '<div class="sq-row"><span>'+label+'</span><b class="'+(cls||"")+'">'+esc(val)+'</b></div>' : "";
@@ -523,7 +588,7 @@
     var effHoje = effStatus(r, todayISO());
     var trabalho = row("Escala", r.escala) + row("Admissão", r.admissao ? fmtDate(r.admissao) : "", "num") +
       row("Tempo de casa", tempoCasaTexto(r, false)) + row("Total de dias de casa", diasDeCasaTexto(r), "num") +
-      row("Situação hoje", STATUS_LABEL[effHoje]) +
+      row("Situação hoje", statusRotulo(r, todayISO())) +
       ((r.status==="ferias"||r.status==="licenca") ? row(r.status==="licenca"?"Licença":"Férias", periodoTexto(r)) : "");
     var flags = repFlags(r);
     var contato = row("CPF", r.cpf, "num") + row("Aniversário", r.aniversario ? fmtDate(r.aniversario) : "", "num") +
@@ -662,6 +727,7 @@
     state.pontos.forEach(function(p){ p.repIds = (p.repIds||[]).filter(function(rid){return rid!==id;}); });
     state.lost = state.lost.filter(function(l){return l.repId!==id;});
     state.tasks.forEach(function(t){ t.repIds = (t.repIds||[]).filter(function(rid){return rid!==id;}); });
+    state.folgas = (state.folgas||[]).filter(function(f){return f.repId!==id;});
     if(editing.rep===id) resetRepForm();
     scheduleSave();
     renderAll();
@@ -686,9 +752,10 @@
 
     var c = {ativo:0, folga:0, ferias:0, licenca:0, afastado:0};
     state.reps.filter(function(r){return !repEhPS(r);}).forEach(function(r){ c[effStatus(r, dimDate)]++; });
+    var cdDia = contagemDia(dimDate), extraFolga = cdDia.banco.length + cdDia.trocaFolga.length;
     document.getElementById("dimStrip").innerHTML =
-      stripCell("Trabalhando", c.ativo, "green", "green", "Ativos na data") +
-      stripCell("Folga", c.folga, "folga", "folga", "Pela escala") +
+      stripCell("Trabalhando", c.ativo, "green", "green", "Ativos na data" + (cdDia.trocaTrab.length ? " · "+cdDia.trocaTrab.length+" em troca" : "")) +
+      stripCell("Folga", c.folga, "folga", "folga", extraFolga ? "Escala + "+extraFolga+" folga"+(extraFolga>1?"s":"")+" extra"+(extraFolga>1?"s":"") : "Pela escala") +
       stripCell("Férias", c.ferias, "ferias", "ferias", "Em férias") +
       stripCell("Licença", c.licenca, "licenca", "licenca", "Em licença") +
       stripCell("Afastados", c.afastado, "rust", "rust", "Afastados");
@@ -708,12 +775,19 @@
         return '<td class="d '+(on?'on':'off')+(d===dimDate?' sel':'')+'" data-act="dim-dia" data-iso="'+d+'">'+(on?'Trabalha':'Folga')+'</td>';
       }).join("") + '</tr>';
     });
+    // Total de pessoas trabalhando por dia, já com banco de horas e trocas (ver aba Folgas extras)
+    html += '<tr class="tot-row"><td class="lbl">Pessoas trabalhando</td>' + dias.map(function(d){
+      var cd = contagemDia(d), dl = cd.total - cd.base;
+      var tip = "Pela escala "+cd.base+(cd.banco.length?" − "+cd.banco.length+" banco de horas":"")+(cd.trocaFolga.length?" − "+cd.trocaFolga.length+" troca (folga)":"")+(cd.trocaTrab.length?" + "+cd.trocaTrab.length+" troca (trabalha)":"")+" = "+cd.total;
+      return '<td class="d tot'+(d===dimDate?' sel':'')+'" data-act="dim-dia" data-iso="'+d+'" title="'+esc(tip)+'"><b>'+cd.total+'</b>'+
+        (dl ? ' <small class="'+(dl<0?'neg':'pos')+'">'+(dl<0?'−':'+')+Math.abs(dl)+'</small>' : '')+'</td>';
+    }).join("") + '</tr>';
     document.getElementById("dimSemana").innerHTML = html + '</tbody></table>';
 
     document.getElementById("dimLegenda").innerHTML =
       ['ativo','folga','ferias','licenca','afastado'].map(function(k){
         return '<span class="tag '+STATUS_TAG[k]+'">'+STATUS_LABEL[k]+'</span>';
-      }).join("") + '<span class="hint">· Escala marcada nos calendários = '+(state.escalaModo==="trabalho"?"dia de trabalho":"folga")+' · PS não entram no dimensionamento</span>';
+      }).join("") + '<span class="hint">· Escala marcada nos calendários = '+(state.escalaModo==="trabalho"?"dia de trabalho":"folga")+' · PS não entram no dimensionamento · A linha "Pessoas trabalhando" já desconta banco de horas e trocas de folga</span>';
 
     var hint = document.getElementById("dimHint");
     if(Cal.foraDosCalendarios(dimDate)){
@@ -727,7 +801,8 @@
     var r = state.reps.find(function(x){return x.id===rid;});
     if(!r) return esc("(rep removido)");
     var st = effStatus(r, dimDate);
-    return '<span class="nm st-'+st+'">'+esc(r.nome)+'</span>' + (st!=="ativo" ? ' <small>('+esc(statusNote(r, dimDate))+')</small>' : "");
+    var nota = statusNote(r, dimDate);
+    return '<span class="nm st-'+st+'">'+esc(r.nome)+'</span>' + (nota ? ' <small>('+esc(nota)+')</small>' : "");
   }
   // ----- preenchimento dinâmico -----
   function elegiveis(t){ return sortReps(state.reps).filter(function(r){ return repElegivel(t, r); }); }
@@ -850,7 +925,7 @@
       }).join("");
       return '<tr><th class="mx-row st-'+st+'"><button class="mx-rowbtn" data-act="mx-row" data-id="'+r.id+'" title="Marcar/desmarcar todas as tarefas elegíveis deste rep">'+
         (r.escala?'<span class="esc-dot" style="background:'+ESC_COR[r.escala]+'"></span>':'')+esc(r.nome)+
-        (st!=="ativo"?' <small>'+esc(statusNote(r, dimDate))+'</small>':'')+'</button></th>'+cells+'</tr>';
+        (statusNote(r, dimDate)?' <small>'+esc(statusNote(r, dimDate))+'</small>':'')+'</button></th>'+cells+'</tr>';
     }).join("");
     wrap.innerHTML = '<div class="mx-scroll"><table class="mx">'+'<thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>' +
       '<div class="hint" style="margin-top:8px;">Clique numa célula para marcar/desmarcar · no nome da tarefa para marcar todos os elegíveis · no nome do rep para marcar todas as tarefas dele. “—” = fora da área; PS não aparecem.</div>';
@@ -927,7 +1002,8 @@
         var foraArea = !repElegivel(t, r);
         var st = foraArea ? "fora" : effStatus(r, dimDate);
         var nota = foraArea ? repMotivoFora(r) : [r.escala ? r.escala : "", statusNote(r, dimDate)].filter(Boolean).join(" · ");
-        return '<label class="rep-box st-'+st+(isResp?' is-resp':'')+'"><input type="checkbox" class="task-rep-toggle" data-task="'+t.id+'" data-rep="'+r.id+'" '+(isResp?"checked":"")+'>'+
+        var exr = foraArea ? null : extraDe(r, dimDate);
+        return '<label class="rep-box st-'+st+(isResp?' is-resp':'')+(exr ? (exr.tipo==="troca-trabalho" ? ' ex-trab' : ' ex-folga') : '')+'"><input type="checkbox" class="task-rep-toggle" data-task="'+t.id+'" data-rep="'+r.id+'" '+(isResp?"checked":"")+'>'+
           esc(r.nome)+(nota?' <small>'+esc(nota)+'</small>':'')+'</label>';
       }).join("") : '<span class="hint">Nenhum rep nesse filtro'+(fixa?' (só reps de '+CATEGORIA_LABEL[fixa]+', sem PS)':'')+'.</span>') : '<span class="hint">Cadastre reps na aba Equipe.</span>';
       return '<div class="card">' +
@@ -1269,11 +1345,363 @@
     renderAll();
   }
 
+  // =====================================================================
+  // FOLGAS EXTRAS (banco de horas e troca de folga)
+  // =====================================================================
+  var folgasMes = "", folgaFiltroRep = "", folgaFiltroPer = "mes", folgaTocado = false;
+  var ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
+  function isoOk(s){ return ISO_RE.test(String(s||"")); }
+  function diasEntre(a, b){ return Cal.diasDesdeEpoch(b) - Cal.diasDesdeEpoch(a) + 1; } // inclusivo
+  function diaSemana(iso){
+    if(!isoOk(iso)) return "";
+    var p = iso.split("-");
+    return new Date(Date.UTC(+p[0], +p[1]-1, +p[2])).toLocaleDateString("pt-BR", {weekday:"short", timeZone:"UTC"});
+  }
+  function diaMes(iso){ if(!isoOk(iso)) return "—"; var p = iso.split("-"); return p[2]+"/"+p[1]; }
+  function mesLabel(ym){
+    var p = ym.split("-");
+    var s = new Date(Date.UTC(+p[0], +p[1]-1, 1)).toLocaleDateString("pt-BR", {month:"long", year:"numeric", timeZone:"UTC"});
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  function addMeses(ym, n){
+    var p = ym.split("-"), m0 = (+p[1]-1) + n;
+    var y = +p[0] + Math.floor(m0/12), m = ((m0%12)+12)%12;
+    return y + "-" + String(m+1).padStart(2,"0");
+  }
+  function diasDoMes(ym){ var p = ym.split("-"); return new Date(Date.UTC(+p[0], +p[1], 0)).getUTCDate(); }
+  function repPorId(id){ return state.reps.find(function(x){return x.id===id;}); }
+
+  function folgaDatas(f){
+    return (f.tipo==="troca" ? [f.dataFolga, f.dataTrabalho] : [f.data, f.dataFim||f.data]).filter(isoOk).sort();
+  }
+  function folgaIni(f){ return folgaDatas(f)[0] || ""; }
+  function folgaFim(f){ var d = folgaDatas(f); return d[d.length-1] || ""; }
+
+  // Por que um dia não muda nada (ou "" se muda).
+  function motivoSemEfeito(r, iso, base){
+    var n = r.nome;
+    if(base==="folga") return n+" já está de folga em "+diaMes(iso)+" pela escala";
+    if(base==="ferias") return n+" está de férias em "+diaMes(iso);
+    if(base==="licenca") return n+" está de licença em "+diaMes(iso);
+    if(base==="afastado") return n+" está afastado(a) em "+diaMes(iso);
+    return n+" já trabalha em "+diaMes(iso)+" pela escala";
+  }
+
+  // Lê o formulário.
+  function folgaLerForm(){
+    var g = function(id){ return document.getElementById(id).value; };
+    return {tipo: g("folgaTipo")==="troca" ? "troca" : "banco", repId:g("folgaRep"), data:g("folgaData"), dataFim:g("folgaDataFim"),
+            trabalha:g("folgaTrabalha"), folgaEm:g("folgaFolgaEm"), obs:g("folgaObs").trim()};
+  }
+  // Avalia o agendamento contra a escala de hoje (ignorando o que está sendo editado) e monta a prévia do impacto.
+  function folgaAvaliar(d){
+    var res = {ok:false, erro:"", incompleto:false, linhas:[], entry:null};
+    var r = repPorId(d.repId);
+    if(!r){ res.erro = "Escolha a pessoa."; res.incompleto = true; return res; }
+    if(repEhPS(r)){ res.erro = "PS não entram na contagem de pessoas trabalhando."; return res; }
+    folgaIgnorar = editing.folga || "";
+    try{
+      var i, iso, base, antes;
+      if(d.tipo==="banco"){
+        if(!isoOk(d.data)){ res.erro = "Informe a data da folga."; res.incompleto = true; return res; }
+        var fim = isoOk(d.dataFim) ? d.dataFim : d.data;
+        if(fim < d.data){ res.erro = "A data final não pode ser antes da data inicial."; return res; }
+        var n = diasEntre(d.data, fim);
+        if(n>31){ res.erro = "O período pode ter no máximo 31 dias."; return res; }
+        var ef = 0, motivos = [];
+        for(i=0;i<n;i++){
+          iso = Cal.addDays(d.data, i); base = baseStatus(r, iso);
+          if(base==="ativo"){
+            if(ajusteAplicado(r, iso, "ativo")){
+              motivos.push(r.nome+" já tem agendamento em "+diaMes(iso));
+              res.linhas.push({iso:iso, cls:"mute", txt:"já tem agendamento — sem efeito"});
+            }else{
+              ef++; antes = contagemDia(iso).total;
+              res.linhas.push({iso:iso, cls:"ok", antes:antes, depois:antes-1, rot:"folga"});
+            }
+          }else{
+            motivos.push(motivoSemEfeito(r, iso, base));
+            res.linhas.push({iso:iso, cls:"mute", txt:(base==="folga" ? "já é folga pela escala" : STATUS_LABEL[base].toLowerCase())+" — sem efeito"});
+          }
+        }
+        if(!ef){
+          res.erro = n===1 ? "Sem efeito: "+motivos[0]+"." : "Nenhum dia do período muda a contagem: "+motivos.slice(0,2).join("; ")+(motivos.length>2?"…":"")+".";
+          return res;
+        }
+        res.ok = true;
+        res.entry = {tipo:"banco", repId:r.id, data:d.data, dataFim: fim!==d.data ? fim : "", obs:d.obs};
+      }else{
+        if(!isoOk(d.trabalha) || !isoOk(d.folgaEm)){ res.erro = "Informe os dois dias da troca."; res.incompleto = true; return res; }
+        if(d.trabalha===d.folgaEm){ res.erro = "Os dois dias da troca precisam ser diferentes."; return res; }
+        var bT = baseStatus(r, d.trabalha), bF = baseStatus(r, d.folgaEm), erros = [];
+        if(bT!=="folga") erros.push(motivoSemEfeito(r, d.trabalha, bT)+(bT==="ativo" ? " — escolha um dia que seria folga" : ""));
+        else if(ajusteAplicado(r, d.trabalha, "folga")) erros.push(r.nome+" já tem agendamento em "+diaMes(d.trabalha));
+        if(bF!=="ativo") erros.push(motivoSemEfeito(r, d.folgaEm, bF)+(bF==="folga" ? " — escolha um dia que seria de trabalho" : ""));
+        else if(ajusteAplicado(r, d.folgaEm, "ativo")) erros.push(r.nome+" já tem agendamento em "+diaMes(d.folgaEm));
+        var okT = !(bT!=="folga" || ajusteAplicado(r, d.trabalha, "folga")), okF = !(bF!=="ativo" || ajusteAplicado(r, d.folgaEm, "ativo"));
+        if(okT){ antes = contagemDia(d.trabalha).total; res.linhas.push({iso:d.trabalha, cls:"ok", antes:antes, depois:antes+1, rot:"trabalha"}); }
+        if(okF){ antes = contagemDia(d.folgaEm).total; res.linhas.push({iso:d.folgaEm, cls:"ok", antes:antes, depois:antes-1, rot:"folga"}); }
+        if(erros.length){ res.erro = erros.join(". ")+"."; return res; }
+        res.ok = true;
+        res.entry = {tipo:"troca", repId:r.id, dataTrabalho:d.trabalha, dataFolga:d.folgaEm, obs:d.obs};
+      }
+    }finally{
+      folgaIgnorar = "";
+    }
+    return res;
+  }
+
+  function folgaPreview(){
+    var box = document.getElementById("folgaPreview");
+    var d = folgaLerForm(), av = folgaAvaliar(d), html = "";
+    if(av.linhas.length){
+      var max = 8, mostra = av.linhas.slice(0, max);
+      html = mostra.map(function(l){
+        if(l.cls==="ok"){
+          var rot = l.rot==="trabalha" ? "Trabalha" : "Folga";
+          return '<div class="fp-line ok"><b>'+fmtDate(l.iso)+'</b> <span>'+esc(diaSemana(l.iso))+'</span> · '+rot+' · pessoas trabalhando: '+l.antes+' → <b>'+l.depois+'</b></div>';
+        }
+        return '<div class="fp-line mute"><b>'+fmtDate(l.iso)+'</b> <span>'+esc(diaSemana(l.iso))+'</span> · '+esc(l.txt)+'</div>';
+      }).join("");
+      if(av.linhas.length>max) html += '<div class="fp-line mute">… e mais '+(av.linhas.length-max)+' dia(s)</div>';
+    }else if(av.incompleto){
+      html = '<div class="fp-line mute">'+(d.tipo==="banco" ? "Escolha a pessoa e a data para ver quantas pessoas trabalham no dia." : "Escolha a pessoa e os dois dias para ver o impacto na contagem.")+'</div>';
+    }
+    // antes de a pessoa mexer no formulário o aviso fica discreto (a data de hoje vem preenchida por padrão)
+    if(av.erro && !av.incompleto) html += '<div class="fp-line '+(folgaTocado ? 'bad' : 'mute')+'">'+esc(av.erro)+'</div>';
+    box.innerHTML = html;
+  }
+  function folgaFormMudou(){
+    var troca = document.getElementById("folgaTipo").value==="troca";
+    document.querySelectorAll("[data-folga]").forEach(function(el){
+      el.style.display = (el.dataset.folga==="troca")===troca ? "" : "none";
+    });
+    clearFormError("folgaFormError");
+    folgaPreview();
+  }
+  function resetFolgaForm(){
+    editing.folga = null;
+    document.getElementById("folgaFormTitle").textContent = "Agendar folga";
+    document.getElementById("folgaTipo").value = "banco";
+    document.getElementById("folgaData").value = todayISO();
+    document.getElementById("folgaDataFim").value = "";
+    document.getElementById("folgaTrabalha").value = "";
+    document.getElementById("folgaFolgaEm").value = "";
+    document.getElementById("folgaObs").value = "";
+    document.getElementById("folgaSaveBtn").textContent = "Agendar";
+    document.getElementById("folgaCancelBtn").style.display = "none";
+    folgaTocado = false;
+    folgaFormMudou();
+  }
+  function startFolgaEdit(f){
+    if(!f) return;
+    var r = repPorId(f.repId);
+    if(!r || repEhPS(r)){ showFormError("folgaFormError", "Esse agendamento é de uma pessoa que não conta mais (PS ou removida). Exclua-o."); return; }
+    editing.folga = f.id;
+    document.getElementById("folgaFormTitle").textContent = "Editar agendamento";
+    document.getElementById("folgaTipo").value = f.tipo==="troca" ? "troca" : "banco";
+    fillFolgaRepSelect();
+    document.getElementById("folgaRep").value = f.repId;
+    document.getElementById("folgaData").value = f.data || "";
+    document.getElementById("folgaDataFim").value = f.dataFim || "";
+    document.getElementById("folgaTrabalha").value = f.dataTrabalho || "";
+    document.getElementById("folgaFolgaEm").value = f.dataFolga || "";
+    document.getElementById("folgaObs").value = f.obs || "";
+    document.getElementById("folgaSaveBtn").textContent = "Salvar";
+    document.getElementById("folgaCancelBtn").style.display = "inline-block";
+    folgaTocado = true;
+    folgaFormMudou();
+    var painel = document.getElementById("folgaFormPanel");
+    if(painel.scrollIntoView) painel.scrollIntoView({block:"nearest"});
+  }
+  function saveFolga(){
+    var av = folgaAvaliar(folgaLerForm());
+    if(!av.ok){ showFormError("folgaFormError", av.erro || "Revise os dados."); return; }
+    clearFormError("folgaFormError");
+    var entry = av.entry;
+    if(!Array.isArray(state.folgas)) state.folgas = [];
+    if(editing.folga){
+      var i = state.folgas.findIndex(function(x){return x.id===editing.folga;});
+      entry.id = editing.folga;
+      if(i>-1) state.folgas[i] = entry; else state.folgas.push(entry);
+    }else{
+      entry.id = uid();
+      state.folgas.push(entry);
+    }
+    folgasMes = folgaIni(entry).slice(0,7) || folgasMes; // mostra o mês do agendamento para ver o efeito
+    resetFolgaForm();
+    scheduleSave();
+    renderAll();
+  }
+  function deleteFolga(id){
+    state.folgas = (state.folgas||[]).filter(function(f){return f.id!==id;});
+    if(editing.folga===id) resetFolgaForm();
+    scheduleSave();
+    renderAll();
+  }
+
+  function fillFolgaRepSelect(){
+    var sel = document.getElementById("folgaRep"), atual = sel.value;
+    var lista = sortReps(state.reps.filter(function(r){return !repEhPS(r);}));
+    if(!lista.length){ sel.innerHTML = '<option value="">Nenhum rep cadastrado</option>'; return; }
+    sel.innerHTML = lista.map(function(r){ return '<option value="'+esc(r.id)+'">'+esc(r.nome)+(r.escala?' · Escala '+esc(r.escala):'')+'</option>'; }).join("");
+    if(atual && lista.some(function(r){return r.id===atual;})) sel.value = atual;
+  }
+  function fillFolgaFiltroRep(){
+    var sel = document.getElementById("folgaFiltroRep");
+    var lista = sortReps(state.reps.filter(function(r){return !repEhPS(r);}));
+    if(folgaFiltroRep && !lista.some(function(r){return r.id===folgaFiltroRep;})) folgaFiltroRep = "";
+    sel.innerHTML = '<option value="">Todas as pessoas</option>' + lista.map(function(r){ return '<option value="'+esc(r.id)+'">'+esc(r.nome)+'</option>'; }).join("");
+    sel.value = folgaFiltroRep;
+    document.getElementById("folgaFiltroPer").value = folgaFiltroPer;
+  }
+
+  // O que o agendamento está fazendo hoje na contagem (tags + detalhe).
+  function folgaEfeito(f){
+    var r = repPorId(f.repId), tags = [], det = [];
+    if(!r) return {tags:[{cls:"tag-rust", txt:"pessoa removida"}], det:[]};
+    if(repEhPS(r)) return {tags:[{cls:"tag-mute", txt:"PS · fora da contagem"}], det:[]};
+    if(f.tipo==="troca"){
+      if(!isoOk(f.dataTrabalho) || !isoOk(f.dataFolga)) return {tags:[{cls:"tag-rust", txt:"datas inválidas"}], det:[]};
+      var bT = baseStatus(r, f.dataTrabalho), bF = baseStatus(r, f.dataFolga);
+      var aT = bT==="folga" ? ajusteAplicado(r, f.dataTrabalho, "folga") : null, aF = bF==="ativo" ? ajusteAplicado(r, f.dataFolga, "ativo") : null;
+      var okT = !!aT && aT.f===f, okF = !!aF && aF.f===f;
+      tags.push({cls: okT?"tag-green":"tag-rust", txt: okT ? "+1 trabalha em "+diaMes(f.dataTrabalho) : "trabalha: sem efeito"});
+      tags.push({cls: okF?"tag-green":"tag-rust", txt: okF ? "−1 folga em "+diaMes(f.dataFolga) : "folga: sem efeito"});
+      if(!okT) det.push(aT ? "dia de trabalho já coberto por outro agendamento" : motivoSemEfeito(r, f.dataTrabalho, bT));
+      if(!okF) det.push(aF ? "folga já coberta por outro agendamento" : motivoSemEfeito(r, f.dataFolga, bF));
+      return {tags:tags, det:det};
+    }
+    var d0 = f.data, fimOk = !f.dataFim || isoOk(f.dataFim), n = (isoOk(d0) && fimOk) ? diasEntre(d0, f.dataFim||d0) : 0, ef = 0, ja = 0, aus = 0, cob = 0;
+    if(!(n>0)) return {tags:[{cls:"tag-rust", txt:"datas inválidas"}], det:[]};
+    for(var i=0;i<n && i<400;i++){
+      var iso = Cal.addDays(d0, i), base = baseStatus(r, iso);
+      if(base==="ativo"){ var aj = ajusteAplicado(r, iso, "ativo"); if(aj && aj.f===f) ef++; else cob++; }
+      else if(base==="folga") ja++; else aus++;
+    }
+    if(ef===n && n>0) tags.push({cls:"tag-green", txt:"−1 em "+(n===1 ? "1 dia" : n+" dias")});
+    else if(ef===0) tags.push({cls:"tag-rust", txt:"sem efeito"});
+    else tags.push({cls:"tag-amber", txt:"−1 em "+ef+" de "+n+" dias"});
+    if(ja) det.push("já é folga pela escala em "+plural(ja, "dia", "dias"));
+    if(aus) det.push("ausente (férias/licença/afastado) em "+plural(aus, "dia", "dias"));
+    if(cob) det.push("já agendado em outro registro em "+plural(cob, "dia", "dias"));
+    return {tags:tags, det:det};
+  }
+  function folgaDatasTexto(f){
+    if(f.tipo==="troca") return 'Trabalha <b>'+(isoOk(f.dataTrabalho)?diaMes(f.dataTrabalho):"—")+'</b> → Folga <b>'+(isoOk(f.dataFolga)?diaMes(f.dataFolga):"—")+'</b>';
+    if(!isoOk(f.data)) return "—";
+    if(isoOk(f.dataFim) && f.dataFim!==f.data) return '<b>'+diaMes(f.data)+'</b> a <b>'+fmtDate(f.dataFim)+'</b> · '+diasEntre(f.data, f.dataFim)+' dias';
+    return '<b>'+fmtDate(f.data)+'</b> · '+esc(diaSemana(f.data));
+  }
+
+  function renderFolgas(){
+    var hoje = todayISO();
+    if(!/^\d{4}-\d{2}$/.test(folgasMes)) folgasMes = hoje.slice(0,7);
+    var ym = folgasMes, nd = diasDoMes(ym);
+    document.getElementById("folgasMeta").textContent = (state.folgas||[]).length + " agendamento(s)";
+    fillFolgaRepSelect();
+    fillFolgaFiltroRep();
+    var inpMes = document.getElementById("folgasMesInput");
+    if(inpMes.value!==ym) inpMes.value = ym;
+
+    // ----- pessoas trabalhando por dia -----
+    var equipe = state.reps.filter(function(r){return !repEhPS(r);}).length;
+    var wrap = document.getElementById("folgasDias"), strip = document.getElementById("folgasStrip");
+    if(!equipe){
+      wrap.innerHTML = '<div class="hint" style="padding:10px 2px;">Cadastre reps na aba Equipe para ver quantas pessoas trabalham em cada dia.</div>';
+      strip.innerHTML = "";
+    }else{
+      var dias = [], nBanco = 0, nTF = 0, nTT = 0, menor = null, maior = null;
+      for(var d=1; d<=nd; d++){
+        var iso = ym+"-"+String(d).padStart(2,"0"), cd = contagemDia(iso);
+        dias.push(cd);
+        nBanco += cd.banco.length; nTF += cd.trocaFolga.length; nTT += cd.trocaTrab.length;
+        if(menor===null || cd.total<menor.total) menor = cd;
+        if(maior===null || cd.total>maior.total) maior = cd;
+      }
+      strip.innerHTML =
+        stripCell("Equipe", equipe, "", "teal", "Reps (sem PS)") +
+        stripCell("Folgas extras", nBanco+nTF, nBanco+nTF ? "rust" : "", "rust", "banco "+nBanco+" · troca "+nTF+" (pessoa-dias)") +
+        stripCell("Trabalham em troca", nTT, nTT ? "green" : "", "green", "dias de trabalho extra") +
+        stripCell("Menor dia", menor.total, "amber", "amber", diaSemana(menor.iso)+" "+diaMes(menor.iso)) +
+        stripCell("Maior dia", maior.total, "teal", "teal", diaSemana(maior.iso)+" "+diaMes(maior.iso));
+      function chips(lista, rotulo){
+        return lista.map(function(x){
+          return '<span class="fd-chip" title="'+esc((x.f.obs ? x.f.obs+" · " : "")+rotulo)+'">'+esc(x.r.nome)+' <i>'+rotulo+'</i></span>';
+        }).join("");
+      }
+      var linhas = dias.map(function(cd){
+        var dl = cd.total - cd.base, neg = cd.banco.length + cd.trocaFolga.length, pos = cd.trocaTrab.length;
+        var pct = function(v){ return Math.max(0, Math.min(100, v/equipe*100)).toFixed(1)+"%"; };
+        var barra = '<div class="fd-bar" title="Total '+cd.total+' de '+equipe+'"><i class="fd-ok" style="width:'+pct(Math.min(cd.total, cd.base))+'"></i>' +
+          (dl<0 ? '<i class="fd-lost" style="width:'+pct(cd.base-cd.total)+'"></i>' : '') +
+          (dl>0 ? '<i class="fd-gain" style="width:'+pct(cd.total-cd.base)+'"></i>' : '') + '</div>';
+        return '<tr class="fd-row'+(cd.iso===hoje?' fd-hoje':'')+'">' +
+          '<td class="fd-dia"><b>'+cd.iso.slice(8)+'</b> <span>'+esc(diaSemana(cd.iso))+'</span>'+(cd.iso===hoje?' <em>hoje</em>':'')+'</td>' +
+          '<td class="num fd-n">'+cd.base+'</td>' +
+          '<td class="fd-neg">'+(neg ? '<b>−'+neg+'</b> '+chips(cd.banco,"banco")+chips(cd.trocaFolga,"troca") : '<span class="fd-nada">—</span>')+'</td>' +
+          '<td class="fd-pos">'+(pos ? '<b>+'+pos+'</b> '+chips(cd.trocaTrab,"troca") : '<span class="fd-nada">—</span>')+'</td>' +
+          '<td class="fd-total"><div class="fd-tot-n"><b>'+cd.total+'</b>'+(dl ? ' <small class="'+(dl<0?'neg':'pos')+'">'+(dl<0?'−':'+')+Math.abs(dl)+'</small>' : '')+'</div>'+barra+'</td>' +
+        '</tr>';
+      }).join("");
+      wrap.innerHTML = '<table class="fd-table"><thead><tr><th>Dia</th><th title="Pessoas com dia de trabalho pela escala (sem férias, licença e afastados)">Pela escala</th><th>Folgas extras</th><th>Trabalham em troca</th><th>Pessoas trabalhando</th></tr></thead><tbody>'+linhas+'</tbody></table>';
+    }
+    document.getElementById("folgasLegenda").innerHTML =
+      '<span class="hint"><b>'+esc(mesLabel(ym))+'</b> · Pela escala = reps com dia de trabalho (já sem férias/licença/afastados) · − folga extra (banco de horas ou troca) · + trabalha em dia de folga (troca) · PS não entram</span>';
+    var hint = document.getElementById("folgasHint");
+    if(Cal.foraDosCalendarios(ym+"-01") || Cal.foraDosCalendarios(ym+"-"+String(nd).padStart(2,"0"))){
+      hint.textContent = "Mês fora dos calendários enviados (set–dez/2026): a escala é projetada pelo ciclo de 52 semanas deduzido deles.";
+      hint.style.display = "block";
+    }else{
+      hint.style.display = "none";
+    }
+
+    // ----- lista de agendamentos -----
+    var todos = (state.folgas||[]).filter(function(f){
+      if(folgaFiltroRep && f.repId!==folgaFiltroRep) return false;
+      var ds = folgaDatas(f);
+      if(!ds.length) return folgaFiltroPer==="todas";
+      if(folgaFiltroPer==="mes") return f.tipo==="troca" ? ds.some(function(x){return x.slice(0,7)===ym;}) : (ds[0].slice(0,7)<=ym && ds[ds.length-1].slice(0,7)>=ym);
+      if(folgaFiltroPer==="futuras") return ds[ds.length-1]>=hoje;
+      return true;
+    }).sort(function(a,b){ return folgaIni(a).localeCompare(folgaIni(b)) || repName(a.repId).localeCompare(repName(b.repId), "pt-BR"); });
+    var body = document.getElementById("folgasLista"), vazio = document.getElementById("folgasEmpty");
+    if(!todos.length){
+      body.innerHTML = "";
+      vazio.style.display = "block";
+      vazio.innerHTML = (state.folgas||[]).length ? '<b>Nenhum agendamento nesse filtro</b>Mude o mês ou o filtro acima para ver os demais.' : '<b>Nenhuma folga agendada</b>Use o formulário acima para agendar uma folga de banco de horas ou uma troca de folga.';
+    }else{
+      vazio.style.display = "none";
+      body.innerHTML = todos.map(function(f){
+       try{
+        var r = repPorId(f.repId), ef = folgaEfeito(f), passado = folgaFim(f) && folgaFim(f)<hoje;
+        var nome = r ? '<span class="esc-dot" style="background:'+(ESC_COR[r.escala]||"var(--text-faint)")+'"></span>'+esc(r.nome) : '<span class="hint">(rep removido)</span>';
+        return '<tr class="'+(passado?'fd-passado':'')+'">' +
+          '<td>'+nome+'</td>' +
+          '<td><span class="tag '+(f.tipo==="troca"?'tag-amber':'tag-teal')+'">'+(f.tipo==="troca"?'Troca de folga':'Banco de horas')+'</span></td>' +
+          '<td class="num">'+folgaDatasTexto(f)+'</td>' +
+          '<td>'+ef.tags.map(function(t){return '<span class="tag '+t.cls+'">'+esc(t.txt)+'</span>';}).join(" ")+(ef.det.length?'<div class="hint">'+esc(ef.det.join(" · "))+'</div>':'')+'</td>' +
+          '<td>'+esc(f.obs||"")+'</td>' +
+          '<td class="row-actions">' +
+            '<button class="btn-ghost" data-act="edit-folga" data-id="'+esc(f.id)+'">Editar</button>' +
+            '<button class="btn-ghost" data-act="del-folga" data-id="'+esc(f.id)+'">Excluir</button>' +
+          '</td>' +
+        '</tr>';
+       }catch(e){
+        // um registro com dados estranhos não pode apagar a lista inteira
+        return '<tr><td colspan="5"><span class="hint">Registro com dados inválidos.</span></td><td class="row-actions"><button class="btn-ghost" data-act="del-folga" data-id="'+esc(f && f.id)+'">Excluir</button></td></tr>';
+       }
+      }).join("");
+    }
+    folgaPreview();
+  }
+
   // ---------- render all ----------
   function renderAll(){
     renderEquipe();
     renderDim();
     renderTasks();
+    renderFolgas();
     renderPontos();
     renderLost();
   }
@@ -1341,6 +1769,8 @@
     else if(act==="del-ponto"){ pendingDelete(btn, deletePonto, id); }
     else if(act==="edit-lost"){ startLostEdit(state.lost.find(function(l){return l.id===id;})); }
     else if(act==="del-lost"){ pendingDelete(btn, deleteLost, id); }
+    else if(act==="edit-folga"){ startFolgaEdit((state.folgas||[]).find(function(f){return f.id===id;})); }
+    else if(act==="del-folga"){ pendingDelete(btn, deleteFolga, id); }
     else if(act==="backup-open"){ backupAbrir(); }
     else if(act==="backup-close"){ backupFechar(); }
     else if(act==="backup-gerar"){ backupGerar(); }
@@ -1390,6 +1820,20 @@
   document.getElementById("lostSaveBtn").addEventListener("click", saveLost);
   document.getElementById("lostCancelBtn").addEventListener("click", resetLostForm);
 
+  ["folgaTipo","folgaRep","folgaData","folgaDataFim","folgaTrabalha","folgaFolgaEm","folgaObs"].forEach(function(id){
+    document.getElementById(id).addEventListener("input", function(){ folgaTocado = true; folgaFormMudou(); });
+    document.getElementById(id).addEventListener("change", function(){ folgaTocado = true; folgaFormMudou(); });
+  });
+  document.getElementById("folgaSaveBtn").addEventListener("click", saveFolga);
+  document.getElementById("folgaCancelBtn").addEventListener("click", resetFolgaForm);
+  function setFolgasMes(ym){ if(/^\d{4}-\d{2}$/.test(ym)){ folgasMes = ym; renderFolgas(); } }
+  document.getElementById("folgasPrev").addEventListener("click", function(){ setFolgasMes(addMeses(folgasMes || todayISO().slice(0,7), -1)); });
+  document.getElementById("folgasNext").addEventListener("click", function(){ setFolgasMes(addMeses(folgasMes || todayISO().slice(0,7), 1)); });
+  document.getElementById("folgasHoje").addEventListener("click", function(){ setFolgasMes(todayISO().slice(0,7)); });
+  document.getElementById("folgasMesInput").addEventListener("change", function(e){ setFolgasMes(e.target.value); });
+  document.getElementById("folgaFiltroRep").addEventListener("change", function(e){ folgaFiltroRep = e.target.value; renderFolgas(); });
+  document.getElementById("folgaFiltroPer").addEventListener("change", function(e){ folgaFiltroPer = e.target.value; renderFolgas(); });
+
   document.getElementById("pontoCategoria").addEventListener("change", function(){
     renderPontoRepsChecklist(editing.ponto ? getCheckedPontoReps() : []);
   });
@@ -1408,6 +1852,7 @@
   resetTaskForm();
   resetPontoForm();
   resetLostForm();
+  resetFolgaForm();
   tickClock();
   setInterval(tickClock, 1000);
   loadAndRender();
