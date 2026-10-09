@@ -2067,7 +2067,6 @@
     var t = new Date(Date.UTC(+p[0], +p[1]-1, +p[2])).toLocaleDateString("pt-BR", {weekday:"long", day:"2-digit", month:"long", timeZone:"UTC"});
     return t.charAt(0).toUpperCase() + t.slice(1);
   }
-  function numBR(n){ return n.toLocaleString("pt-BR", {minimumFractionDigits:1, maximumFractionDigits:1}); }
   function nomesLista(l){ return l.map(function(x){ return x.r.nome; }).join(", "); }
   // Texto curto de um dia (dica ao passar o mouse e leitura por leitor de tela).
   function resumoDia(cd){
@@ -2075,23 +2074,26 @@
       areasDoDia(cd).map(function(a){ return AREA_CURTA[a.key]+" "+a.total; }).join(" · ");
   }
 
-  // Um bloco por área: média do mês, menor/maior dia e uma barra por dia (clicável).
+  // Um bloco por área: quantas pessoas trabalham no dia em foco (número exato), menor/maior dia do mês e uma barra por dia (clicável).
   function blocosAreaHTML(dias, sel, hoje){
+    var ym = dias[0].iso.slice(0,7);
+    var ref = sel || (hoje.slice(0,7)===ym ? hoje : dias[0].iso); // dia em foco: o escolhido; senão hoje (se for deste mês); senão o dia 1
     return areasDoDia(dias[0]).map(function(a0){
-      var k = a0.key, cad = a0.cad, soma = 0, min = Infinity, max = 0, diaMin = dias[0].iso, alterados = 0;
+      var k = a0.key, cad = a0.cad, min = Infinity, max = -1, diaMin = dias[0].iso, diaMax = dias[0].iso, alterados = 0;
       var h = function(n){ return (cad ? n/cad*100 : 0).toFixed(1)+"%"; };
       var barras = dias.map(function(cd){
         var a = cd.areas[k], ok = Math.min(a.total, a.base), perdeu = Math.max(0, a.base-a.total), ganhou = Math.max(0, a.total-a.base);
-        soma += a.total; if(a.total<min){ min = a.total; diaMin = cd.iso; } if(a.total>max) max = a.total; if(a.total!==a.base) alterados++;
+        if(a.total<min){ min = a.total; diaMin = cd.iso; } if(a.total>max){ max = a.total; diaMax = cd.iso; } if(a.total!==a.base) alterados++;
         var dica = diaSemana(cd.iso)+" "+diaMes(cd.iso)+": "+a.total+" de "+cad+(a.total!==a.base ? " (pela escala "+a.base+")" : "");
         return '<button type="button" class="ab-bar'+(ehFimDeSemana(cd.iso)?' fds':'')+(cd.iso===hoje?' hoje':'')+(cd.iso===sel?' sel':'')+'" data-act="dim-dia" data-iso="'+cd.iso+'" title="'+esc(dica)+'" aria-label="'+esc(areaNome(k)+", "+dica)+'">' +
           '<span class="bs"><i class="b-ok" style="height:'+h(ok)+'"></i>'+(perdeu ? '<i class="b-lost" style="height:'+h(perdeu)+'"></i>' : '')+(ganhou ? '<i class="b-gain" style="height:'+h(ganhou)+'"></i>' : '')+'</span></button>';
       }).join("");
+      var noDia = dias[Number(ref.slice(8))-1].areas[k].total;
       return '<div class="area-block '+areaCls(k)+'" data-area="'+k+'">' +
         '<div class="ab-head"><span class="ab-dot"></span>'+esc(areaNome(k))+'<span class="ab-cad">'+plural(cad, "cadastrado", "cadastrados")+'</span></div>' +
-        '<div class="ab-main"><b>'+numBR(soma/dias.length)+'</b><span>pessoas por dia, em média</span></div>' +
+        '<div class="ab-main"><b>'+noDia+'</b><span>trabalhando em '+esc(diaSemana(ref)+" "+diaMes(ref))+'</span></div>' +
         '<div class="ab-bars">'+barras+'</div>' +
-        '<div class="ab-foot"><span>Menor: <b>'+min+'</b> · '+esc(diaSemana(diaMin)+" "+diaMes(diaMin))+'</span><span>Maior: <b>'+max+'</b></span></div>' +
+        '<div class="ab-foot"><span>Menor: <b>'+min+'</b> · '+esc(diaSemana(diaMin)+" "+diaMes(diaMin))+'</span><span>Maior: <b>'+max+'</b> · '+esc(diaSemana(diaMax)+" "+diaMes(diaMax))+'</span></div>' +
         (alterados ? '<div class="ab-foot"><span class="dn">'+plural(alterados, "dia", "dias")+' com folga extra ou troca na área</span></div>' : '') +
       '</div>';
     }).join("");
