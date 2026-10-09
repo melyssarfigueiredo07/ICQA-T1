@@ -204,20 +204,32 @@
     if(ex) return ex.tipo==="troca-trabalho" ? "Trabalha (troca)" : "Folga extra";
     return STATUS_LABEL[effStatus(r, iso)];
   }
-  // Pessoas trabalhando em um dia (sem PS): pela escala, folgas extras, trocas e total.
-  // Invariante: total = base − banco − trocaFolga + trocaTrab.
+  // Áreas usadas para separar quem está presente (Área cadastrada do rep). Fora dessas quatro vai em "Sem área".
+  var AREAS_PRESENCA = ["inventario","qualidade","ps_operacoes","ps_icqa"];
+  var AREA_CURTA = {inventario:"Inv", qualidade:"Qual", ps_operacoes:"PS Op", ps_icqa:"PS ICQA", outra:"Outras"};
+  function areaDe(r){ return AREAS_PRESENCA.indexOf(r.categoria)>-1 ? r.categoria : "outra"; }
+  function areaNome(k){ return k==="outra" ? "Sem área" : (CATEGORIA_LABEL[k]||k); }
+  function areaEhPS(k){ return k.indexOf("ps_")===0; }
+  // Pessoas em um dia, TODAS as classes (rep e PS), com a quebra por Área cadastrada:
+  // pela escala, folgas extras, trocas e total. Invariante: total = base − banco − trocaFolga + trocaTrab.
+  // areas[k] = {key, cad (cadastrados), ps (quantos são PS), base, total (presentes)}.
   function contagemDia(iso){
-    var c = {iso:iso, base:0, total:0, banco:[], trocaFolga:[], trocaTrab:[]};
+    var c = {iso:iso, base:0, total:0, banco:[], trocaFolga:[], trocaTrab:[], areas:{}};
     sortReps(state.reps).forEach(function(r){
-      if(repEhPS(r)) return;
+      var k = areaDe(r), a = c.areas[k] || (c.areas[k] = {key:k, cad:0, ps:0, base:0, total:0});
+      a.cad++; if(repEhPS(r)) a.ps++;
       var b = baseStatus(r, iso);
       var ex = (b==="ativo" || b==="folga") ? ajusteAplicado(r, iso, b) : null;
-      if(b==="ativo") c.base++;
+      if(b==="ativo"){ c.base++; a.base++; }
       var eff = ex ? (ex.tipo==="troca-trabalho" ? "ativo" : "folga") : b;
-      if(eff==="ativo") c.total++;
+      if(eff==="ativo"){ c.total++; a.total++; }
       if(ex) (ex.tipo==="banco" ? c.banco : ex.tipo==="troca-folga" ? c.trocaFolga : c.trocaTrab).push({r:r, f:ex.f});
     });
     return c;
+  }
+  // Áreas que têm gente cadastrada, na ordem de exibição.
+  function areasDoDia(cd){
+    return AREAS_PRESENCA.concat(["outra"]).filter(function(k){ return cd.areas[k]; }).map(function(k){ return cd.areas[k]; });
   }
   // Tarefas com área fixa: só reps dessa Área entram no dimensionamento (nome sem acento/maiúscula).
 
@@ -750,15 +762,23 @@
     if(inp.value!==dimDate) inp.value = dimDate;
     document.getElementById("escalaModo").value = state.escalaModo==="trabalho" ? "trabalho" : "folga";
 
+    // Contadores com TODOS (reps e PS); logo abaixo, os presentes separados por Área cadastrada.
     var c = {ativo:0, folga:0, ferias:0, licenca:0, afastado:0};
-    state.reps.filter(function(r){return !repEhPS(r);}).forEach(function(r){ c[effStatus(r, dimDate)]++; });
+    state.reps.forEach(function(r){ c[effStatus(r, dimDate)]++; });
     var cdDia = contagemDia(dimDate), extraFolga = cdDia.banco.length + cdDia.trocaFolga.length;
     document.getElementById("dimStrip").innerHTML =
-      stripCell("Trabalhando", c.ativo, "green", "green", "Ativos na data" + (cdDia.trocaTrab.length ? " · "+cdDia.trocaTrab.length+" em troca" : "")) +
+      stripCell("Trabalhando", c.ativo, "green", "green", "Presentes na data" + (cdDia.trocaTrab.length ? " · "+cdDia.trocaTrab.length+" em troca" : "")) +
       stripCell("Folga", c.folga, "folga", "folga", extraFolga ? "Escala + "+extraFolga+" folga"+(extraFolga>1?"s":"")+" extra"+(extraFolga>1?"s":"") : "Pela escala") +
       stripCell("Férias", c.ferias, "ferias", "ferias", "Em férias") +
       stripCell("Licença", c.licenca, "licenca", "licenca", "Em licença") +
       stripCell("Afastados", c.afastado, "rust", "rust", "Afastados");
+    var areasDia = areasDoDia(cdDia);
+    document.getElementById("dimAreasTitle").textContent = areasDia.length ? "Presentes por área em "+fmtDate(dimDate)+" (quem está trabalhando, PS incluídos)" : "";
+    document.getElementById("dimAreas").innerHTML = areasDia.map(function(a){
+      var dl = a.total - a.base;
+      var cap = "de "+a.cad+" cadastrado"+(a.cad>1?"s":"") + (a.ps && !areaEhPS(a.key) ? " · "+a.ps+" PS" : "") + (dl ? " · "+(dl<0?"−":"+")+Math.abs(dl)+" por folga extra/troca" : "");
+      return stripCell(esc(areaNome(a.key)), a.total, "", areaEhPS(a.key) ? "amber" : "teal", cap);
+    }).join("");
 
     var dias = [];
     for(var i=-3;i<=3;i++) dias.push(Cal.addDays(dimDate, i));
@@ -767,7 +787,7 @@
       return '<th>'+dimDiaLabel(d)+(d===hoje?'<br>hoje':'')+'</th>';
     }).join("") + '</tr></thead><tbody>';
     ESCALAS.forEach(function(e){
-      var membros = state.reps.filter(function(r){return r.escala===e && !repEhPS(r);});
+      var membros = state.reps.filter(function(r){return r.escala===e;});
       var disp = membros.filter(function(r){return effStatus(r, dimDate)==="ativo";}).length;
       html += '<tr><td class="lbl"><span class="esc-dot" style="background:'+ESC_COR[e]+'"></span>Escala '+e+
         ' <span class="hint">('+disp+'/'+membros.length+')</span></td>' + dias.map(function(d){
@@ -775,19 +795,31 @@
         return '<td class="d '+(on?'on':'off')+(d===dimDate?' sel':'')+'" data-act="dim-dia" data-iso="'+d+'">'+(on?'Trabalha':'Folga')+'</td>';
       }).join("") + '</tr>';
     });
-    // Total de pessoas trabalhando por dia, já com banco de horas e trocas (ver aba Folgas extras)
-    html += '<tr class="tot-row"><td class="lbl">Pessoas trabalhando</td>' + dias.map(function(d){
-      var cd = contagemDia(d), dl = cd.total - cd.base;
-      var tip = "Pela escala "+cd.base+(cd.banco.length?" − "+cd.banco.length+" banco de horas":"")+(cd.trocaFolga.length?" − "+cd.trocaFolga.length+" troca (folga)":"")+(cd.trocaTrab.length?" + "+cd.trocaTrab.length+" troca (trabalha)":"")+" = "+cd.total;
-      return '<td class="d tot'+(d===dimDate?' sel':'')+'" data-act="dim-dia" data-iso="'+d+'" title="'+esc(tip)+'"><b>'+cd.total+'</b>'+
-        (dl ? ' <small class="'+(dl<0?'neg':'pos')+'">'+(dl<0?'−':'+')+Math.abs(dl)+'</small>' : '')+'</td>';
+    // Presentes por dia, separados por Área cadastrada (PS incluídos) e o total, já com banco de horas e trocas
+    var cds = dias.map(contagemDia);
+    var saldo = function(dl){ return dl ? ' <small class="'+(dl<0?'neg':'pos')+'">'+(dl<0?'−':'+')+Math.abs(dl)+'</small>' : ''; };
+    var areasSemana = areasDoDia(cds[0]);
+    if(areasSemana.length){
+      html += '<tr class="sub-row"><td class="lbl sub" colspan="'+(dias.length+1)+'">Presentes por área</td></tr>';
+      areasSemana.forEach(function(ar){
+        html += '<tr class="area-row"><td class="lbl"><span class="esc-dot" style="background:'+(areaEhPS(ar.key)?'var(--amber)':'var(--teal)')+'"></span>'+esc(areaNome(ar.key))+
+          ' <span class="hint">('+ar.cad+')</span></td>' + cds.map(function(cd){
+          var a = cd.areas[ar.key];
+          return '<td class="d area'+(cd.iso===dimDate?' sel':'')+'" data-act="dim-dia" data-iso="'+cd.iso+'"><b>'+a.total+'</b>'+saldo(a.total-a.base)+'</td>';
+        }).join("") + '</tr>';
+      });
+    }
+    html += '<tr class="tot-row"><td class="lbl">Pessoas trabalhando</td>' + cds.map(function(cd){
+      var tip = "Pela escala "+cd.base+(cd.banco.length?" − "+cd.banco.length+" banco de horas":"")+(cd.trocaFolga.length?" − "+cd.trocaFolga.length+" troca (folga)":"")+(cd.trocaTrab.length?" + "+cd.trocaTrab.length+" troca (trabalha)":"")+" = "+cd.total+
+        " · "+areasDoDia(cd).map(function(ar){ return AREA_CURTA[ar.key]+" "+ar.total; }).join(" · ");
+      return '<td class="d tot'+(cd.iso===dimDate?' sel':'')+'" data-act="dim-dia" data-iso="'+cd.iso+'" title="'+esc(tip)+'"><b>'+cd.total+'</b>'+saldo(cd.total-cd.base)+'</td>';
     }).join("") + '</tr>';
     document.getElementById("dimSemana").innerHTML = html + '</tbody></table>';
 
     document.getElementById("dimLegenda").innerHTML =
       ['ativo','folga','ferias','licenca','afastado'].map(function(k){
         return '<span class="tag '+STATUS_TAG[k]+'">'+STATUS_LABEL[k]+'</span>';
-      }).join("") + '<span class="hint">· Escala marcada nos calendários = '+(state.escalaModo==="trabalho"?"dia de trabalho":"folga")+' · PS não entram no dimensionamento · A linha "Pessoas trabalhando" já desconta banco de horas e trocas de folga</span>';
+      }).join("") + '<span class="hint">· Escala marcada nos calendários = '+(state.escalaModo==="trabalho"?"dia de trabalho":"folga")+' · PS contam nos presentes (separados por área), mas não entram nas tarefas · "Pessoas trabalhando" já desconta banco de horas e trocas de folga</span>';
 
     var hint = document.getElementById("dimHint");
     if(Cal.foraDosCalendarios(dimDate)){
@@ -1398,7 +1430,6 @@
     var res = {ok:false, erro:"", incompleto:false, linhas:[], entry:null};
     var r = repPorId(d.repId);
     if(!r){ res.erro = "Escolha a pessoa."; res.incompleto = true; return res; }
-    if(repEhPS(r)){ res.erro = "PS não entram na contagem de pessoas trabalhando."; return res; }
     folgaIgnorar = editing.folga || "";
     try{
       var i, iso, base, antes;
@@ -1496,7 +1527,7 @@
   function startFolgaEdit(f){
     if(!f) return;
     var r = repPorId(f.repId);
-    if(!r || repEhPS(r)){ showFormError("folgaFormError", "Esse agendamento é de uma pessoa que não conta mais (PS ou removida). Exclua-o."); return; }
+    if(!r){ showFormError("folgaFormError", "Esse agendamento é de uma pessoa que não está mais cadastrada. Exclua-o."); return; }
     editing.folga = f.id;
     document.getElementById("folgaFormTitle").textContent = "Editar agendamento";
     document.getElementById("folgaTipo").value = f.tipo==="troca" ? "troca" : "banco";
@@ -1542,14 +1573,17 @@
 
   function fillFolgaRepSelect(){
     var sel = document.getElementById("folgaRep"), atual = sel.value;
-    var lista = sortReps(state.reps.filter(function(r){return !repEhPS(r);}));
+    var lista = sortReps(state.reps);
     if(!lista.length){ sel.innerHTML = '<option value="">Nenhum rep cadastrado</option>'; return; }
-    sel.innerHTML = lista.map(function(r){ return '<option value="'+esc(r.id)+'">'+esc(r.nome)+(r.escala?' · Escala '+esc(r.escala):'')+'</option>'; }).join("");
+    sel.innerHTML = lista.map(function(r){
+      var ps = repEhPS(r) ? ' · '+(areaEhPS(areaDe(r)) ? areaNome(areaDe(r)) : 'PS') : '';
+      return '<option value="'+esc(r.id)+'">'+esc(r.nome)+(r.escala?' · Escala '+esc(r.escala):'')+esc(ps)+'</option>';
+    }).join("");
     if(atual && lista.some(function(r){return r.id===atual;})) sel.value = atual;
   }
   function fillFolgaFiltroRep(){
     var sel = document.getElementById("folgaFiltroRep");
-    var lista = sortReps(state.reps.filter(function(r){return !repEhPS(r);}));
+    var lista = sortReps(state.reps);
     if(folgaFiltroRep && !lista.some(function(r){return r.id===folgaFiltroRep;})) folgaFiltroRep = "";
     sel.innerHTML = '<option value="">Todas as pessoas</option>' + lista.map(function(r){ return '<option value="'+esc(r.id)+'">'+esc(r.nome)+'</option>'; }).join("");
     sel.value = folgaFiltroRep;
@@ -1560,7 +1594,6 @@
   function folgaEfeito(f){
     var r = repPorId(f.repId), tags = [], det = [];
     if(!r) return {tags:[{cls:"tag-rust", txt:"pessoa removida"}], det:[]};
-    if(repEhPS(r)) return {tags:[{cls:"tag-mute", txt:"PS · fora da contagem"}], det:[]};
     if(f.tipo==="troca"){
       if(!isoOk(f.dataTrabalho) || !isoOk(f.dataFolga)) return {tags:[{cls:"tag-rust", txt:"datas inválidas"}], det:[]};
       var bT = baseStatus(r, f.dataTrabalho), bF = baseStatus(r, f.dataFolga);
@@ -1605,7 +1638,7 @@
     if(inpMes.value!==ym) inpMes.value = ym;
 
     // ----- pessoas trabalhando por dia -----
-    var equipe = state.reps.filter(function(r){return !repEhPS(r);}).length;
+    var equipe = state.reps.length;
     var wrap = document.getElementById("folgasDias"), strip = document.getElementById("folgasStrip");
     if(!equipe){
       wrap.innerHTML = '<div class="hint" style="padding:10px 2px;">Cadastre reps na aba Equipe para ver quantas pessoas trabalham em cada dia.</div>';
@@ -1620,7 +1653,7 @@
         if(maior===null || cd.total>maior.total) maior = cd;
       }
       strip.innerHTML =
-        stripCell("Equipe", equipe, "", "teal", "Reps (sem PS)") +
+        stripCell("Equipe", equipe, "", "teal", areasDoDia(dias[0]).map(function(ar){ return AREA_CURTA[ar.key]+" "+ar.cad; }).join(" · ")) +
         stripCell("Folgas extras", nBanco+nTF, nBanco+nTF ? "rust" : "", "rust", "banco "+nBanco+" · troca "+nTF+" (pessoa-dias)") +
         stripCell("Trabalham em troca", nTT, nTT ? "green" : "", "green", "dias de trabalho extra") +
         stripCell("Menor dia", menor.total, "amber", "amber", diaSemana(menor.iso)+" "+diaMes(menor.iso)) +
@@ -1641,13 +1674,15 @@
           '<td class="num fd-n">'+cd.base+'</td>' +
           '<td class="fd-neg">'+(neg ? '<b>−'+neg+'</b> '+chips(cd.banco,"banco")+chips(cd.trocaFolga,"troca") : '<span class="fd-nada">—</span>')+'</td>' +
           '<td class="fd-pos">'+(pos ? '<b>+'+pos+'</b> '+chips(cd.trocaTrab,"troca") : '<span class="fd-nada">—</span>')+'</td>' +
-          '<td class="fd-total"><div class="fd-tot-n"><b>'+cd.total+'</b>'+(dl ? ' <small class="'+(dl<0?'neg':'pos')+'">'+(dl<0?'−':'+')+Math.abs(dl)+'</small>' : '')+'</div>'+barra+'</td>' +
+          '<td class="fd-total"><div class="fd-tot-n"><b>'+cd.total+'</b>'+(dl ? ' <small class="'+(dl<0?'neg':'pos')+'">'+(dl<0?'−':'+')+Math.abs(dl)+'</small>' : '')+'</div>'+barra+
+            '<div class="fd-areas" title="Presentes por área: '+esc(areasDoDia(cd).map(function(ar){ return areaNome(ar.key)+" "+ar.total; }).join(" · "))+'">'+
+              areasDoDia(cd).map(function(ar){ return '<span class="'+(areaEhPS(ar.key)?'ps':'rep')+'">'+AREA_CURTA[ar.key]+' <b>'+ar.total+'</b></span>'; }).join("")+'</div></td>' +
         '</tr>';
       }).join("");
-      wrap.innerHTML = '<table class="fd-table"><thead><tr><th>Dia</th><th title="Pessoas com dia de trabalho pela escala (sem férias, licença e afastados)">Pela escala</th><th>Folgas extras</th><th>Trabalham em troca</th><th>Pessoas trabalhando</th></tr></thead><tbody>'+linhas+'</tbody></table>';
+      wrap.innerHTML = '<table class="fd-table"><thead><tr><th>Dia</th><th title="Pessoas com dia de trabalho pela escala (sem férias, licença e afastados)">Pela escala</th><th>Folgas extras</th><th>Trabalham em troca</th><th>Pessoas trabalhando <span class="fd-th-sub">(por área)</span></th></tr></thead><tbody>'+linhas+'</tbody></table>';
     }
     document.getElementById("folgasLegenda").innerHTML =
-      '<span class="hint"><b>'+esc(mesLabel(ym))+'</b> · Pela escala = reps com dia de trabalho (já sem férias/licença/afastados) · − folga extra (banco de horas ou troca) · + trabalha em dia de folga (troca) · PS não entram</span>';
+      '<span class="hint"><b>'+esc(mesLabel(ym))+'</b> · Pela escala = reps com dia de trabalho (já sem férias/licença/afastados) · − folga extra (banco de horas ou troca) · + trabalha em dia de folga (troca) · PS incluídos, separados por área (Inv, Qual, PS Op, PS ICQA)</span>';
     var hint = document.getElementById("folgasHint");
     if(Cal.foraDosCalendarios(ym+"-01") || Cal.foraDosCalendarios(ym+"-"+String(nd).padStart(2,"0"))){
       hint.textContent = "Mês fora dos calendários enviados (set–dez/2026): a escala é projetada pelo ciclo de 52 semanas deduzido deles.";

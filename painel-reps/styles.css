@@ -470,3 +470,17 @@ tr.fd-passado td{opacity:.6;}
 .esc-week td.d.tot b{font-family:'IBM Plex Mono',monospace; font-size:14px;}
 .rep-box.ex-folga{border-style:dashed; border-color:var(--amber); background:var(--amber-dim); color:#8A4B04;}
 .rep-box.ex-trab{border-left:4px solid var(--teal);}
+
+/* ---------- presentes por área (Painel do dia) ---------- */
+.strip-title{font-size:11px; font-weight:700; color:var(--text-faint); text-transform:uppercase; letter-spacing:.04em; margin:2px 0 8px;}
+.dim-panel .strip + .strip-title{margin-top:6px;}
+.esc-week tr.sub-row td.sub{font-size:10.5px; font-weight:700; color:var(--text-faint); text-transform:uppercase; letter-spacing:.05em; padding:10px 2px 2px; border:0;}
+.esc-week td.d.area{background:var(--panel); color:var(--text); border-color:var(--line); cursor:pointer;}
+.esc-week td.d.area b{font-family:'IBM Plex Mono',monospace; font-size:13px;}
+.esc-week td.d.area small{font-size:10.5px; font-weight:700; margin-left:3px;}
+.esc-week td.d.area.sel{border-color:var(--text);}
+.fd-th-sub{text-transform:none; font-weight:500; letter-spacing:0;}
+.fd-areas{display:flex; flex-wrap:wrap; gap:3px 8px; margin-top:4px; font-size:10.5px; color:var(--text-faint);}
+.fd-areas span.ps b{color:#8A4B04;}
+.fd-areas span.rep b{color:var(--teal);}
+.fd-areas b{font-family:'IBM Plex Mono',monospace;}
