@@ -306,9 +306,91 @@
     el.style.display = "none";
   }
 
+  // ---------- feedback visual: aviso rápido, estado da gravação e destaque do que mudou ----------
+  var toastTimer = null;
+  function toast(msg, tipo){
+    var el = document.getElementById("toast");
+    if(!el) return;
+    el.textContent = msg;
+    el.className = "toast show" + (tipo ? " "+tipo : "");
+    if(toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(function(){ el.classList.remove("show"); }, 2800);
+  }
+  var saveEstadoTimer = null;
+  function setSaveState(s){ // "pend" (salvando) | "ok" | "err" | "idle" (escondido)
+    var el = document.getElementById("saveState");
+    if(!el) return;
+    el.dataset.s = s;
+    el.querySelector(".ss-txt").textContent = s==="pend" ? "Salvando…" : (s==="err" ? "Não salvo" : "Salvo");
+    if(saveEstadoTimer){ clearTimeout(saveEstadoTimer); saveEstadoTimer = null; }
+    if(s==="ok") saveEstadoTimer = setTimeout(function(){ el.dataset.s = "idle"; }, 4000);
+  }
+  function reduzMov(){ return !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches); }
+  function alturaNav(){ var n = document.getElementById("subnav"); return n ? n.offsetHeight : 0; }
+  // Rola até o item (se estiver fora da tela) e pisca para mostrar o que acabou de mudar.
+  function destacar(chave, rolar){
+    var el = null;
+    try{ el = document.querySelector('[data-key="'+String(chave).replace(/["\\]/g, "\\$&")+'"]'); }catch(e){}
+    if(!el) return;
+    if(rolar){
+      var r = el.getBoundingClientRect(), vh = window.innerHeight || document.documentElement.clientHeight || 0;
+      if(r.top < alturaNav()+16 || r.bottom > vh-24) el.scrollIntoView({block:"center", behavior: reduzMov() ? "auto" : "smooth"});
+    }
+    el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+  }
+
+  // ---------- formulários recolhíveis (mesmo padrão nas 5 abas) ----------
+  // Abrem sozinhos só quando a lista está vazia (primeiro uso); depois valem a escolha da pessoa.
+  // "Editar" abre o formulário e, ao salvar ou cancelar, ele volta a ficar como estava.
+  var FORMS = {
+    rep:   {painel:"repFormPanel",   foco:"repNome",    lista:function(){ return state.reps; }},
+    task:  {painel:"taskFormPanel",  foco:"taskNome",   lista:function(){ return state.tasks; }},
+    folga: {painel:"folgaFormPanel", foco:"folgaRep",   lista:function(){ return state.folgas||[]; }},
+    ponto: {painel:"pontoFormPanel", foco:"pontoTexto", lista:function(){ return state.pontos; }},
+    lost:  {painel:"lostFormPanel",  foco:"lostMu",     lista:function(){ return state.lost; }}
+  };
+  var formAberto = {}; // escolha atual de cada formulário (true = aberto); ausente = ainda não decidido
+  var formAntes = {};  // como o formulário estava antes de abrir só para editar
+  function aplicarForm(k){
+    var p = document.getElementById(FORMS[k].painel);
+    if(!p) return;
+    var aberto = !!formAberto[k], b = p.querySelector(".form-head");
+    p.classList.toggle("collapsed", !aberto);
+    b.setAttribute("aria-expanded", aberto ? "true" : "false");
+    b.querySelector(".fh-state").textContent = aberto ? "Ocultar" : "Abrir";
+  }
+  function aplicarForms(){ Object.keys(FORMS).forEach(aplicarForm); }
+  function formPadrao(){
+    Object.keys(FORMS).forEach(function(k){ if(formAberto[k]===undefined) formAberto[k] = FORMS[k].lista().length===0; });
+    aplicarForms();
+  }
+  function abrirForm(k, foco){
+    formAberto[k] = true; aplicarForm(k);
+    if(!foco) return;
+    var el = document.getElementById(FORMS[k].foco), p = document.getElementById(FORMS[k].painel);
+    if(el && el.focus) el.focus({preventScroll:true});
+    if(p && p.scrollIntoView){
+      var rr = p.getBoundingClientRect(), vh = window.innerHeight || document.documentElement.clientHeight || 0;
+      if(rr.top < alturaNav() || rr.top > vh-140) p.scrollIntoView({block:"start", behavior: reduzMov() ? "auto" : "smooth"});
+    }
+  }
+  function alternarForm(k){
+    if(formAberto[k]){ formAberto[k] = false; aplicarForm(k); }
+    else abrirForm(k, true);
+  }
+  function abrirParaEditar(k){
+    if(formAntes[k]===undefined) formAntes[k] = !!formAberto[k];
+    abrirForm(k, true);
+  }
+  function fecharAposEditar(k){
+    if(formAntes[k]===undefined) return;
+    formAberto[k] = formAntes[k]; delete formAntes[k]; aplicarForm(k);
+  }
+
   function scheduleSave(){
     if(saveTimer) clearTimeout(saveTimer);
-    saveTimer = setTimeout(persist, 250);
+    setSaveState("pend");
+    saveTimer = setTimeout(function(){ saveTimer = null; persist(); }, 250);
   }
   var lido = false; // só grava depois de ter lido o estado do Grid com sucesso (senão sobrescreveria com vazio)
   function aviso(msg){
@@ -317,12 +399,20 @@
     el.textContent = msg || "";
     el.style.display = msg ? "block" : "none";
   }
+  var gravando = 0; // gravações em andamento (o "Salvo" só aparece quando não resta nenhuma)
   function persist(){
-    if(!lido){ aviso("Sem conexão com o Grid: a alteração NÃO foi salva. Aguarde a reconexão e repita."); return; }
+    if(!lido){ setSaveState("err"); aviso("Sem conexão com o Grid: a alteração NÃO foi salva. Aguarde a reconexão e repita."); return; }
+    var contado = true;
+    function fim(){ if(contado){ contado = false; gravando--; } }
+    gravando++; setSaveState("pend");
     window.GRID.state.set(root, lastUpdatedAt).then(function(res){
+      fim();
       lastUpdatedAt = res.updated_at;
       aviso("");
+      if(!gravando && !saveTimer) setSaveState("ok");
     }).catch(function(err){
+      fim();
+      setSaveState("err");
       console.error("Falha ao salvar no Grid:", err);
       aviso("Não foi possível salvar no Grid agora (outra pessoa pode ter alterado ao mesmo tempo). Recarregue a página antes de continuar.");
     });
@@ -413,13 +503,17 @@
     resetRepForm(); resetTaskForm(); resetPontoForm(); resetLostForm(); resetFolgaForm();
     renderAll();
     backupMsg("Backup restaurado.");
+    toast("Backup restaurado");
   }
   function trocarTime(key){
     if(key===timeAtual) return;
     timeAtual = key;
     dimUndo = null; dimMsg = "";
+    limparFiltros();
+    formAberto = {}; formAntes = {};
     usarDados(root);
     resetRepForm(); resetTaskForm(); resetPontoForm(); resetLostForm(); resetFolgaForm();
+    formPadrao();
     renderAll();
   }
   function buildTimeSel(){
@@ -444,6 +538,8 @@
       aplicarLeitura(res);
       lido = true;
       aviso("");
+      document.body.classList.remove("is-loading");
+      formPadrao();
       renderAll();
       startPolling();
     }).catch(function(err){
@@ -467,26 +563,76 @@
     var ok = viewsDoTime().some(function(v){ return v.key===viewAtual; });
     showView(ok ? viewAtual : viewsDoTime()[0].key);
   }
+  var VIEW_ICONS = {
+    equipe: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.4"/><path d="M2.8 20c0-3.4 2.8-6 6.2-6s6.2 2.6 6.2 6"/><circle cx="17.4" cy="9.2" r="2.6"/><path d="M17.6 14.2c2.4.3 4.2 2.3 4.2 4.8"/></svg>',
+    dimensionamento: '<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><path d="M14 17h6.5M17.2 13.7v6.6"/></svg>',
+    calendario: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+    pontos: '<svg viewBox="0 0 24 24"><rect x="4" y="3.5" width="16" height="17.5" rx="2.2"/><path d="M8 9.5l1.6 1.6L12.5 8M8 15.5l1.6 1.6 2.9-3M14.5 10h2.5M14.5 16h2.5"/></svg>',
+    lost: '<svg viewBox="0 0 24 24"><path d="M12 3.5l9 16H3z"/><path d="M12 10v4.2M12 17.2v.1"/></svg>'
+  };
   function buildNav(){
     var nav = document.getElementById("navList");
     nav.innerHTML = "";
     viewsDoTime().forEach(function(v){
-      var el = document.createElement("div");
-      el.className = "tab-item" + (v.key===viewAtual ? " active" : "");
+      var el = document.createElement("button");
+      var ativa = v.key===viewAtual;
+      el.type = "button";
+      el.className = "tab-item" + (ativa ? " active" : "");
       el.dataset.view = v.key;
-      el.textContent = v.label;
+      el.id = "tab-"+v.key;
+      el.setAttribute("role", "tab");
+      el.setAttribute("aria-controls", "view-"+v.key);
+      el.setAttribute("aria-selected", ativa ? "true" : "false");
+      el.tabIndex = ativa ? 0 : -1;
+      el.innerHTML = '<span class="tab-ico" aria-hidden="true">'+(VIEW_ICONS[v.key]||"")+'</span><span class="tab-label">'+v.label+'</span><span class="tab-badge" hidden></span>';
       el.addEventListener("click", function(){ showView(v.key); });
       nav.appendChild(el);
     });
+    medirNav();
+  }
+  // Contadores nas abas: o que importa ver sem abrir a aba (pendências em âmbar).
+  function renderNavBadges(){
+    var hoje = todayISO();
+    var semCob = state.tasks.filter(function(t){ return coberturaTarefa(t).sem; }).length;
+    var pend = state.pontos.filter(function(p){ return p.status!=="concluido"; }).length;
+    var agend = (state.folgas||[]).filter(function(f){ return f && typeof f==="object" && folgaFim(f) && folgaFim(f)>=hoje; }).length;
+    var info = {
+      equipe:{n:state.reps.length, tip:state.reps.length+" pessoa(s) cadastrada(s)"},
+      dimensionamento:{n:state.tasks.length, warn:semCob>0, tip:state.tasks.length+" tarefa(s)"+(semCob ? " · "+semCob+" sem cobertura na data" : "")},
+      calendario:{n:agend, tip:agend+" agendamento(s) em andamento ou futuros"},
+      pontos:{n:pend, warn:pend>0, tip:pend+" ponto(s) pendente(s)"},
+      lost:{n:state.lost.length, tip:state.lost.length+" registro(s)"}
+    };
+    Array.prototype.forEach.call(document.querySelectorAll(".tab-item"), function(el){
+      var i = info[el.dataset.view], b = el.querySelector(".tab-badge");
+      if(!i || !b) return;
+      b.hidden = !i.n;
+      b.textContent = i.n;
+      b.classList.toggle("warn", !!i.warn);
+      el.title = i.tip;
+    });
+  }
+  // A barra de abas fica fixa no topo; guardamos a altura dela para o índice do Calendário grudar logo abaixo.
+  function medirNav(){
+    var h = alturaNav();
+    if(h) document.documentElement.style.setProperty("--nav-h", h+"px");
   }
   function showView(key){
+    var mudou = key!==viewAtual;
     viewAtual = key;
-    document.querySelectorAll(".view").forEach(function(v){
-      v.classList.toggle("active", v.dataset.view===key);
+    Array.prototype.forEach.call(document.querySelectorAll(".view"), function(v){
+      var on = v.dataset.view===key;
+      v.classList.toggle("active", on);
+      if(on && mudou){ v.classList.remove("enter"); void v.offsetWidth; v.classList.add("enter"); }
     });
-    document.querySelectorAll(".tab-item").forEach(function(n){
-      n.classList.toggle("active", n.dataset.view===key);
+    Array.prototype.forEach.call(document.querySelectorAll(".tab-item"), function(n){
+      var on = n.dataset.view===key;
+      n.classList.toggle("active", on);
+      n.setAttribute("aria-selected", on ? "true" : "false");
+      n.tabIndex = on ? 0 : -1;
     });
+    if(mudou && window.pageYOffset>0) window.scrollTo(0, 0);
+    atualizarScroll();
   }
   function tickClock(){
     var d = new Date();
@@ -527,22 +673,15 @@
     '</div>';
   }
 
-  // Painel "Adicionar rep" recolhível (preferência só desta sessão; abre sozinho ao editar um rep).
-  var repFormAberto = true;
-  function aplicarRepForm(){
-    var p = document.getElementById("repFormPanel"), b = document.getElementById("repFormToggle");
-    p.classList.toggle("collapsed", !repFormAberto);
-    b.textContent = repFormAberto ? "Ocultar ▲" : "Mostrar ▼";
-    b.setAttribute("aria-expanded", repFormAberto ? "true" : "false");
-  }
   // Card de apresentação da equipe: quem está presente hoje (reps e PS), por situação, por Área e por escala.
   function renderTeamCard(){
     var el = document.getElementById("equipeStrip");
     var hoje = todayISO(), reps = state.reps, n = reps.length;
     var nome = state.teamName || timeDef().nome;
     var dia = new Date().toLocaleDateString("pt-BR", {weekday:"long", day:"2-digit", month:"long"});
+    el.removeAttribute("aria-busy");
     if(!n){
-      el.innerHTML = '<div class="tc-head"><div><div class="tc-name">'+esc(nome)+'</div><div class="tc-sub">Nenhuma pessoa cadastrada ainda — use "Adicionar rep" abaixo.</div></div></div>';
+      el.innerHTML = '<div class="tc-head"><div><div class="tc-name">'+esc(nome)+'</div><div class="tc-sub">Nenhuma pessoa cadastrada ainda · '+esc(dia)+'</div></div></div>';
       return;
     }
     var c = {ativo:0, folga:0, ferias:0, licenca:0, afastado:0};
@@ -583,25 +722,55 @@
         '</div>' +
       '</div>';
   }
+  // Busca e filtros rápidos da Equipe (valem só nesta tela; voltam ao padrão ao trocar de time).
+  var repFiltro = "todos", repBusca = "";
+  var REP_CHIPS = [["todos","Todos"], ["presentes","Presentes hoje"], ["ausentes","Fora hoje"], ["rep","Reps"], ["ps","PS"]];
+  function repPassa(r, hoje, q){
+    var st = effStatus(r, hoje);
+    if(repFiltro==="presentes" && st!=="ativo") return false;
+    if(repFiltro==="ausentes" && st==="ativo") return false;
+    if(repFiltro==="rep" && repClasse(r)!=="rep") return false;
+    if(repFiltro==="ps" && repClasse(r)!=="ps") return false;
+    if(q){
+      var alvo = normNome([r.nome, r.ldap, r.re, r.email, CATEGORIA_LABEL[r.categoria], r.escala ? "escala "+r.escala : "", repSkillNames(r).join(" ")].join(" "));
+      if(alvo.indexOf(q)<0) return false;
+    }
+    return true;
+  }
+  function limparFiltros(){
+    repFiltro = "todos"; repBusca = ""; pontoFiltro = "todos"; pontoBusca = "";
+    ["repBusca","pontoBusca"].forEach(function(id){ var el = document.getElementById(id); if(el) el.value = ""; });
+  }
   function renderEquipe(){
     renderTeamCard();
-
-    if(!editing.rep) renderRepSkillsChecklist([]);
-
+    if(!editing.rep) renderRepSkillsChecklist(getCheckedRepSkills());
+    renderRepGrid();
+  }
+  function renderRepGrid(){
     var grid = document.getElementById("repGrid");
     var empty = document.getElementById("repEmpty");
+    var bar = document.getElementById("repToolbar");
     if(state.reps.length===0){
       grid.innerHTML = "";
       empty.style.display = "block";
+      bar.style.display = "none";
       return;
     }
     empty.style.display = "none";
-    var filtro = (document.getElementById("repFiltroClasse")||{}).value || "";
-    var visiveis = sortReps(state.reps.filter(function(r){
-      return !filtro || repClasse(r)===filtro;
-    }));
+    bar.style.display = "";
+    var hoje = todayISO(), q = normNome(repBusca);
+    var cont = {todos:state.reps.length, presentes:0, ausentes:0, rep:0, ps:0};
+    state.reps.forEach(function(r){
+      if(effStatus(r, hoje)==="ativo") cont.presentes++; else cont.ausentes++;
+      cont[repClasse(r)]++;
+    });
+    document.getElementById("repChips").innerHTML = REP_CHIPS.map(function(c){
+      var on = repFiltro===c[0];
+      return '<button type="button" class="fchip'+(on?' on':'')+(cont[c[0]]?'':' zero')+'" data-act="rep-filtro" data-v="'+c[0]+'" aria-pressed="'+(on?'true':'false')+'">'+c[1]+'<b>'+cont[c[0]]+'</b></button>';
+    }).join("");
+    var visiveis = sortReps(state.reps.filter(function(r){ return repPassa(r, hoje, q); }));
     if(visiveis.length===0){
-      grid.innerHTML = '<div class="hint" style="grid-column:1/-1;padding:14px 4px;">Nenhum rep nessa classificação.</div>';
+      grid.innerHTML = '<div class="hint" style="grid-column:1/-1;padding:14px 4px;">Nenhum rep encontrado com esse filtro ou busca. <button type="button" class="btn-ghost" data-act="rep-limpar">Limpar filtros</button></div>';
       return;
     }
     var out = "", lastEsc = null;
@@ -649,7 +818,7 @@
     var flags = repFlags(r);
     var skills = repSkillNames(r);
     var tarefas = skills.length ? skills.slice(0,2).join(", ") + (skills.length>2 ? " +"+(skills.length-2) : "") : "";
-    return '<div class="card rep-card'+escCls+stCls+'">' +
+    return '<div class="card rep-card'+escCls+stCls+'" data-key="rep:'+esc(r.id)+'">' +
       '<div class="rep-top"><div class="rep-avatar">'+esc(repInitials(r.nome))+'</div><div class="rep-name">'+esc(r.nome)+'</div></div>' +
       '<div class="card-tags">'+repTags(r)+'</div>' +
       (rows ? '<div class="sq-rows">'+rows+'</div>' : "") +
@@ -710,7 +879,8 @@
     updateSkillsVisibility();
   }
   function startRepEdit(rep){
-    repFormAberto = true; aplicarRepForm();
+    if(!rep) return;
+    abrirParaEditar("rep");
     editing.rep = rep.id;
     document.getElementById("repFormTitle").textContent = "Editar rep";
     document.getElementById("repNome").value = rep.nome;
@@ -736,10 +906,10 @@
     renderRepSkillsChecklist(rep.skills||[]);
     document.getElementById("repSaveBtn").textContent = "Salvar";
     document.getElementById("repCancelBtn").style.display = "inline-block";
-    document.getElementById("repNome").focus();
   }
   function resetRepForm(){
     editing.rep = null;
+    fecharAposEditar("rep");
     document.getElementById("repFormTitle").textContent = "Adicionar rep";
     document.getElementById("repNome").value = "";
     document.getElementById("repEscala").value = "A";
@@ -800,19 +970,25 @@
       data.afastDias = dias;
     }
     clearFormError("repFormError");
+    var editou = !!editing.rep, idSalvo;
     if(editing.rep){
       var rep = state.reps.find(function(r){return r.id===editing.rep;});
-      if(rep){ Object.assign(rep, data); }else{ data.id = uid(); state.reps.push(data); }
+      if(rep){ Object.assign(rep, data); idSalvo = rep.id; }else{ data.id = uid(); idSalvo = data.id; state.reps.push(data); }
     }else{
       data.id = uid();
+      idSalvo = data.id;
       state.reps.push(data);
     }
     migrateTasks();
     resetRepForm();
     scheduleSave();
     renderAll();
+    toast((editou ? "Atualizado: " : "Adicionado: ")+nome);
+    destacar("rep:"+idSalvo, editou);
+    if(!editou){ var campo = document.getElementById("repNome"); if(campo.offsetParent) campo.focus({preventScroll:true}); }
   }
   function deleteRep(id){
+    var alvo = state.reps.find(function(r){return r.id===id;});
     state.reps = state.reps.filter(function(r){return r.id!==id;});
     state.pontos.forEach(function(p){ p.repIds = (p.repIds||[]).filter(function(rid){return rid!==id;}); });
     state.lost = state.lost.filter(function(l){return l.repId!==id;});
@@ -821,6 +997,7 @@
     if(editing.rep===id) resetRepForm();
     scheduleSave();
     renderAll();
+    toast("Excluído: "+(alvo ? alvo.nome : "rep"));
   }
 
   // =====================================================================
@@ -1067,8 +1244,20 @@
     m.textContent = dimMsg;
     m.style.display = dimMsg ? "inline" : "none";
   }
+  // Responsáveis elegíveis da tarefa e quantos estão disponíveis na data de referência.
+  // sem = tem responsáveis, mas ninguém trabalha na data (cobertura zerada); semResp = ninguém marcado ainda.
+  function coberturaTarefa(t){
+    var ids = t.repIds||[];
+    var resp = state.reps.filter(function(r){ return ids.indexOf(r.id)>-1 && repElegivel(t, r); });
+    var disp = resp.filter(function(r){ return effStatus(r, dimDate)==="ativo"; }).length;
+    return {resp:resp, disp:disp, semResp:resp.length===0, sem:resp.length>0 && disp===0};
+  }
   function renderTasks(){
-    document.getElementById("taskMeta").textContent = state.tasks.length + " tarefa(s)";
+    var cobs = state.tasks.map(coberturaTarefa);
+    var nSem = cobs.filter(function(c){ return c.sem; }).length, nSemResp = cobs.filter(function(c){ return c.semResp; }).length;
+    var metaEl = document.getElementById("taskMeta");
+    metaEl.textContent = state.tasks.length + " tarefa(s)" + (nSem ? " · "+nSem+" sem cobertura na data" : "") + (nSemResp ? " · "+nSemResp+" sem responsáveis" : "");
+    metaEl.classList.toggle("warn", nSem>0);
     var grid = document.getElementById("taskGrid");
     var empty = document.getElementById("taskEmpty");
     var matriz = document.getElementById("taskMatrix");
@@ -1088,9 +1277,10 @@
     grid.innerHTML = state.tasks.map(function(t){
       var ids = t.repIds||[];
       var area = tarefaArea(t), fixa = areaFixa(t.nome);
-      var resp = state.reps.filter(function(r){return ids.indexOf(r.id)>-1 && repElegivel(t, r);});
+      var cb = coberturaTarefa(t), resp = cb.resp, disp = cb.disp;
       var fora = state.reps.filter(function(r){return ids.indexOf(r.id)>-1 && !repElegivel(t, r);});
-      var disp = resp.filter(function(r){return effStatus(r, dimDate)==="ativo";}).length;
+      var alerta = cb.semResp ? '<span class="tag tag-amber" title="Marque abaixo quem é responsável por esta tarefa">Sem responsáveis</span>' :
+        (cb.sem ? '<span class="tag tag-rust" title="Os responsáveis não estão disponíveis em '+fmtDate(dimDate)+'">Sem cobertura na data</span>' : '');
       var cov;
       if(resp.length===0){
         cov = '<div class="cov"><div class="cov-head"><span>Sem responsáveis'+(fixa?' de '+CATEGORIA_LABEL[fixa]:'')+'</span></div></div>';
@@ -1116,7 +1306,7 @@
         return '<label class="rep-box st-'+st+(isResp?' is-resp':'')+(exr ? (exr.tipo==="troca-trabalho" ? ' ex-trab' : ' ex-folga') : '')+'"><input type="checkbox" class="task-rep-toggle" data-task="'+t.id+'" data-rep="'+r.id+'" '+(isResp?"checked":"")+'>'+
           esc(r.nome)+(nota?' <small>'+esc(nota)+'</small>':'')+'</label>';
       }).join("") : '<span class="hint">Nenhum rep nesse filtro'+(fixa?' (só reps de '+CATEGORIA_LABEL[fixa]+', sem PS)':'')+'.</span>') : '<span class="hint">Cadastre reps na aba Equipe.</span>';
-      return '<div class="card">' +
+      return '<div class="card" data-key="task:'+esc(t.id)+'">' +
         '<div class="card-head">' +
           '<div class="card-title">'+esc(t.nome)+'</div>' +
           '<div class="row-actions">' +
@@ -1125,7 +1315,7 @@
           '</div>' +
         '</div>' +
         '<div class="card-tags"><span class="tag tag-dark">'+(CATEGORIA_LABEL[area]||"—")+'</span>' +
-          (fixa ? '<span class="tag tag-folga">só reps de '+CATEGORIA_LABEL[fixa]+' (sem PS)</span>' : '') + '</div>' +
+          (fixa ? '<span class="tag tag-folga">só reps de '+CATEGORIA_LABEL[fixa]+' (sem PS)</span>' : '') + alerta + '</div>' +
         cov +
         taskTools(t) +
         '<div class="card-section-label">Reps responsáveis</div>' +
@@ -1190,6 +1380,8 @@
     }
   }
   function startTaskEdit(t){
+    if(!t) return;
+    abrirParaEditar("task");
     editing.task = t.id;
     document.getElementById("taskFormTitle").textContent = "Editar tarefa";
     document.getElementById("taskNome").value = t.nome;
@@ -1197,10 +1389,10 @@
     syncTaskAreaLock();
     document.getElementById("taskSaveBtn").textContent = "Salvar";
     document.getElementById("taskCancelBtn").style.display = "inline-block";
-    document.getElementById("taskNome").focus();
   }
   function resetTaskForm(){
     editing.task = null;
+    fecharAposEditar("task");
     document.getElementById("taskFormTitle").textContent = "Adicionar tarefa";
     document.getElementById("taskNome").value = "";
     document.getElementById("taskCategoria").value = "inventario";
@@ -1212,23 +1404,30 @@
     var nome = document.getElementById("taskNome").value.trim();
     if(!nome){ document.getElementById("taskNome").focus(); return; }
     var categoria = areaFixa(nome) || document.getElementById("taskCategoria").value;
+    var editou = !!editing.task, idSalvo;
     if(editing.task){
       var t = state.tasks.find(function(x){return x.id===editing.task;});
-      if(t){ t.nome = nome; t.categoria = categoria; }
-      else{ state.tasks.push({id:uid(), nome:nome, categoria:categoria, repIds:[]}); }
+      if(t){ t.nome = nome; t.categoria = categoria; idSalvo = t.id; }
+      else{ idSalvo = uid(); state.tasks.push({id:idSalvo, nome:nome, categoria:categoria, repIds:[]}); }
     }else{
-      state.tasks.push({id:uid(), nome:nome, categoria:categoria, repIds:[]});
+      idSalvo = uid();
+      state.tasks.push({id:idSalvo, nome:nome, categoria:categoria, repIds:[]});
     }
     resetTaskForm();
     scheduleSave();
     renderAll();
+    toast((editou ? "Tarefa atualizada: " : "Tarefa adicionada: ")+nome);
+    destacar("task:"+idSalvo, editou);
+    if(!editou){ var campo = document.getElementById("taskNome"); if(campo.offsetParent) campo.focus({preventScroll:true}); }
   }
   function deleteTask(id){
+    var alvo = state.tasks.find(function(t){return t.id===id;});
     state.tasks = state.tasks.filter(function(t){return t.id!==id;});
     state.reps.forEach(function(r){ r.skills = (r.skills||[]).filter(function(tid){return tid!==id;}); });
     if(editing.task===id) resetTaskForm();
     scheduleSave();
     renderAll();
+    toast("Tarefa excluída: "+(alvo ? alvo.nome : ""));
   }
   function toggleTaskRep(taskId, repId){
     var t = state.tasks.find(function(x){return x.id===taskId;});
@@ -1265,25 +1464,60 @@
   function getCheckedPontoReps(){
     return Array.prototype.slice.call(document.querySelectorAll(".ponto-rep-check:checked")).map(function(c){return c.value;});
   }
+  // Filtro e busca da lista de pontos (valem só nesta tela).
+  var pontoFiltro = "todos", pontoBusca = "";
+  var PONTO_CHIPS = [["todos","Todos"], ["pendentes","Pendentes"], ["concluidos","Concluídos"]];
   function renderPontos(){
-    document.getElementById("pontosMeta").textContent = state.pontos.length + " registro(s)";
-    if(!editing.ponto) renderPontoRepsChecklist([]);
+    var hoje = todayISO(), tot = state.pontos.length;
+    var pend = state.pontos.filter(function(p){ return p.status!=="concluido"; });
+    var conc = tot - pend.length;
+    document.getElementById("pontosMeta").textContent = tot + " registro(s)";
+    if(!editing.ponto) renderPontoRepsChecklist(getCheckedPontoReps());
+
+    var maisAntigo = pend.reduce(function(m, p){ return (isoOk(p.data) && (!m || p.data<m.data)) ? p : m; }, null);
+    var diasParado = maisAntigo ? Math.max(0, Cal.diasDesdeEpoch(hoje) - Cal.diasDesdeEpoch(maisAntigo.data)) : 0;
+    document.getElementById("pontosStrip").innerHTML =
+      stripCell("Registros", tot, "", "teal", "Pontos alinhados") +
+      stripCell("Pendentes", pend.length, pend.length ? "amber" : "", "amber", pend.length ? "ainda a resolver" : "nada pendente") +
+      stripCell("Concluídos", conc, conc ? "green" : "", "green", tot ? Math.round(conc/tot*100)+"% do total" : "—") +
+      stripCell("Pendente mais antigo", maisAntigo ? plural(diasParado, "dia", "dias") : "—", maisAntigo && diasParado>14 ? "rust" : "", maisAntigo && diasParado>14 ? "rust" : "", maisAntigo ? esc(fmtDate(maisAntigo.data)+" · "+(CATEGORIA_LABEL[maisAntigo.categoria]||"")) : "Sem pendências");
+    document.getElementById("pontoToolbar").style.display = tot ? "" : "none";
+    var cont = {todos:tot, pendentes:pend.length, concluidos:conc};
+    document.getElementById("pontoChips").innerHTML = PONTO_CHIPS.map(function(c){
+      var on = pontoFiltro===c[0];
+      return '<button type="button" class="fchip'+(on?' on':'')+(cont[c[0]]?'':' zero')+'" data-act="ponto-filtro" data-v="'+c[0]+'" aria-pressed="'+(on?'true':'false')+'">'+c[1]+'<b>'+cont[c[0]]+'</b></button>';
+    }).join("");
 
     var body = document.getElementById("pontoTableBody");
     var empty = document.getElementById("pontoEmpty");
-    var list = state.pontos.slice().sort(function(a,b){ return (b.data||"").localeCompare(a.data||""); });
-    if(list.length===0){ body.innerHTML=""; empty.style.display="block"; return; }
+    // pendentes primeiro; dentro de cada grupo, os mais recentes no topo
+    var q = normNome(pontoBusca);
+    var list = state.pontos.filter(function(p){
+      if(pontoFiltro==="pendentes" && p.status==="concluido") return false;
+      if(pontoFiltro==="concluidos" && p.status!=="concluido") return false;
+      if(q && normNome(p.texto+" "+(p.repIds||[]).map(repName).join(" ")+" "+(CATEGORIA_LABEL[p.categoria]||"")).indexOf(q)<0) return false;
+      return true;
+    }).sort(function(a,b){
+      var ga = a.status==="concluido" ? 1 : 0, gb = b.status==="concluido" ? 1 : 0;
+      return (ga-gb) || (b.data||"").localeCompare(a.data||"");
+    });
+    if(tot===0){ body.innerHTML=""; empty.style.display="block"; return; }
     empty.style.display = "none";
+    if(list.length===0){
+      body.innerHTML = '<tr><td colspan="6" class="hint" style="padding:14px 12px;">Nenhum ponto neste filtro ou busca.</td></tr>';
+      return;
+    }
     body.innerHTML = list.map(function(p){
-      var statusCls = p.status==="concluido" ? "tag-green" : "tag-amber";
-      var statusLabel = p.status==="concluido" ? "Concluído" : "Pendente";
+      var concl = p.status==="concluido";
+      var statusCls = concl ? "tag-green" : "tag-amber";
+      var statusLabel = concl ? "Concluído" : "Pendente";
       var nomes = (p.repIds||[]).map(repName).join(", ") || "—";
-      return '<tr>' +
+      return '<tr data-key="ponto:'+esc(p.id)+'">' +
         '<td class="num">'+fmtDate(p.data)+'</td>' +
         '<td><span class="tag tag-dark">'+(CATEGORIA_LABEL[p.categoria]||"—")+'</span></td>' +
         '<td>'+esc(nomes)+'</td>' +
         '<td>'+esc(p.texto)+'</td>' +
-        '<td><span class="tag '+statusCls+'">'+statusLabel+'</span></td>' +
+        '<td><button type="button" class="tag tag-btn '+statusCls+'" data-act="toggle-ponto" data-id="'+esc(p.id)+'" title="'+(concl ? 'Clique para reabrir (volta a pendente)' : 'Clique para marcar como concluído')+'">'+statusLabel+'</button></td>' +
         '<td class="row-actions">' +
           '<button class="btn-ghost" data-act="edit-ponto" data-id="'+p.id+'">Editar</button>' +
           '<button class="btn-ghost" data-act="del-ponto" data-id="'+p.id+'">Excluir</button>' +
@@ -1291,7 +1525,18 @@
       '</tr>';
     }).join("");
   }
+  function togglePonto(id){
+    var p = state.pontos.find(function(x){return x.id===id;});
+    if(!p) return;
+    p.status = p.status==="concluido" ? "pendente" : "concluido";
+    scheduleSave();
+    renderAll();
+    toast(p.status==="concluido" ? "Ponto concluído" : "Ponto reaberto: voltou para pendente");
+    destacar("ponto:"+p.id, true);
+  }
   function startPontoEdit(p){
+    if(!p) return;
+    abrirParaEditar("ponto");
     editing.ponto = p.id;
     document.getElementById("pontoFormTitle").textContent = "Editar ponto";
     document.getElementById("pontoCategoria").value = p.categoria||"inventario";
@@ -1304,6 +1549,7 @@
   }
   function resetPontoForm(){
     editing.ponto = null;
+    fecharAposEditar("ponto");
     document.getElementById("pontoFormTitle").textContent = "Registrar ponto";
     document.getElementById("pontoCategoria").value = "inventario";
     document.getElementById("pontoData").value = todayISO();
@@ -1324,22 +1570,28 @@
       status: document.getElementById("pontoStatus").value,
       repIds: repIds
     };
+    var editou = !!editing.ponto, idSalvo;
     if(editing.ponto){
       var p = state.pontos.find(function(p){return p.id===editing.ponto;});
-      if(p){ Object.assign(p, data); }else{ data.id = uid(); state.pontos.push(data); }
+      if(p){ Object.assign(p, data); idSalvo = p.id; }else{ data.id = uid(); idSalvo = data.id; state.pontos.push(data); }
     }else{
       data.id = uid();
+      idSalvo = data.id;
       state.pontos.push(data);
     }
     resetPontoForm();
     scheduleSave();
     renderAll();
+    toast(editou ? "Ponto atualizado" : "Ponto registrado");
+    destacar("ponto:"+idSalvo, editou);
+    if(!editou){ var campo = document.getElementById("pontoTexto"); if(campo.offsetParent) campo.focus({preventScroll:true}); }
   }
   function deletePonto(id){
     state.pontos = state.pontos.filter(function(p){return p.id!==id;});
     if(editing.ponto===id) resetPontoForm();
     scheduleSave();
     renderAll();
+    toast("Ponto excluído");
   }
 
   // =====================================================================
@@ -1378,17 +1630,21 @@
     var total = state.lost.reduce(function(s,l){return s+(Number(l.valor)||0);}, 0);
     var byRep = computeLostByRep();
     var offender = byRep[0];
+    var muRows = computeLostByMU(), muTop = muRows[0];
     var strip = document.getElementById("lostStrip");
     strip.innerHTML =
       stripCell("Registros", state.lost.length, "", "", "Lost registrados") +
       stripCell("Valor total perdido", fmtMoney(total), "rust", "rust", "Somado de todos os MU") +
+      stripCell("MU mais crítico", muTop ? esc(muTop.mu) : "—", "rust", "rust", muTop ? fmtMoney(muTop.valor)+" · "+(total>0 ? Math.round(muTop.valor/total*100) : 0)+"% do total" : "Sem registros ainda") +
       stripCell("Rep ofensor", offender ? esc(repName(offender.repId)) : "—", "rust", "rust", offender ? fmtMoney(offender.valor)+" acumulado" : "Sem registros ainda");
 
     document.getElementById("lostMeta").textContent = state.lost.length + " registro(s)";
 
-    var muRows = computeLostByMU();
+    // barra de cada MU proporcional à maior perda (valor; se não houver valor, quantidade)
+    var maxV = muRows.reduce(function(m, x){ return Math.max(m, x.valor); }, 0), maxQ = muRows.reduce(function(m, x){ return Math.max(m, x.quantidade); }, 0);
     document.getElementById("lostMuTableBody").innerHTML = muRows.length ? muRows.map(function(m){
-      return '<tr><td>'+esc(m.mu)+'</td><td class="num">'+m.quantidade+'</td><td class="num" style="text-align:right;">'+fmtMoney(m.valor)+'</td></tr>';
+      var pct = maxV>0 ? m.valor/maxV*100 : (maxQ>0 ? m.quantidade/maxQ*100 : 0);
+      return '<tr><td>'+esc(m.mu)+'<span class="minibar" title="Proporção da maior perda"><i style="width:'+pct.toFixed(1)+'%"></i></span></td><td class="num">'+m.quantidade+'</td><td class="num" style="text-align:right;">'+fmtMoney(m.valor)+'</td></tr>';
     }).join("") : '<tr><td colspan="3" class="hint" style="padding:14px 12px;">Sem registros ainda.</td></tr>';
 
     var body = document.getElementById("lostTableBody");
@@ -1396,7 +1652,7 @@
     if(state.lost.length===0){ body.innerHTML=""; empty.style.display="block"; return; }
     empty.style.display = "none";
     body.innerHTML = state.lost.slice().reverse().map(function(l){
-      return '<tr>' +
+      return '<tr data-key="lost:'+esc(l.id)+'">' +
         '<td>'+esc(repName(l.repId))+'</td>' +
         '<td>'+esc(l.mu||"—")+'</td>' +
         '<td class="num">'+(Number(l.quantidade)||0)+'</td>' +
@@ -1409,6 +1665,8 @@
     }).join("");
   }
   function startLostEdit(l){
+    if(!l) return;
+    abrirParaEditar("lost");
     editing.lost = l.id;
     document.getElementById("lostFormTitle").textContent = "Editar lost";
     document.getElementById("lostRep").value = l.repId;
@@ -1420,6 +1678,7 @@
   }
   function resetLostForm(){
     editing.lost = null;
+    fecharAposEditar("lost");
     document.getElementById("lostFormTitle").textContent = "Registrar lost";
     document.getElementById("lostMu").value = "";
     document.getElementById("lostQuantidade").value = "";
@@ -1437,22 +1696,28 @@
       quantidade: Number(document.getElementById("lostQuantidade").value)||0,
       valor: Number(document.getElementById("lostValor").value)||0
     };
+    var editou = !!editing.lost, idSalvo;
     if(editing.lost){
       var l = state.lost.find(function(l){return l.id===editing.lost;});
-      if(l){ Object.assign(l, data); }else{ data.id = uid(); state.lost.push(data); }
+      if(l){ Object.assign(l, data); idSalvo = l.id; }else{ data.id = uid(); idSalvo = data.id; state.lost.push(data); }
     }else{
       data.id = uid();
+      idSalvo = data.id;
       state.lost.push(data);
     }
     resetLostForm();
     scheduleSave();
     renderAll();
+    toast(editou ? "Lost atualizado" : "Lost registrado: "+mu);
+    destacar("lost:"+idSalvo, editou);
+    if(!editou){ var campo = document.getElementById("lostMu"); if(campo.offsetParent) campo.focus({preventScroll:true}); }
   }
   function deleteLost(id){
     state.lost = state.lost.filter(function(l){return l.id!==id;});
     if(editing.lost===id) resetLostForm();
     scheduleSave();
     renderAll();
+    toast("Lost excluído");
   }
 
   // =====================================================================
@@ -1468,6 +1733,11 @@
     return new Date(Date.UTC(+p[0], +p[1]-1, +p[2])).toLocaleDateString("pt-BR", {weekday:"short", timeZone:"UTC"});
   }
   function diaMes(iso){ if(!isoOk(iso)) return "—"; var p = iso.split("-"); return p[2]+"/"+p[1]; }
+  function ehFimDeSemana(iso){
+    if(!isoOk(iso)) return false;
+    var p = iso.split("-"), d = new Date(Date.UTC(+p[0], +p[1]-1, +p[2])).getUTCDay();
+    return d===0 || d===6;
+  }
   function mesLabel(ym){
     var p = ym.split("-");
     var s = new Date(Date.UTC(+p[0], +p[1]-1, 1)).toLocaleDateString("pt-BR", {month:"long", year:"numeric", timeZone:"UTC"});
@@ -1629,6 +1899,7 @@
   }
   function resetFolgaForm(){
     editing.folga = null;
+    fecharAposEditar("folga");
     document.getElementById("folgaFormTitle").textContent = "Agendar";
     document.getElementById("folgaTipo").value = "banco";
     document.getElementById("folgaData").value = todayISO();
@@ -1646,7 +1917,8 @@
   function startFolgaEdit(f){
     if(!f) return;
     var r = repPorId(f.repId);
-    if(!r){ showFormError("folgaFormError", "Esse agendamento é de uma pessoa que não está mais cadastrada. Exclua-o."); return; }
+    if(!r){ toast("Esse agendamento é de uma pessoa que não está mais cadastrada. Exclua-o.", "warn"); return; }
+    abrirParaEditar("folga");
     editing.folga = f.id;
     document.getElementById("folgaFormTitle").textContent = "Editar agendamento";
     document.getElementById("folgaTipo").value = (f.tipo==="troca" || f.tipo==="ferias") ? f.tipo : "banco";
@@ -1663,14 +1935,12 @@
     document.getElementById("folgaCancelBtn").style.display = "inline-block";
     folgaTocado = true;
     folgaFormMudou();
-    var painel = document.getElementById("folgaFormPanel");
-    if(painel.scrollIntoView) painel.scrollIntoView({block:"nearest"});
   }
   function saveFolga(){
     var av = folgaAvaliar(folgaLerForm());
     if(!av.ok){ showFormError("folgaFormError", av.erro || "Revise os dados."); return; }
     clearFormError("folgaFormError");
-    var entry = av.entry;
+    var entry = av.entry, editou = !!editing.folga;
     if(!Array.isArray(state.folgas)) state.folgas = [];
     if(editing.folga){
       var i = state.folgas.findIndex(function(x){return x.id===editing.folga;});
@@ -1684,12 +1954,16 @@
     resetFolgaForm();
     scheduleSave();
     renderAll();
+    toast((editou ? "Agendamento atualizado: " : "Agendado: ")+(TIPO_ROTULO[entry.tipo]||"")+" · "+repName(entry.repId));
+    destacar("dia:"+folgaIni(entry), false);
+    destacar("folga:"+entry.id, editou);
   }
   function deleteFolga(id){
     state.folgas = (state.folgas||[]).filter(function(f){return f.id!==id;});
     if(editing.folga===id) resetFolgaForm();
     scheduleSave();
     renderAll();
+    toast("Agendamento excluído");
   }
 
   function fillFolgaRepSelect(){
@@ -1774,6 +2048,7 @@
     if(!/^\d{4}-\d{2}$/.test(folgasMes)) folgasMes = hoje.slice(0,7);
     var ym = folgasMes, nd = diasDoMes(ym);
     document.getElementById("folgasMeta").textContent = (state.folgas||[]).length + " agendamento(s)";
+    document.getElementById("calIdxN").textContent = (state.folgas||[]).length || "";
     fillFolgaRepSelect();
     fillFolgaFiltroRep();
     var inpMes = document.getElementById("folgasMesInput");
@@ -1818,7 +2093,7 @@
         var barra = '<div class="fd-bar" title="Total '+cd.total+' de '+equipe+'"><i class="fd-ok" style="width:'+pct(Math.min(cd.total, cd.base))+'"></i>' +
           (dl<0 ? '<i class="fd-lost" style="width:'+pct(cd.base-cd.total)+'"></i>' : '') +
           (dl>0 ? '<i class="fd-gain" style="width:'+pct(cd.total-cd.base)+'"></i>' : '') + '</div>';
-        return '<tr class="fd-row'+(cd.iso===hoje?' fd-hoje':'')+'">' +
+        return '<tr class="fd-row'+(cd.iso===hoje?' fd-hoje':'')+(ehFimDeSemana(cd.iso)?' fd-fds':'')+'" data-key="dia:'+cd.iso+'">' +
           '<td class="fd-dia"><b>'+cd.iso.slice(8)+'</b> <span>'+esc(diaSemana(cd.iso))+'</span>'+(cd.iso===hoje?' <em>hoje</em>':'')+'</td>' +
           '<td class="num fd-n">'+cd.base+'</td>' +
           '<td class="fd-neg">'+(neg ? '<b>−'+neg+'</b> '+chips(cd.banco,"banco")+chips(cd.trocaFolga,"troca") : '<span class="fd-nada">—</span>')+'</td>' +
@@ -1861,7 +2136,7 @@
        try{
         var r = repPorId(f.repId), ef = folgaEfeito(f), passado = folgaFim(f) && folgaFim(f)<hoje;
         var nome = r ? '<span class="esc-dot" style="background:'+(ESC_COR[r.escala]||"var(--text-faint)")+'"></span>'+esc(r.nome) : '<span class="hint">(rep removido)</span>';
-        return '<tr class="'+(passado?'fd-passado':'')+'">' +
+        return '<tr class="'+(passado?'fd-passado':'')+'" data-key="folga:'+esc(f.id)+'">' +
           '<td>'+nome+'</td>' +
           '<td><span class="tag '+(TIPO_TAG[f.tipo]||'tag-teal')+'">'+esc(TIPO_ROTULO[f.tipo]||'Banco de horas')+'</span></td>' +
           '<td class="num">'+folgaDatasTexto(f)+'</td>' +
@@ -1889,6 +2164,38 @@
     renderFolgas();
     renderPontos();
     renderLost();
+    renderNavBadges();
+  }
+
+  // ---------- Calendário: índice das seções (fica visível ao rolar e marca onde você está) ----------
+  var SEC_IDS = {"sec-dia":"sec-dia", "sec-agendar":"folgaFormPanel", "sec-mes":"sec-mes", "sec-lista":"sec-lista"};
+  function secAtiva(key){
+    Array.prototype.forEach.call(document.querySelectorAll("#calIndex .fchip"), function(c){ c.classList.toggle("on", c.dataset.sec===key); });
+  }
+  function irParaSecao(key){
+    var el = document.getElementById(SEC_IDS[key]);
+    if(!el) return;
+    if(key==="sec-agendar") abrirForm("folga", false);
+    el.scrollIntoView({block:"start", behavior: reduzMov() ? "auto" : "smooth"});
+    secAtiva(key);
+  }
+  function calSpy(){
+    if(viewAtual!=="calendario") return;
+    var idx = document.getElementById("calIndex"), limite = alturaNav() + (idx ? idx.offsetHeight : 0) + 36, atual = "sec-dia";
+    Object.keys(SEC_IDS).forEach(function(k){
+      var el = document.getElementById(SEC_IDS[k]);
+      if(el && el.getBoundingClientRect().top <= limite) atual = k;
+    });
+    var de = document.documentElement;
+    if(window.pageYOffset>0 && window.innerHeight + window.pageYOffset >= de.scrollHeight - 4) atual = "sec-lista";
+    secAtiva(atual);
+  }
+  // Sombra na barra de abas quando há conteúdo rolando por baixo dela + seção ativa do Calendário.
+  var rafScroll = 0;
+  function atualizarScroll(){
+    var nav = document.getElementById("subnav");
+    if(nav) nav.classList.toggle("stuck", nav.getBoundingClientRect().top<=0 && window.pageYOffset>0);
+    calSpy();
   }
 
   // ---------- events ----------
@@ -1958,7 +2265,13 @@
     else if(act==="del-ponto"){ pendingDelete(btn, deletePonto, id); }
     else if(act==="edit-lost"){ startLostEdit(state.lost.find(function(l){return l.id===id;})); }
     else if(act==="del-lost"){ pendingDelete(btn, deleteLost, id); }
-    else if(act==="toggle-repform"){ repFormAberto = !repFormAberto; aplicarRepForm(); }
+    else if(act==="toggle-form"){ if(FORMS[btn.dataset.form]) alternarForm(btn.dataset.form); }
+    else if(act==="open-form"){ if(FORMS[btn.dataset.form]) abrirForm(btn.dataset.form, true); }
+    else if(act==="rep-filtro"){ repFiltro = btn.dataset.v; renderRepGrid(); }
+    else if(act==="rep-limpar"){ repFiltro = "todos"; repBusca = ""; document.getElementById("repBusca").value = ""; renderRepGrid(); }
+    else if(act==="ponto-filtro"){ pontoFiltro = btn.dataset.v; renderPontos(); }
+    else if(act==="toggle-ponto"){ togglePonto(id); }
+    else if(act==="goto-sec"){ irParaSecao(btn.dataset.sec); }
     else if(act==="edit-folga"){ startFolgaEdit((state.folgas||[]).find(function(f){return f.id===id;})); }
     else if(act==="del-folga"){ pendingDelete(btn, deleteFolga, id); }
     else if(act==="backup-open"){ backupAbrir(); }
@@ -1969,10 +2282,43 @@
   });
 
   document.getElementById("fichaOverlay").addEventListener("click", function(e){ if(e.target.id==="fichaOverlay") closeFicha(); });
-  document.addEventListener("keydown", function(e){ if(e.key==="Escape") closeFicha(); });
+  document.getElementById("backupOverlay").addEventListener("click", function(e){ if(e.target.id==="backupOverlay") backupFechar(); });
+  var CANCELAR_EDICAO = {rep:function(){ resetRepForm(); }, task:function(){ resetTaskForm(); }, ponto:function(){ resetPontoForm(); }, lost:function(){ resetLostForm(); }, folga:function(){ resetFolgaForm(); }};
+  document.addEventListener("keydown", function(e){
+    var t = e.target, painel = (t && t.closest) ? t.closest(".form-panel[data-form]") : null;
+    if(e.key==="Escape"){
+      closeFicha(); backupFechar();
+      // Esc dentro de um formulário em edição cancela a edição
+      if(painel && editing[painel.dataset.form]) CANCELAR_EDICAO[painel.dataset.form]();
+      return;
+    }
+    // Enter num campo de texto/data/número do formulário = salvar (nos campos de várias linhas, Enter quebra a linha)
+    if(e.key==="Enter" && !e.shiftKey && !e.isComposing && painel && t.tagName==="INPUT" && t.type!=="checkbox" && t.type!=="button"){
+      var salvar = painel.querySelector(".fbody .btn-primary");
+      if(salvar){ e.preventDefault(); salvar.click(); }
+    }
+  });
+  // Setas, Home e End percorrem as abas
+  document.getElementById("navList").addEventListener("keydown", function(e){
+    var k = e.key;
+    if(k!=="ArrowRight" && k!=="ArrowLeft" && k!=="Home" && k!=="End") return;
+    var abas = viewsDoTime(), i = 0;
+    abas.forEach(function(v, n){ if(v.key===viewAtual) i = n; });
+    var j = k==="Home" ? 0 : k==="End" ? abas.length-1 : (i + (k==="ArrowRight" ? 1 : -1) + abas.length) % abas.length;
+    e.preventDefault();
+    showView(abas[j].key);
+    var alvo = document.querySelector('.tab-item[data-view="'+abas[j].key+'"]');
+    if(alvo) alvo.focus();
+  });
+  window.addEventListener("scroll", function(){
+    if(rafScroll) return;
+    rafScroll = window.requestAnimationFrame(function(){ rafScroll = 0; atualizarScroll(); });
+  }, {passive:true});
+  window.addEventListener("resize", function(){ medirNav(); atualizarScroll(); });
+  document.getElementById("repBusca").addEventListener("input", function(e){ repBusca = e.target.value; renderRepGrid(); });
+  document.getElementById("pontoBusca").addEventListener("input", function(e){ pontoBusca = e.target.value; renderPontos(); });
 
   document.addEventListener("change", function(e){
-    if(e.target.id==="repFiltroClasse"){ renderEquipe(); return; }
     if(e.target.classList.contains("dim-data-input")){ setDimDate(e.target.value); return; }
     if(e.target.classList.contains("task-rep-toggle")){
       toggleTaskRep(e.target.dataset.task, e.target.dataset.rep);
@@ -2034,6 +2380,11 @@
 
   // ---------- init ----------
   dimDate = todayISO();
+  Array.prototype.forEach.call(document.querySelectorAll(".view"), function(v){
+    v.id = "view-"+v.dataset.view;
+    v.setAttribute("role", "tabpanel");
+    v.setAttribute("aria-labelledby", "tab-"+v.dataset.view);
+  });
   buildNav();
   buildTimeSel();
   showView(VIEWS[0].key);
@@ -2042,7 +2393,8 @@
   resetPontoForm();
   resetLostForm();
   resetFolgaForm();
-  aplicarRepForm();
+  aplicarForms();
+  if(document.fonts && document.fonts.ready) document.fonts.ready.then(medirNav);
   tickClock();
   setInterval(tickClock, 1000);
   loadAndRender();

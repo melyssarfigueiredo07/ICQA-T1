@@ -9,7 +9,10 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="is-loading">
+
+<div class="load-bar" id="loadBar" aria-hidden="true"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <div class="app-shell">
   <div class="topbar">
@@ -19,6 +22,7 @@
         <input class="team-name" id="teamNameInput" placeholder="nome da equipe (opcional)">
       </div>
       <div class="topbar-right-group">
+        <span class="save-state" id="saveState" data-s="idle" title="Situação da gravação no Grid"><i class="ss-dot"></i><span class="ss-txt">Salvo</span></span>
         <button class="btn-backup" data-act="backup-open" title="Backup e restauração dos dados">💾 Backup</button>
         <select class="time-sel" id="timeSel" title="Time" aria-label="Time"></select>
         <span class="live-badge"><span class="live-dot"></span>Ao vivo</span>
@@ -26,8 +30,8 @@
       </div>
     </div>
   </div>
-  <div class="subnav">
-    <div class="tabs" id="navList"></div>
+  <div class="subnav" id="subnav">
+    <div class="tabs" id="navList" role="tablist" aria-label="Seções do painel"></div>
   </div>
 
   <div class="aviso-grid" id="avisoGrid" style="display:none;"></div>
@@ -38,20 +42,30 @@
       <div class="view-head">
         <div>
           <div class="view-title">Equipe</div>
-          <div class="view-sub">Reps, escala, admissão, acesso ao HV, área e tarefas que sabem realizar</div>
+          <div class="view-sub">Quem está na equipe, a escala de cada um e o que sabe fazer</div>
         </div>
         <div class="view-meta" id="equipeMeta"></div>
       </div>
 
-      <div class="team-card" id="equipeStrip"></div>
-
-      <div class="form-panel" id="repFormPanel">
-        <div class="form-panel-head">
-          <div class="form-panel-title" id="repFormTitle">Adicionar rep</div>
-          <button class="btn-ghost form-toggle" id="repFormToggle" data-act="toggle-repform" aria-expanded="true" aria-controls="repFormBody">Ocultar ▲</button>
+      <div class="team-card" id="equipeStrip" aria-busy="true">
+        <div class="tc-head">
+          <div><span class="skel" style="width:230px;height:22px;"></span><span class="skel" style="width:310px;height:13px;margin-top:9px;"></span></div>
+          <span class="skel" style="width:130px;height:38px;"></span>
         </div>
-        <div id="repFormBody">
+        <span class="skel" style="width:100%;height:12px;margin:16px 0 12px;"></span>
+        <span class="skel" style="width:58%;height:24px;"></span>
+      </div>
+
+      <div class="form-panel fc collapsed" id="repFormPanel" data-form="rep">
+        <button type="button" class="form-head" id="repFormToggle" data-act="toggle-form" data-form="rep" aria-expanded="false" aria-controls="repFormBody">
+          <span class="fh-plus" aria-hidden="true">+</span>
+          <span class="fh-title" id="repFormTitle">Adicionar rep</span>
+          <span class="fh-state" aria-hidden="true">Abrir</span>
+          <span class="fh-chev" aria-hidden="true"></span>
+        </button>
+        <div class="fbody" id="repFormBody"><div class="fbody-in"><div class="fbody-pad">
         <div class="form-row">
+          <div class="form-sub">Cadastro</div>
           <div class="field grow2">
             <label>Nome</label>
             <input type="text" id="repNome" placeholder="Nome do rep">
@@ -128,7 +142,7 @@
             <label>Data final (calculada)</label>
             <div class="calc-out" id="repAfastFim">—</div>
           </div>
-          <div class="field" style="flex-basis:100%; height:0; margin:0; padding:0;"></div>
+          <div class="form-sub">Dados pessoais e contato</div>
           <div class="field">
             <label>CPF</label>
             <input type="text" id="repCpf" placeholder="000.000.000-00">
@@ -157,38 +171,30 @@
             <label>Telefone</label>
             <input type="tel" id="repTelefone" placeholder="(00) 00000-0000">
           </div>
-          <div class="field" style="flex:0;">
-            <label>&nbsp;</label>
-            <div style="display:flex; gap:8px;">
-              <button class="btn btn-primary" id="repSaveBtn">Adicionar</button>
-              <button class="btn" id="repCancelBtn" style="display:none;">Cancelar</button>
-            </div>
-          </div>
         </div>
-        <div class="field" id="repSkillsField" style="margin-top:12px;">
+        <div class="field skills-field" id="repSkillsField">
           <label>Tarefas que sabe realizar</label>
           <div id="repSkills" class="check-list"></div>
         </div>
         <div class="form-error" id="repFormError" style="display:none;"></div>
+        <div class="form-actions">
+          <button class="btn btn-primary" id="repSaveBtn">Adicionar</button>
+          <button class="btn" id="repCancelBtn" style="display:none;">Cancelar</button>
         </div>
+        </div></div></div>
       </div>
 
-      <div class="filter-row">
-        <div class="field">
-          <label>Filtrar por classificação</label>
-          <select id="repFiltroClasse">
-            <option value="">Todas</option>
-            <option value="rep">Rep</option>
-            <option value="ps">PS</option>
-          </select>
-        </div>
-        <div class="view-meta" id="repOrdemInfo">Ordenado por escala (A–D) e ordem alfabética</div>
+      <div class="toolbar" id="repToolbar" style="display:none;">
+        <div class="search"><input type="search" id="repBusca" placeholder="Buscar por nome, LDAP, RE ou tarefa" autocomplete="off" aria-label="Buscar rep"></div>
+        <div class="fchips" id="repChips" role="group" aria-label="Filtrar equipe"></div>
+        <div class="view-meta tb-info" id="repOrdemInfo">Ordenado por escala (A–D) e ordem alfabética</div>
       </div>
 
       <div class="card-grid" id="repGrid"></div>
       <div class="empty" id="repEmpty" style="display:none;">
         <b>Nenhum rep cadastrado</b>
-        Adicione o primeiro rep acima para começar a montar a equipe.
+        Cadastre o primeiro rep para começar a montar a equipe.
+        <div><button class="btn btn-primary" data-act="open-form" data-form="rep">+ Adicionar o primeiro rep</button></div>
       </div>
     </div>
 
@@ -197,7 +203,7 @@
       <div class="view-head">
         <div>
           <div class="view-title">Dimensionamento</div>
-          <div class="view-sub">Tarefas por área (Inventário/Qualidade) e os reps responsáveis por cada uma</div>
+          <div class="view-sub">Quem é responsável por cada tarefa e quem está disponível na data</div>
         </div>
         <div class="view-meta" id="taskMeta"></div>
       </div>
@@ -232,8 +238,14 @@
         </div>
       </div>
 
-      <div class="form-panel">
-        <div class="form-panel-title" id="taskFormTitle">Adicionar tarefa</div>
+      <div class="form-panel fc collapsed" id="taskFormPanel" data-form="task">
+        <button type="button" class="form-head" id="taskFormToggle" data-act="toggle-form" data-form="task" aria-expanded="false" aria-controls="taskFormBody">
+          <span class="fh-plus" aria-hidden="true">+</span>
+          <span class="fh-title" id="taskFormTitle">Adicionar tarefa</span>
+          <span class="fh-state" aria-hidden="true">Abrir</span>
+          <span class="fh-chev" aria-hidden="true"></span>
+        </button>
+        <div class="fbody" id="taskFormBody"><div class="fbody-in"><div class="fbody-pad">
         <div class="form-row">
           <div class="field grow2">
             <label>Nome da tarefa</label>
@@ -256,6 +268,7 @@
           </div>
         </div>
         <div class="form-error" id="taskFormError" style="display:none;"></div>
+        </div></div></div>
       </div>
 
       <div class="dim-toolbar">
@@ -268,6 +281,15 @@
         <button class="btn" id="dimClearAll" data-act="clear-all">Limpar todas as marcações</button>
         <span class="hint" id="dimMsg" style="display:none;"></span>
       </div>
+      <div class="legend-row" id="taskLegend" aria-label="Legenda das cores">
+        <span class="lg"><i class="lg-dot st-ativo"></i>Trabalha na data</span>
+        <span class="lg"><i class="lg-dot st-folga"></i>Folga</span>
+        <span class="lg"><i class="lg-dot st-ferias"></i>Férias</span>
+        <span class="lg"><i class="lg-dot st-licenca"></i>Licença</span>
+        <span class="lg"><i class="lg-dot st-afastado"></i>Afastado</span>
+        <span class="lg"><i class="lg-dot st-fora"></i>Fora da área</span>
+        <span class="lg"><i class="lg-dot is-resp"></i>Borda escura = responsável pela tarefa</span>
+      </div>
 
       <div class="card-grid" id="taskGrid"></div>
       <div id="taskMatrix" style="display:none;"></div>
@@ -276,7 +298,7 @@
         Adicione a primeira tarefa acima e marque os reps responsáveis direto no card.
       </div>
 
-      <div class="form-panel-title" style="margin:32px 0 14px;">Resumo por área</div>
+      <div class="section-title">Resumo por área</div>
       <div class="resumo-grid" id="resumoGrid"></div>
     </div>
 
@@ -285,12 +307,19 @@
       <div class="view-head">
         <div>
           <div class="view-title">Calendário</div>
-          <div class="view-sub">Painel do dia e agendamento de banco de horas, troca de folga e férias — quantas pessoas trabalham em cada dia</div>
+          <div class="view-sub">Quantas pessoas trabalham por dia, com folgas extras, trocas e férias</div>
         </div>
         <div class="view-meta" id="folgasMeta"></div>
       </div>
 
-      <div class="form-panel dim-panel">
+      <nav class="sec-index" id="calIndex" aria-label="Seções do Calendário">
+        <button type="button" class="fchip on" data-act="goto-sec" data-sec="sec-dia">Painel do dia</button>
+        <button type="button" class="fchip" data-act="goto-sec" data-sec="sec-agendar">Agendar</button>
+        <button type="button" class="fchip" data-act="goto-sec" data-sec="sec-mes">Pessoas por dia</button>
+        <button type="button" class="fchip" data-act="goto-sec" data-sec="sec-lista">Agendamentos <b id="calIdxN"></b></button>
+      </nav>
+
+      <div class="form-panel dim-panel" id="sec-dia" data-sec>
         <div class="form-panel-title">Painel do dia</div>
         <div class="form-row">
           <div class="field" style="flex:0 0 auto;">
@@ -318,8 +347,15 @@
         <div class="hint" id="dimHint" style="display:none; margin-top:8px;"></div>
       </div>
 
-      <div class="form-panel" id="folgaFormPanel">
-        <div class="form-panel-title" id="folgaFormTitle">Agendar</div>
+      <div class="form-panel fc collapsed" id="folgaFormPanel" data-form="folga" data-sec>
+        <button type="button" class="form-head" id="folgaFormToggle" data-act="toggle-form" data-form="folga" aria-expanded="false" aria-controls="folgaFormBody">
+          <span class="fh-plus" aria-hidden="true">+</span>
+          <span class="fh-title" id="folgaFormTitle">Agendar</span>
+          <span class="fh-sub">banco de horas · troca de folga · férias</span>
+          <span class="fh-state" aria-hidden="true">Abrir</span>
+          <span class="fh-chev" aria-hidden="true"></span>
+        </button>
+        <div class="fbody" id="folgaFormBody"><div class="fbody-in"><div class="fbody-pad">
         <div class="form-row">
           <div class="field">
             <label>Tipo</label>
@@ -376,9 +412,10 @@
         <div class="hint" style="margin-top:10px;"><b>Banco de horas:</b> a pessoa folga num dia que seria de trabalho (−1 pessoa naquele dia; dá para informar um período). <b>Troca de folga:</b> trabalha num dia que seria folga (+1) e folga em outro dia que seria de trabalho (−1). <b>Férias:</b> início e duração; a pessoa sai da contagem durante o período.</div>
         <div class="folga-preview" id="folgaPreview"></div>
         <div class="form-error" id="folgaFormError" style="display:none;"></div>
+        </div></div></div>
       </div>
 
-      <div class="form-panel">
+      <div class="form-panel" id="sec-mes" data-sec>
         <div class="form-panel-title">Pessoas trabalhando por dia</div>
         <div class="form-row">
           <div class="field" style="flex:0 0 auto;">
@@ -397,7 +434,7 @@
         <div class="hint" id="folgasHint" style="display:none; margin-top:8px;"></div>
       </div>
 
-      <div class="panel">
+      <div class="panel" id="sec-lista" data-sec>
         <div class="panel-title">Agendamentos</div>
         <div class="filter-row" style="justify-content:flex-start;">
           <div class="field">
@@ -426,13 +463,21 @@
       <div class="view-head">
         <div>
           <div class="view-title">Pontos alinhados</div>
-          <div class="view-sub">Combinados por área, com os reps incluídos em cada registro</div>
+          <div class="view-sub">Combinados por área e o que ainda está pendente</div>
         </div>
         <div class="view-meta" id="pontosMeta"></div>
       </div>
 
-      <div class="form-panel">
-        <div class="form-panel-title" id="pontoFormTitle">Registrar ponto</div>
+      <div class="strip" id="pontosStrip"></div>
+
+      <div class="form-panel fc collapsed" id="pontoFormPanel" data-form="ponto">
+        <button type="button" class="form-head" id="pontoFormToggle" data-act="toggle-form" data-form="ponto" aria-expanded="false" aria-controls="pontoFormBody">
+          <span class="fh-plus" aria-hidden="true">+</span>
+          <span class="fh-title" id="pontoFormTitle">Registrar ponto</span>
+          <span class="fh-state" aria-hidden="true">Abrir</span>
+          <span class="fh-chev" aria-hidden="true"></span>
+        </button>
+        <div class="fbody" id="pontoFormBody"><div class="fbody-in"><div class="fbody-pad">
         <div class="form-row">
           <div class="field">
             <label>Área</label>
@@ -471,10 +516,15 @@
           <div id="pontoReps" class="check-list"></div>
         </div>
         <div class="form-error" id="pontoFormError" style="display:none;"></div>
+        </div></div></div>
       </div>
 
       <div class="panel">
         <div class="panel-title">Registros</div>
+        <div class="toolbar tb-in" id="pontoToolbar">
+          <div class="fchips" id="pontoChips" role="group" aria-label="Filtrar pontos"></div>
+          <div class="search"><input type="search" id="pontoBusca" placeholder="Buscar no combinado ou por rep" autocomplete="off" aria-label="Buscar pontos"></div>
+        </div>
         <table>
           <thead><tr><th>Data</th><th>Área</th><th>Reps</th><th>Combinado</th><th>Status</th><th></th></tr></thead>
           <tbody id="pontoTableBody"></tbody>
@@ -491,15 +541,21 @@
       <div class="view-head">
         <div>
           <div class="view-title">Controle de Lost</div>
-          <div class="view-sub">Perdas por rep e MU, com o total somado por unidade</div>
+          <div class="view-sub">Perdas por MU e por rep, com o total de cada unidade</div>
         </div>
         <div class="view-meta" id="lostMeta"></div>
       </div>
 
       <div class="strip" id="lostStrip"></div>
 
-      <div class="form-panel">
-        <div class="form-panel-title" id="lostFormTitle">Registrar lost</div>
+      <div class="form-panel fc collapsed" id="lostFormPanel" data-form="lost">
+        <button type="button" class="form-head" id="lostFormToggle" data-act="toggle-form" data-form="lost" aria-expanded="false" aria-controls="lostFormBody">
+          <span class="fh-plus" aria-hidden="true">+</span>
+          <span class="fh-title" id="lostFormTitle">Registrar lost</span>
+          <span class="fh-state" aria-hidden="true">Abrir</span>
+          <span class="fh-chev" aria-hidden="true"></span>
+        </button>
+        <div class="fbody" id="lostFormBody"><div class="fbody-in"><div class="fbody-pad">
         <div class="form-row">
           <div class="field">
             <label>Rep</label>
@@ -526,6 +582,7 @@
           </div>
         </div>
         <div class="form-error" id="lostFormError" style="display:none;"></div>
+        </div></div></div>
       </div>
 
       <div class="panel-grid">
