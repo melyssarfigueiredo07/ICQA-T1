@@ -373,7 +373,7 @@
     .topbar-inner, .tabs, .main{padding-left:16px; padding-right:16px;}
     .tabs{gap:16px; overflow-x:auto;}
     .team-name{width:140px;}
-    .form-row{flex-direction:column;}
+    .form-row{flex-direction:column; align-items:stretch;}
     .field{min-width:0;}
   }
   @media (prefers-reduced-motion:reduce){
@@ -484,3 +484,52 @@ tr.fd-passado td{opacity:.6;}
 .fd-areas span.ps b{color:#8A4B04;}
 .fd-areas span.rep b{color:var(--teal);}
 .fd-areas b{font-family:'IBM Plex Mono',monospace;}
+
+/* ---------- férias no Calendário ---------- */
+.fp-line.warn{background:var(--amber-dim); border-color:#EFCB93; color:#8A4B04;}
+.fd-fer b{color:#C2185B; margin-right:4px;}
+.fd-chip.fer{background:#FCE4EE; border-color:#F2B3CB; color:#8E1B4A;}
+.fd-chip.fer i{color:#B35A80;}
+.fd-table{min-width:860px;}
+
+/* ---------- painel "Adicionar rep" recolhível ---------- */
+.form-panel-head{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+.form-panel-head .form-panel-title{margin-bottom:0;}
+#repFormBody{margin-top:12px;}
+.form-panel.collapsed #repFormBody{display:none;}
+.form-toggle{font-size:12px; font-weight:700; color:var(--text-dim); border:1px solid var(--line); border-radius:8px; padding:5px 12px; background:var(--panel);}
+.form-toggle:hover{color:var(--text); border-color:var(--text-dim);}
+
+/* ---------- card de apresentação da equipe ---------- */
+.team-card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:18px 22px 20px; margin-bottom:24px; box-shadow:0 1px 2px rgba(20,20,30,0.04), 0 1px 8px rgba(20,20,30,0.05);}
+.tc-head{display:flex; justify-content:space-between; align-items:flex-start; gap:18px; flex-wrap:wrap;}
+.tc-name{font-size:20px; font-weight:700; letter-spacing:-0.01em;}
+.tc-sub{font-size:12.5px; color:var(--text-dim); margin-top:3px; text-transform:capitalize;}
+.tc-sub{text-transform:none;}
+.tc-big{display:flex; align-items:baseline; gap:8px;}
+.tc-big b{font-size:38px; line-height:1; font-family:'IBM Plex Mono',monospace; color:var(--green);}
+.tc-big span{font-size:12.5px; color:var(--text-dim);}
+.tc-seg{display:flex; height:12px; border-radius:7px; overflow:hidden; background:var(--panel-2); border:1px solid var(--line); margin:14px 0 10px;}
+.tc-seg i{display:block; height:100%;}
+.tc-s-ativo{background:var(--green);} .tc-s-folga{background:#B9BEC9;}
+.tc-s-ferias{background:repeating-linear-gradient(135deg,#F4A9C6 0 5px,#FCE4EE 5px 10px);}
+.tc-s-licenca{background:repeating-linear-gradient(135deg,#8CCBDB 0 5px,#DDF2F7 5px 10px);}
+.tc-s-afastado{background:var(--rust);}
+.tc-pills{display:flex; flex-wrap:wrap; gap:8px;}
+.tc-pill{font-size:12px; border-radius:999px; padding:3px 11px; border:1px solid var(--line); background:var(--panel-2); color:var(--text-dim);}
+.tc-pill b{font-family:'IBM Plex Mono',monospace; color:var(--text);}
+.tc-pill.zero{opacity:.5;}
+.tc-p-ativo{background:var(--green-dim); border-color:#A6DEC1; color:#116B41;}
+.tc-p-ferias{background:#FCE4EE; border-color:#F2B3CB; color:#8E1B4A;}
+.tc-p-licenca{background:#DDF2F7; border-color:#9FD3E0; color:#0B5F73;}
+.tc-p-afastado{background:var(--rust-dim); border-color:#F0B3AC; color:#8A1F17;}
+.tc-extra{font-size:12px; color:#8A4B04; background:var(--amber-dim); border:1px solid #EFCB93; border-radius:6px; padding:5px 10px; margin-top:10px; display:inline-block;}
+.tc-cols{display:grid; grid-template-columns:repeat(auto-fit, minmax(300px,1fr)); gap:10px 36px; margin-top:16px; padding-top:14px; border-top:1px solid var(--line-soft);}
+.tc-col-title{font-size:11px; font-weight:700; color:var(--text-faint); text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px;}
+.tc-row{display:grid; grid-template-columns:150px 1fr 56px; align-items:center; gap:10px; font-size:13px; padding:3px 0;}
+.tc-lbl{white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.tc-row b{text-align:right; font-size:12.5px;}
+.tc-mini{display:block; height:7px; background:var(--panel-2); border:1px solid var(--line); border-radius:4px; overflow:hidden;}
+.tc-mini i{display:block; height:100%;}
+.field.wide{flex:1.6; min-width:230px;}
+.field.wide .calc-out{white-space:nowrap;}
