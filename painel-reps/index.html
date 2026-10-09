@@ -415,20 +415,36 @@
         </div></div></div>
       </div>
 
-      <div class="form-panel" id="sec-mes" data-sec>
-        <div class="form-panel-title">Pessoas trabalhando por dia</div>
-        <div class="form-row">
-          <div class="field" style="flex:0 0 auto;">
-            <label>Mês</label>
-            <div class="date-nav">
+      <div class="form-panel" id="sec-mes" data-sec data-mesview="blocos">
+        <div class="mes-head">
+          <div class="form-panel-title">Pessoas trabalhando por dia</div>
+          <div class="mes-ctl">
+            <div class="date-nav" aria-label="Mês exibido">
               <button class="btn" id="folgasPrev" title="Mês anterior">‹</button>
-              <input type="month" id="folgasMesInput">
+              <input type="month" id="folgasMesInput" aria-label="Mês">
               <button class="btn" id="folgasNext" title="Próximo mês">›</button>
               <button class="btn" id="folgasHoje">Este mês</button>
             </div>
+            <div class="seg" role="group" aria-label="Como ver o mês">
+              <button type="button" class="seg-btn on" data-act="mes-view" data-mode="blocos" aria-pressed="true" title="Um bloco por dia, com as áreas em cores">Blocos</button>
+              <button type="button" class="seg-btn" data-act="mes-view" data-mode="tabela" aria-pressed="false" title="Tabela dia a dia com os nomes de quem está fora">Tabela</button>
+            </div>
           </div>
         </div>
-        <div class="strip" id="folgasStrip"></div>
+        <div class="strip compact" id="folgasStrip"></div>
+        <div id="mesAreasBox">
+          <div class="sub-title">Por área no mês <small>média de pessoas por dia · clique numa barra para ver o dia</small></div>
+          <div class="area-blocks" id="mesAreas"></div>
+        </div>
+        <div id="mesBlocos">
+          <div class="sub-title">Dia a dia <small>um bloco por dia · clique para ver quem trabalha em cada área</small></div>
+          <div class="area-legend" id="mesLegAreas"></div>
+          <div class="hint" id="mesDica" style="display:none; margin:0 0 10px;">Clique num dia do calendário para ver quem trabalha e quem está fora em cada área.</div>
+          <div class="cal-wrap">
+            <div class="cal-head" aria-hidden="true"><span class="fds">Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span class="fds">Sáb</span></div>
+            <div class="cal-grid" id="calGrid"></div>
+          </div>
+        </div>
         <div class="fd-wrap" id="folgasDias"></div>
         <div class="dim-legend" id="folgasLegenda"></div>
         <div class="hint" id="folgasHint" style="display:none; margin-top:8px;"></div>
