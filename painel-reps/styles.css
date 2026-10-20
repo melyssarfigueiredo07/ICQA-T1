@@ -733,6 +733,14 @@ tr.flash td{animation:flash-bg 1.7s ease-out;}
 .cal-head span{padding:2px 0 7px; text-align:center; font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--text-faint);}
 .cal-head span.fds{color:var(--amber);}
 .cal-blank{display:block; min-height:0;}
+/* aniversários: mesma grade do calendário, com o nome de cada aniversariante (cor = time) */
+.aniv-day{cursor:default; min-height:96px;}
+.aniv-day:hover{transform:none; box-shadow:none; border-color:var(--line);}
+.aniv-list{display:flex; flex-direction:column; gap:3px; min-width:0;}
+.aniv-who{display:block; padding:2px 6px; border-radius:6px; font-size:11.5px; font-weight:600; line-height:1.35; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--text);}
+.aniv-who i{font-style:normal; font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:var(--text-faint); margin-left:3px;}
+.aniv-who.t-vinicius{background:var(--teal-dim);}
+.aniv-who.t-harley{background:var(--amber-dim);}
 .cal-day{display:flex; flex-direction:column; gap:8px; min-height:112px; padding:8px 8px 9px; margin:0; text-align:left; background:var(--panel); border:1px solid var(--line); border-radius:8px; font:inherit; color:var(--text); cursor:pointer; position:relative; transition:border-color .15s ease, box-shadow .15s ease, transform .12s ease, background-color .15s ease;}
 .cal-day:hover{border-color:var(--text-dim); box-shadow:0 6px 16px rgba(20,22,30,0.10); transform:translateY(-1px);}
 .cal-day:focus-visible{outline:2px solid var(--teal); outline-offset:2px;}

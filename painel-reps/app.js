@@ -15,7 +15,7 @@
   };
   var TIMES = [
     {key:"vinicius", nome:"Time Vinicius", areaFixa:ICQA_AREA_FIXA},
-    {key:"harley", nome:"Time Harley", areaFixa:{}, views:["equipe","dimensionamento","calendario"],
+    {key:"harley", nome:"Time Harley", areaFixa:{}, views:["equipe","dimensionamento","calendario","aniversarios"],
      seedTasks:["Contagem","Stock Audit","Lost","RR/ER","Hunter"]}
   ];
   var timeAtual = TIMES[0].key;
@@ -31,6 +31,7 @@
     {key:"equipe", label:"Equipe"},
     {key:"dimensionamento", label:"Dimensionamento"},
     {key:"calendario", label:"Calendário"},
+    {key:"aniversarios", label:"Aniversários"},
     {key:"pontos", label:"Pontos alinhados"},
     {key:"lost", label:"Controle de Lost"}
   ];
@@ -573,6 +574,7 @@
     dimensionamento: '<svg viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><path d="M14 17h6.5M17.2 13.7v6.6"/></svg>',
     calendario: '<svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5" rx="2.2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
     pontos: '<svg viewBox="0 0 24 24"><rect x="4" y="3.5" width="16" height="17.5" rx="2.2"/><path d="M8 9.5l1.6 1.6L12.5 8M8 15.5l1.6 1.6 2.9-3M14.5 10h2.5M14.5 16h2.5"/></svg>',
+    aniversarios: '<svg viewBox="0 0 24 24"><path d="M4 20h16M5.5 20v-7.5h13V20"/><path d="M5.5 15.5c2 1.4 4.5 1.4 6.5 0s4.5-1.4 6.5 0"/><path d="M12 12.5V9"/><circle cx="12" cy="6.8" r="1.8"/></svg>',
     lost: '<svg viewBox="0 0 24 24"><path d="M12 3.5l9 16H3z"/><path d="M12 10v4.2M12 17.2v.1"/></svg>'
   };
   function buildNav(){
@@ -605,6 +607,7 @@
       equipe:{n:state.reps.length, tip:state.reps.length+" pessoa(s) cadastrada(s)"},
       dimensionamento:{n:state.tasks.length, warn:semCob>0, tip:state.tasks.length+" tarefa(s)"+(semCob ? " · "+semCob+" sem cobertura na data" : "")},
       calendario:{n:agend, tip:agend+" agendamento(s) em andamento ou futuros"},
+      aniversarios:{n:anivNoMes(todayISO().slice(0,7)).itens.length, tip:"Aniversariantes do mês, dos dois times"},
       pontos:{n:pend, warn:pend>0, tip:pend+" ponto(s) pendente(s)"},
       lost:{n:state.lost.length, tip:state.lost.length+" registro(s)"}
     };
@@ -738,7 +741,7 @@
     if(repFiltro==="rep" && repClasse(r)!=="rep") return false;
     if(repFiltro==="ps" && repClasse(r)!=="ps") return false;
     if(q){
-      var alvo = normNome([r.nome, r.ldap, r.re, r.email, CATEGORIA_LABEL[r.categoria], r.escala ? "escala "+r.escala : "", repSkillNames(r).join(" ")].join(" "));
+      var alvo = normNome([r.nome, r.ldap, r.re, r.groot, r.email, CATEGORIA_LABEL[r.categoria], r.escala ? "escala "+r.escala : "", repSkillNames(r).join(" ")].join(" "));
       if(alvo.indexOf(q)<0) return false;
     }
     return true;
@@ -855,7 +858,7 @@
     }).join("");
     var flags = repFlags(r);
     var contato = row("CPF", r.cpf, "num") + row("Aniversário", r.aniversario ? fmtDate(r.aniversario) : "", "num") +
-      row("LDAP", r.ldap) + row("RE", r.re, "num") + row("Email", r.email) + row("Telefone", r.telefone, "num") + row("Endereço", r.endereco);
+      row("LDAP", r.ldap) + row("RE", r.re, "num") + row("ID Groot", r.groot, "num") + row("Email", r.email) + row("Telefone", r.telefone, "num") + row("Endereço", r.endereco);
     var skills = repSkillNames(r);
     document.getElementById("fichaBox").innerHTML =
       '<div class="ficha-head"><div class="rep-avatar">'+esc(repInitials(r.nome))+'</div><div><div class="ficha-name">'+esc(r.nome)+'</div><div class="card-tags" style="margin:6px 0 0;padding:0;border:0;">'+repTags(r)+'</div></div></div>' +
@@ -906,6 +909,7 @@
     document.getElementById("repAniversario").value = rep.aniversario||"";
     document.getElementById("repLdap").value = rep.ldap||"";
     document.getElementById("repRe").value = rep.re||"";
+    document.getElementById("repGroot").value = rep.groot||"";
     document.getElementById("repEmail").value = rep.email||"";
     document.getElementById("repEndereco").value = rep.endereco||"";
     document.getElementById("repTelefone").value = rep.telefone||"";
@@ -934,6 +938,7 @@
     document.getElementById("repAniversario").value = "";
     document.getElementById("repLdap").value = "";
     document.getElementById("repRe").value = "";
+    document.getElementById("repGroot").value = "";
     document.getElementById("repEmail").value = "";
     document.getElementById("repEndereco").value = "";
     document.getElementById("repTelefone").value = "";
@@ -960,6 +965,7 @@
       aniversario: document.getElementById("repAniversario").value,
       ldap: document.getElementById("repLdap").value.trim(),
       re: document.getElementById("repRe").value.trim(),
+      groot: document.getElementById("repGroot").value.trim(),
       email: document.getElementById("repEmail").value.trim(),
       endereco: document.getElementById("repEndereco").value.trim(),
       telefone: document.getElementById("repTelefone").value.trim(),
@@ -2310,11 +2316,73 @@
   }
 
   // ---------- render all ----------
+  // ---------- Aniversários: um calendário só, com os reps de todos os times ----------
+  // Lê direto de root.times (o time ativo já está lá), então o painel mostra os dois times ao mesmo tempo.
+  var anivMes = "", anivFiltro = "todos";
+  function anivNoMes(ym){
+    var nd = diasDoMes(ym), dias = [], lista = [], ano = Number(ym.slice(0,4));
+    TIMES.forEach(function(t){
+      var d = root.times[t.key];
+      if(!d || !Array.isArray(d.reps)) return;
+      d.reps.forEach(function(r){
+        var iso = String(r.aniversario||"");
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return;
+        var dia = Number(iso.slice(8));
+        // 29/02 cai em 28/02 nos anos que não são bissextos
+        if(iso.slice(5,7)==="02" && dia===29 && nd===28) dia = 28;
+        if(iso.slice(5,7)!==ym.slice(5,7)) return;
+        lista.push({r:r, time:t, dia:dia, idade:ano-Number(iso.slice(0,4))});
+      });
+    });
+    return {itens:lista, nd:nd, sem: TIMES.reduce(function(n,t){ var d = root.times[t.key]; return n + (d && Array.isArray(d.reps) ? d.reps.filter(function(r){ return !r.aniversario; }).length : 0); }, 0)};
+  }
+  function anivChip(x){
+    var tip = x.r.nome+" · "+x.time.nome+" · completa "+x.idade+(x.idade===1 ? " ano" : " anos");
+    return '<span class="aniv-who t-'+x.time.key+'" title="'+esc(tip)+'">'+esc(x.r.nome)+' <i>'+x.idade+'</i></span>';
+  }
+  function renderAniversarios(){
+    var hoje = todayISO();
+    if(!/^\d{4}-\d{2}$/.test(anivMes)) anivMes = hoje.slice(0,7);
+    var ym = anivMes, ano = Number(ym.slice(0,4)), mes = Number(ym.slice(5,7));
+    var dados = anivNoMes(ym), nd = dados.nd;
+    var contagem = {todos:dados.itens.length};
+    TIMES.forEach(function(t){ contagem[t.key] = dados.itens.filter(function(x){ return x.time.key===t.key; }).length; });
+    document.getElementById("anivTimes").innerHTML = [{key:"todos", nome:"Todos os times"}].concat(TIMES).map(function(t){
+      var on = anivFiltro===t.key;
+      return '<button type="button" class="fchip'+(on?' on':'')+'" data-act="aniv-time" data-v="'+t.key+'" aria-pressed="'+(on?'true':'false')+'">'+esc(t.nome)+'<b>'+contagem[t.key]+'</b></button>';
+    }).join("");
+    document.getElementById("anivMesSub").innerHTML = 'Mês · '+esc(mesLabel(ym));
+    document.getElementById("anivMesInput").value = ym;
+    document.getElementById("anivMeta").textContent = dados.itens.length+" aniversariante(s) no mês" + (dados.sem ? " · "+dados.sem+" sem data cadastrada" : "");
+
+    var visiveis = dados.itens.filter(function(x){ return anivFiltro==="todos" || x.time.key===anivFiltro; });
+    var por = {};
+    visiveis.forEach(function(x){ (por[x.dia] = por[x.dia] || []).push(x); });
+    var cells = [], vazios = new Date(Date.UTC(ano, mes-1, 1)).getUTCDay(), i;
+    for(i=0;i<vazios;i++) cells.push('<span class="cal-blank" aria-hidden="true"></span>');
+    for(i=1;i<=nd;i++){
+      var iso = ym+"-"+String(i).padStart(2,"0"), lista = (por[i]||[]).slice().sort(function(a,b){ return normNome(a.r.nome)<normNome(b.r.nome) ? -1 : 1; });
+      cells.push('<div class="cal-day aniv-day'+(ehFimDeSemana(iso)?' fds':'')+(iso===hoje?' hoje':'')+'">' +
+        '<span class="cd-top"><b class="cd-n">'+i+'</b>'+(iso===hoje?'<em>hoje</em>':'')+(lista.length?'<span class="cd-tot num">'+lista.length+'</span>':'')+'</span>' +
+        '<span class="aniv-list">'+lista.map(anivChip).join("")+'</span></div>');
+    }
+    document.getElementById("anivGrid").innerHTML = cells.join("");
+    var hint = document.getElementById("anivHint");
+    hint.style.display = visiveis.length ? "none" : "";
+    hint.textContent = "Nenhum aniversariante neste mês"+(anivFiltro==="todos" ? "" : " para "+timeDef(anivFiltro).nome)+".";
+  }
+  function setAnivMes(ym){ if(/^\d{4}-\d{2}$/.test(ym)){ anivMes = ym; renderAniversarios(); } }
+  document.getElementById("anivPrev").addEventListener("click", function(){ setAnivMes(addMeses(anivMes || todayISO().slice(0,7), -1)); });
+  document.getElementById("anivNext").addEventListener("click", function(){ setAnivMes(addMeses(anivMes || todayISO().slice(0,7), 1)); });
+  document.getElementById("anivHoje").addEventListener("click", function(){ setAnivMes(todayISO().slice(0,7)); });
+  document.getElementById("anivMesInput").addEventListener("change", function(e){ setAnivMes(e.target.value); });
+
   function renderAll(){
     renderEquipe();
     renderDim();
     renderTasks();
     renderFolgas();
+    renderAniversarios();
     renderPontos();
     renderLost();
     renderNavBadges();
@@ -2434,6 +2502,7 @@
     else if(act==="ponto-filtro"){ pontoFiltro = btn.dataset.v; renderPontos(); }
     else if(act==="toggle-ponto"){ togglePonto(id); }
     else if(act==="goto-sec"){ irParaSecao(btn.dataset.sec); }
+    else if(act==="aniv-time"){ anivFiltro = btn.dataset.v; renderAniversarios(); }
     else if(act==="mes-view"){ mesView = btn.dataset.mode==="tabela" ? "tabela" : "blocos"; renderMes(); }
     else if(act==="mes-dia"){ setDimDate(Cal.addDays(dimDate, Number(btn.dataset.d)||0)); }
     else if(act==="edit-folga"){ startFolgaEdit((state.folgas||[]).find(function(f){return f.id===id;})); }

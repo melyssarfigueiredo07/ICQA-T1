@@ -160,6 +160,10 @@
             <input type="text" id="repRe" placeholder="Nº de registro">
           </div>
           <div class="field">
+            <label>ID Groot</label>
+            <input type="text" id="repGroot" placeholder="ID no Groot">
+          </div>
+          <div class="field">
             <label>Email</label>
             <input type="email" id="repEmail" placeholder="nome@empresa.com">
           </div>
@@ -470,6 +474,34 @@
     </div>
 
     <!-- PONTOS ALINHADOS -->
+    <div class="view" data-view="aniversarios">
+      <div class="view-head">
+        <div>
+          <div class="view-title">Aniversários</div>
+          <div class="view-sub">Aniversariantes dos dois times num calendário só</div>
+        </div>
+        <div class="view-meta" id="anivMeta"></div>
+      </div>
+
+      <div class="form-panel">
+        <div class="mes-head">
+          <div class="form-panel-title" id="anivMesSub">Mês</div>
+          <div class="date-nav">
+            <button class="btn" id="anivPrev" title="Mês anterior">‹</button>
+            <input type="month" id="anivMesInput" aria-label="Mês">
+            <button class="btn" id="anivNext" title="Próximo mês">›</button>
+            <button class="btn" id="anivHoje">Este mês</button>
+          </div>
+        </div>
+        <div class="fchips" id="anivTimes" role="group" aria-label="Filtrar time" style="margin-bottom:12px;"></div>
+        <div class="cal-wrap">
+          <div class="cal-head" aria-hidden="true"><span class="fds">Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span class="fds">Sáb</span></div>
+          <div class="cal-grid" id="anivGrid"></div>
+        </div>
+        <div class="hint" id="anivHint" style="display:none; margin-top:8px;"></div>
+      </div>
+    </div>
+
     <div class="view" data-view="pontos">
       <div class="view-head">
         <div>
