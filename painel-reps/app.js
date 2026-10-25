@@ -1070,6 +1070,17 @@
     document.getElementById("dimBarInfo").textContent = (state.reps.length ? cdDia.total+" de "+state.reps.length+" presentes · "+areasDia.map(function(ar){ return AREA_CURTA[ar.key]+" "+ar.total; }).join(" · ") : "Nenhum rep cadastrado");
     if(!calAtiva()){ calSujo = true; return; }
 
+    // contadores do dia com TODOS (reps e PS); os presentes por área ficam nos blocos por área (renderMes)
+    var c = {ativo:0, folga:0, ferias:0, licenca:0, afastado:0};
+    state.reps.forEach(function(r){ c[effStatus(r, dimDate)]++; });
+    var extraFolga = cdDia.banco.length + cdDia.trocaFolga.length;
+    document.getElementById("dimStrip").innerHTML =
+      stripCell("Trabalhando", c.ativo, "green", "green", "Presentes na data" + (cdDia.trocaTrab.length ? " · "+cdDia.trocaTrab.length+" em troca" : "")) +
+      stripCell("Folga", c.folga, "folga", "folga", extraFolga ? "Escala + "+extraFolga+" folga"+(extraFolga>1?"s":"")+" extra"+(extraFolga>1?"s":"") : "Pela escala") +
+      stripCell("Férias", c.ferias, "ferias", "ferias", "Em férias") +
+      stripCell("Licença", c.licenca, "licenca", "licenca", "Em licença") +
+      stripCell("Afastados", c.afastado, "rust", "rust", "Afastados");
+
     // escalas A–D na semana em torno da data (quem a escala manda trabalhar); contagens por dia e por área ficam no calendário
     var dias = [];
     for(var i=-3;i<=3;i++) dias.push(Cal.addDays(dimDate, i));
@@ -2077,7 +2088,6 @@
   // PESSOAS TRABALHANDO POR DIA (blocos por área, calendário de blocos, detalhe do dia e tabela)
   // =====================================================================
   var mesView = "blocos"; // "blocos" (calendário com um bloco por dia) | "tabela" (dia a dia detalhado)
-  var calMover = null, calFocoIso = null; // movimento pendente (mês ou visão) e dia que deve receber o foco
   function aplicarMesView(){
     var p = document.getElementById("view-calendario");
     p.dataset.mesview = mesView;
@@ -2141,7 +2151,7 @@
     var marca = dl ? '<small class="'+(dl<0?'neg':'pos')+'" title="'+esc(dl<0 ? "Folga extra ou troca a menos que a escala" : "Troca: trabalha em dia de folga")+'">'+(dl<0?'−':'+')+Math.abs(dl)+'</small>' : "";
     var fora = cd.ausentes.length ? '<span class="cd-fora">'+cd.ausentes.length+' fora</span>' : "";
     var dica = resumoDia(cd);
-    return '<button type="button" class="cal-day'+(fds?' fds':'')+(iso===ctx.hoje?' hoje':'')+(iso===ctx.sel?' sel':'')+'" data-act="dim-dia" data-iso="'+iso+'" data-key="cal:'+iso+'" tabindex="'+(iso===ctx.tab?0:-1)+'" aria-pressed="'+(iso===ctx.sel?'true':'false')+'" title="'+esc(dica)+'" aria-label="'+esc(diaLongo(iso)+": "+cd.total+" pessoas trabalhando")+'">' +
+    return '<button type="button" class="cal-day'+(fds?' fds':'')+(iso===ctx.hoje?' hoje':'')+(iso===ctx.sel?' sel':'')+'" data-act="dim-dia" data-iso="'+iso+'" data-key="cal:'+iso+'" aria-pressed="'+(iso===ctx.sel?'true':'false')+'" title="'+esc(dica)+'" aria-label="'+esc(diaLongo(iso)+": "+cd.total+" pessoas trabalhando")+'">' +
       '<span class="cd-top"><b class="cd-n">'+iso.slice(8)+'</b>'+marca+'</span>' +
       '<span class="cd-tot">'+cd.total+'</span>' +
       '<span class="cd-areas">'+areas+'</span>' +
@@ -2164,29 +2174,25 @@
     });
     return por;
   }
-  // Painel do dia: total, quem está fora (folga, férias, licença, afastado) e quem trabalha em cada área.
+  function chipPessoa(x){
+    var cls = "who st-"+x.st+(x.ex ? (x.ex.tipo==="troca-trabalho" ? " ex-trab" : " ex-folga") : "");
+    var sub = x.st==="ativo" ? (x.ex ? x.nota : (x.r.escala ? "Escala "+x.r.escala : "")) : (x.nota || STATUS_LABEL[x.st]);
+    return '<span class="'+cls+'" title="'+esc(x.r.nome+(x.nota ? " · "+x.nota : ""))+'">'+esc(x.r.nome)+(sub ? ' <i>'+esc(sub)+'</i>' : '')+'</span>';
+  }
   function detalheDiaHTML(iso, cd, hoje){
-    var por = pessoasDoDia(iso), c = {folga:0, ferias:0, licenca:0, afastado:0};
-    var rotulo = {folga:"de folga", ferias:"de férias", licenca:"em licença", afastado:"afastados"};
-    state.reps.forEach(function(r){ var st = effStatus(r, iso); if(c[st]!==undefined) c[st]++; });
-    var neg = cd.banco.length + cd.trocaFolga.length, pos = cd.trocaTrab.length;
-    var situacao = Object.keys(c).filter(function(k){ return c[k]; }).map(function(k){
-      return '<span class="cal-st st-'+k+'"><i></i><b>'+c[k]+'</b> '+rotulo[k]+'</span>';
-    }).join("");
+    var por = pessoasDoDia(iso), neg = cd.banco.length + cd.trocaFolga.length, pos = cd.trocaTrab.length;
+    var nota = "pela escala "+cd.base+(neg ? " · −"+plural(neg, "folga extra", "folgas extras") : "")+(pos ? " · +"+plural(pos, "troca", "trocas") : "");
     var blocos = areasDoDia(cd).map(function(a){
       var g = por[a.key] || {trab:[], fora:[]};
-      var trabalham = g.trab.length ? g.trab.map(function(x){ return esc(x.r.nome); }).join(", ") : "ninguém";
-      var fora = g.fora.map(function(x){ return esc(x.r.nome)+' <i>'+esc(x.nota || STATUS_LABEL[x.st])+'</i>'; }).join(", ");
       return '<div class="dd-area '+areaCls(a.key)+'" data-area="'+a.key+'">' +
         '<div class="dda-head"><span class="ab-dot"></span>'+esc(areaNome(a.key))+'<span class="dda-n"><b>'+a.total+'</b> de '+a.cad+'</span></div>' +
-        '<div class="dda-line"><span class="dda-tag">Trabalham</span>'+trabalham+'</div>' +
-        (fora ? '<div class="dda-line"><span class="dda-tag">Fora</span>'+fora+'</div>' : '') +
+        '<div class="dda-sec"><div class="dda-lbl">Trabalhando ('+g.trab.length+')</div><div class="dda-chips">'+(g.trab.length ? g.trab.map(chipPessoa).join("") : '<span class="hint">Ninguém nesta área</span>')+'</div></div>' +
+        (g.fora.length ? '<div class="dda-sec"><div class="dda-lbl">Fora ('+g.fora.length+')</div><div class="dda-chips">'+g.fora.map(chipPessoa).join("")+'</div></div>' : '') +
       '</div>';
     }).join("");
     return '<div class="dd-head">' +
-        '<div class="dd-title">'+esc(diaLongo(iso))+(iso===hoje?' <em>hoje</em>':'')+'</div>' +
-        '<div class="dd-sum"><b>'+cd.total+'</b> trabalhando <span>pela escala '+cd.base+(neg ? ' · −'+neg+' folga extra' : '')+(pos ? ' · +'+pos+' troca' : '')+'</span></div>' +
-        (situacao ? '<div class="cal-status">'+situacao+'</div>' : '') +
+        '<div class="dd-title"><b>'+esc(diaLongo(iso))+'</b>'+(iso===hoje?'<em>hoje</em>':'')+'</div>' +
+        '<div class="dd-sum"><b>'+cd.total+'</b> trabalhando<span>'+esc(nota)+'</span></div>' +
       '</div>' +
       '<div class="dd-areas">'+blocos+'</div>';
   }
@@ -2197,26 +2203,8 @@
     d.scrollIntoView({block:"start", behavior: reduzMov() ? "auto" : "smooth"});
   }
 
-  // Movimento do calendário: mês novo desliza a grade no sentido da troca; dia novo só faz o painel lateral aparecer.
-  function animarCal(){
-    var m = calMover; calMover = null;
-    if(!m || reduzMov()) return;
-    var grade = mesView==="tabela" ? document.getElementById("folgasDias") : document.getElementById("calGrid");
-    var alvos = [];
-    if(m.visao) alvos.push([grade, "cal-in-fade"]);
-    else if(m.dir){ alvos.push([grade, m.dir>0 ? "cal-in-next" : "cal-in-prev"], [document.getElementById("mesSub"), "cal-in-fade"]); }
-    alvos.push([document.getElementById("diaDetalhe"), "cal-in-fade"]);
-    alvos.forEach(function(par){
-      var el = par[0], cls = par[1];
-      if(!el) return;
-      el.classList.remove("cal-in-next","cal-in-prev","cal-in-fade");
-      void el.offsetWidth; // reinicia a animação mesmo quando a classe já está lá
-      el.classList.add(cls);
-      setTimeout(function(){ el.classList.remove(cls); }, 500);
-    });
-  }
   function renderMes(){
-    if(!calAtiva()){ calSujo = true; calMover = null; return; } // ao abrir a aba, showView desenha
+    if(!calAtiva()){ calSujo = true; return; } // ao abrir a aba, showView desenha
     var hoje = todayISO();
     if(!/^\d{4}-\d{2}$/.test(folgasMes)) folgasMes = hoje.slice(0,7);
     var ym = folgasMes, nd = diasDoMes(ym);
@@ -2226,8 +2214,7 @@
     aplicarMesView();
     // o clique num dia redesenha o calendário: devolve o foco ao mesmo botão (uso pelo teclado)
     var ae = document.activeElement, foco = null;
-    if(calFocoIso){ foco = "#calGrid [data-iso='"+calFocoIso+"']"; calFocoIso = null; }
-    else if(ae && ae.closest && ae.dataset && ae.closest("#calGrid") && ae.dataset.iso) foco = "#calGrid [data-iso='"+ae.dataset.iso+"']";
+    if(ae && ae.closest && ae.dataset && ae.closest("#calGrid") && ae.dataset.iso) foco = "#calGrid [data-iso='"+ae.dataset.iso+"']";
 
     var equipe = state.reps.length;
     var wrap = document.getElementById("folgasDias"), strip = document.getElementById("folgasStrip");
@@ -2239,30 +2226,33 @@
       document.getElementById("diaDetalhe").innerHTML = '<div class="hint">Cadastre reps na aba Equipe para ver o dia.</div>';
     }else{
       wrap.style.display = ""; blocos.style.display = ""; areasBox.style.display = "";
-      var dias = [], nBanco = 0, nTF = 0, menor = null, maior = null, feriasPessoas = {};
+      var dias = [], nBanco = 0, nTF = 0, nTT = 0, menor = null, maior = null, feriasPessoas = {}, feriasPD = 0;
       for(var d=1; d<=nd; d++){
         var iso = ym+"-"+String(d).padStart(2,"0"), cd = contagemDia(iso);
         dias.push(cd);
-        nBanco += cd.banco.length; nTF += cd.trocaFolga.length;
-        cd.ausentes.forEach(function(x){ if(x.tipo==="ferias") feriasPessoas[x.r.id] = true; });
+        nBanco += cd.banco.length; nTF += cd.trocaFolga.length; nTT += cd.trocaTrab.length;
+        cd.ausentes.forEach(function(x){ if(x.tipo==="ferias"){ feriasPessoas[x.r.id] = true; feriasPD++; } });
         if(menor===null || cd.total<menor.total) menor = cd;
         if(maior===null || cd.total>maior.total) maior = cd;
       }
       strip.innerHTML =
-        stripCell("Equipe", equipe, "", "teal", "pessoas cadastradas") +
-        stripCell("Folgas extras", nBanco+nTF, nBanco+nTF ? "rust" : "", "rust", "no mês · banco "+nBanco+" · troca "+nTF) +
-        stripCell("Em férias", Object.keys(feriasPessoas).length, Object.keys(feriasPessoas).length ? "ferias" : "", "ferias", "pessoas no mês") +
-        stripCell("Pessoas por dia", menor.total+" – "+maior.total, "", "teal", "menor "+diaMes(menor.iso)+" · maior "+diaMes(maior.iso));
+        stripCell("Equipe", equipe, "", "teal", areasDoDia(dias[0]).map(function(ar){ return '<span class="kp '+areaCls(ar.key)+'"><i></i>'+AREA_CURTA[ar.key]+" "+ar.cad+'</span>'; }).join(" · ")) +
+        stripCell("Folgas extras", nBanco+nTF, nBanco+nTF ? "rust" : "", "rust", "banco "+nBanco+" · troca "+nTF+" (pessoa-dias)") +
+        stripCell("Trabalham em troca", nTT, nTT ? "green" : "", "green", "dias de trabalho extra") +
+        stripCell("Em férias", Object.keys(feriasPessoas).length, Object.keys(feriasPessoas).length ? "ferias" : "", "ferias", "pessoas no mês · "+feriasPD+" pessoa-dias") +
+        stripCell("Menor dia", menor.total, "amber", "amber", diaSemana(menor.iso)+" "+diaMes(menor.iso)) +
+        stripCell("Maior dia", maior.total, "teal", "teal", diaSemana(maior.iso)+" "+diaMes(maior.iso));
 
       // ----- blocos por área, calendário de blocos e detalhe do dia -----
       var sel = (dimDate && dimDate.slice(0,7)===ym) ? dimDate : "";
       document.getElementById("mesAreas").innerHTML = blocosAreaHTML(dias, sel, hoje);
       if(mesView==="blocos"){
         document.getElementById("mesLegAreas").innerHTML = legendaAreasHTML(dias);
-        var ctx = {hoje:hoje, sel:sel, tab: sel || (hoje.slice(0,7)===ym ? hoje : ym+"-01")};
+        var ctx = {hoje:hoje, sel:sel, min:(menor.total<maior.total ? menor.total : null)};
         document.getElementById("calGrid").innerHTML = calendarioHTML(dias, ym, ctx);
         var ref = dimDate || hoje;
         document.getElementById("diaDetalhe").innerHTML = detalheDiaHTML(ref, contagemDia(ref), hoje);
+        document.getElementById("mesDica").style.display = sel ? "none" : "block";
         wrap.innerHTML = ""; // a tabela só é montada quando a visão Tabela está escolhida
       }else{
       document.getElementById("calGrid").innerHTML = ""; document.getElementById("mesLegAreas").innerHTML = "";
@@ -2306,7 +2296,6 @@
     }else{
       hint.style.display = "none";
     }
-    animarCal();
     if(foco){ var alvo = document.querySelector(foco); if(alvo && alvo.focus) alvo.focus({preventScroll:true}); }
   }
 
@@ -2529,7 +2518,7 @@
     else if(act==="folga-tipo"){ document.getElementById("folgaTipo").value = btn.dataset.v; folgaTocado = true; folgaFormMudou(); }
     else if(act==="folga-per"){ folgaFiltroPer = btn.dataset.v; renderFolgas(); }
     else if(act==="aniv-time"){ anivFiltro = btn.dataset.v; renderAniversarios(); }
-    else if(act==="mes-view"){ mesView = btn.dataset.mode==="tabela" ? "tabela" : "blocos"; calMover = {dir:0, visao:true}; renderMes(); }
+    else if(act==="mes-view"){ mesView = btn.dataset.mode==="tabela" ? "tabela" : "blocos"; renderMes(); }
     else if(act==="edit-folga"){ startFolgaEdit((state.folgas||[]).find(function(f){return f.id===id;})); }
     else if(act==="del-folga"){ pendingDelete(btn, deleteFolga, id); }
     else if(act==="backup-open"){ backupAbrir(); }
@@ -2585,11 +2574,9 @@
 
   function setDimDate(iso){
     if(!iso) return;
-    var mesAntes = (dimDate || "").slice(0,7), mesNovo = iso.slice(0,7);
-    calMover = {dir: mesNovo>mesAntes ? 1 : (mesNovo<mesAntes ? -1 : 0), visao:false};
     dimDate = iso;
     dimFollow = (iso===todayISO());
-    folgasMes = mesNovo; // o painel é um só: mudar a data de referência leva o calendário para o mês dela
+    folgasMes = iso.slice(0,7); // o painel é um só: mudar a data de referência leva o calendário para o mês dela
     renderDim();
     renderTasks();
     renderFolgas(); // redesenha o calendário e a lista de agendamentos do mês
@@ -2622,35 +2609,11 @@
   });
   document.getElementById("folgaSaveBtn").addEventListener("click", saveFolga);
   document.getElementById("folgaCancelBtn").addEventListener("click", resetFolgaForm);
-  // Trocar de mês leva a seleção para o mesmo dia do mês novo (ou o último dia, se o mês for mais curto).
-  function setFolgasMes(ym){
-    if(!/^\d{4}-\d{2}$/.test(ym)) return;
-    var dia = Math.min(Number((dimDate || todayISO()).slice(8)), diasDoMes(ym));
-    setDimDate(ym+"-"+String(dia).padStart(2,"0"));
-  }
+  function setFolgasMes(ym){ if(/^\d{4}-\d{2}$/.test(ym)){ folgasMes = ym; renderFolgas(); } }
   document.getElementById("folgasPrev").addEventListener("click", function(){ setFolgasMes(addMeses(folgasMes || todayISO().slice(0,7), -1)); });
   document.getElementById("folgasNext").addEventListener("click", function(){ setFolgasMes(addMeses(folgasMes || todayISO().slice(0,7), 1)); });
+  document.getElementById("folgasHoje").addEventListener("click", function(){ setFolgasMes(todayISO().slice(0,7)); });
   document.getElementById("folgasMesInput").addEventListener("change", function(e){ setFolgasMes(e.target.value); });
-  // Teclado no calendário: ← → ↑ ↓ andam pelos dias, Home e End vão ao primeiro e ao último, Page Up e Page Down trocam de mês.
-  document.getElementById("calGrid").addEventListener("keydown", function(e){
-    var dia = e.target.closest ? e.target.closest(".cal-day") : null;
-    if(!dia || !dia.dataset.iso) return;
-    var iso = dia.dataset.iso, ym = iso.slice(0,7), dd = Number(iso.slice(8)), alvo = null;
-    if(e.key==="ArrowLeft") alvo = Cal.addDays(iso, -1);
-    else if(e.key==="ArrowRight") alvo = Cal.addDays(iso, 1);
-    else if(e.key==="ArrowUp") alvo = Cal.addDays(iso, -7);
-    else if(e.key==="ArrowDown") alvo = Cal.addDays(iso, 7);
-    else if(e.key==="Home") alvo = ym+"-01";
-    else if(e.key==="End") alvo = ym+"-"+String(diasDoMes(ym)).padStart(2,"0");
-    else if(e.key==="PageUp" || e.key==="PageDown"){
-      var outro = addMeses(ym, e.key==="PageUp" ? -1 : 1);
-      alvo = outro+"-"+String(Math.min(dd, diasDoMes(outro))).padStart(2,"0");
-    }
-    if(!alvo) return;
-    e.preventDefault();
-    calFocoIso = alvo;
-    setDimDate(alvo);
-  });
   document.getElementById("folgaFiltroRep").addEventListener("change", function(e){ folgaFiltroRep = e.target.value; renderFolgas(); });
 
   document.getElementById("pontoCategoria").addEventListener("change", function(){
