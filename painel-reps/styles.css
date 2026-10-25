@@ -586,6 +586,11 @@ tr.flash td{animation:flash-bg 1.7s ease-out;}
 .tipo-btn span{font-size:11.5px; line-height:1.35;}
 .tipo-btn:hover{border-color:var(--text-dim);}
 .tipo-btn.on{border-color:var(--teal); background:var(--teal-dim); box-shadow:inset 0 0 0 1px var(--teal);}
+.transfer-box{margin-top:10px; padding:10px 12px; border:1px dashed var(--teal); border-radius:var(--radius); background:var(--teal-dim);}
+.transfer-box > label{display:block; font-size:12px; font-weight:600; color:var(--text); margin-bottom:6px;}
+.transfer-row{display:flex; gap:6px; flex-wrap:wrap;}
+.transfer-row select{flex:1 1 140px; min-width:0;}
+.transfer-box .hint{margin-top:6px; font-size:11.5px;}
 .tipo-btn:focus-visible{outline:2px solid var(--teal); outline-offset:2px;}
 @media (max-width:640px){ .tipo-seg{grid-template-columns:1fr;} }
 .fchip{font:inherit; font-size:12.5px; font-weight:600; padding:5px 12px; border-radius:999px; border:1px solid var(--line); background:var(--panel); color:var(--text-dim); cursor:pointer; white-space:nowrap; transition:background-color .15s ease, border-color .15s ease, color .15s ease, transform .12s ease;}

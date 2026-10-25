@@ -522,11 +522,6 @@
     formPadrao();
     renderAll();
   }
-  // Campo "Time" do cadastro de rep: escolher outro time transfere o rep ao salvar.
-  function fillRepTime(){
-    document.getElementById("repTime").innerHTML = TIMES.map(function(t){ return '<option value="'+t.key+'">'+esc(t.nome)+'</option>'; }).join("");
-    document.getElementById("repTime").value = timeAtual;
-  }
   // Leva um rep para outro time: o cadastro, as folgas agendadas e as perdas dele vão junto.
   // Tarefas e pontos do time de origem deixam de citar o rep. Retorna o nome do time de destino.
   function transferRep(id, destKey){
@@ -547,7 +542,6 @@
     return timeDef(destKey).nome;
   }
   function buildTimeSel(){
-    fillRepTime();
     var sel = document.getElementById("timeSel");
     sel.innerHTML = TIMES.map(function(t){ return '<option value="'+t.key+'">'+t.nome+'</option>'; }).join("");
     sel.value = timeAtual;
@@ -861,10 +855,25 @@
       '<div class="sq-foot">' +
         '<button class="btn-ghost" data-act="ficha" data-id="'+r.id+'">Ver ficha</button>' +
         '<span class="row-actions">' +
+          '<button class="btn-ghost" data-act="transfer-rep" data-id="'+r.id+'">Transferir</button>' +
           '<button class="btn-ghost" data-act="edit-rep" data-id="'+r.id+'">Editar</button>' +
           '<button class="btn-ghost" data-act="del-rep" data-id="'+r.id+'">Excluir</button>' +
         '</span>' +
       '</div>' +
+      (transferAberto===r.id ? transferPainelHTML(r) : "") +
+    '</div>';
+  }
+  // Escolha do time de destino, aberta no próprio card da pessoa.
+  var transferAberto = null;
+  function transferPainelHTML(r){
+    var outros = TIMES.filter(function(t){ return t.key!==timeAtual; });
+    if(!outros.length) return "";
+    return '<div class="transfer-box">' +
+      '<label for="tr-'+esc(r.id)+'">Transferir '+esc(r.nome.split(" ")[0])+' para</label>' +
+      '<div class="transfer-row"><select id="tr-'+esc(r.id)+'">'+outros.map(function(t){ return '<option value="'+t.key+'">'+esc(t.nome)+'</option>'; }).join("")+'</select>' +
+      '<button type="button" class="btn btn-primary" data-act="transfer-go" data-id="'+esc(r.id)+'">Confirmar</button>' +
+      '<button type="button" class="btn" data-act="transfer-cancel">Cancelar</button></div>' +
+      '<div class="hint">Leva o cadastro, as folgas agendadas e as perdas dela.</div>' +
     '</div>';
   }
 
@@ -918,7 +927,6 @@
     editing.rep = rep.id;
     document.getElementById("repFormTitle").textContent = "Editar rep";
     document.getElementById("repNome").value = rep.nome;
-    document.getElementById("repTime").value = timeAtual;
     document.getElementById("repEscala").value = rep.escala||"";
     document.getElementById("repClasse").value = repClasse(rep);
     document.getElementById("repAdmissao").value = rep.admissao||"";
@@ -948,7 +956,6 @@
     fecharAposEditar("rep");
     document.getElementById("repFormTitle").textContent = "Adicionar rep";
     document.getElementById("repNome").value = "";
-    document.getElementById("repTime").value = timeAtual;
     document.getElementById("repEscala").value = "A";
     document.getElementById("repClasse").value = "rep";
     document.getElementById("repAdmissao").value = "";
@@ -1018,12 +1025,11 @@
       idSalvo = data.id;
       state.reps.push(data);
     }
-    var destino = document.getElementById("repTime").value, nomeDestino = transferRep(idSalvo, destino);
     migrateTasks();
     resetRepForm();
     scheduleSave();
     renderAll();
-    toast(nomeDestino ? "Transferido para "+nomeDestino+": "+nome : (editou ? "Atualizado: " : "Adicionado: ")+nome);
+    toast((editou ? "Atualizado: " : "Adicionado: ")+nome);
     destacar("rep:"+idSalvo, editou);
     if(!editou){ var campo = document.getElementById("repNome"); if(campo.offsetParent) campo.focus({preventScroll:true}); }
   }
@@ -2538,6 +2544,14 @@
     else if(act==="toggle-form"){ if(FORMS[btn.dataset.form]) alternarForm(btn.dataset.form); }
     else if(act==="open-form"){ if(FORMS[btn.dataset.form]) abrirForm(btn.dataset.form, true); }
     else if(act==="rep-filtro"){ repFiltro = btn.dataset.v; renderRepGrid(); }
+    else if(act==="transfer-rep"){ transferAberto = transferAberto===id ? null : id; renderRepGrid(); }
+    else if(act==="transfer-cancel"){ transferAberto = null; renderRepGrid(); }
+    else if(act==="transfer-go"){
+      var destino = document.getElementById("tr-"+id).value, nomeDestino = transferRep(id, destino);
+      transferAberto = null;
+      if(editing.rep===id) resetRepForm();
+      if(nomeDestino){ scheduleSave(); renderAll(); toast("Transferido para "+nomeDestino); }
+    }
     else if(act==="rep-limpar"){ repFiltro = "todos"; repBusca = ""; document.getElementById("repBusca").value = ""; renderRepGrid(); }
     else if(act==="ponto-filtro"){ pontoFiltro = btn.dataset.v; renderPontos(); }
     else if(act==="toggle-ponto"){ togglePonto(id); }
