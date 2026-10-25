@@ -1024,3 +1024,50 @@ tbody tr:last-child td{border-bottom:0;}
 
 /* escalas: o dia selecionado vira um contorno só */
 .esc-week td.d.sel{border-color:var(--text); box-shadow:none;}
+
+/* ---------- calendário: dia selecionado no centro da aba, em faixa larga e compacta ---------- */
+.cal-layout{grid-template-columns:minmax(0,1fr);}
+.cal-side{position:static; display:grid; grid-template-columns:minmax(260px,0.9fr) minmax(0,1.6fr); grid-template-areas:"ctrl strip" "dd strip" "areas areas" "hint hint"; gap:16px 24px; align-items:start; padding:18px 20px; margin-bottom:16px;}
+.cal-side-head{grid-area:ctrl; margin:0; gap:8px;}
+#diaDetalhe{display:contents;}
+.dd-head{grid-area:dd; padding:0; border-bottom:0;}
+.dd-title{font-size:20px; font-weight:700; letter-spacing:-0.01em;}
+.dd-sum{margin-top:6px; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;}
+.dd-sum b{font-size:44px; line-height:1; letter-spacing:-0.03em;}
+.dd-sum span{display:block; width:100%; margin-top:2px; font-size:12.5px; color:var(--text-faint);}
+#dimHint{grid-area:hint;}
+
+/* situação do dia: cinco colunas com o número em destaque */
+#dimStrip{grid-area:strip; display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; margin:0; background:transparent; border:0; border-radius:0; box-shadow:none; overflow:visible;}
+#dimStrip .strip-cell{display:block; grid-template-areas:none; background:var(--panel); box-shadow:none; border-radius:10px; padding:10px 12px;}
+#dimStrip .strip-cell{border-top-width:1px; border-right-width:1px; border-bottom-width:1px; border-top-color:var(--line); border-right-color:var(--line); border-bottom-color:var(--line); border-left-width:3px;}
+#dimStrip .strip-cell:last-child{border-bottom-width:1px;}
+#dimStrip .strip-value{grid-area:auto; text-align:left; font-size:26px; margin-top:2px;}
+#dimStrip .strip-caption{grid-area:auto; font-size:11px;}
+
+/* áreas: três cartões lado a lado, com quem trabalha e quem está fora */
+.dd-areas{grid-area:areas; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:12px; margin-top:0;}
+.dd-area{background:var(--panel); border-radius:10px; box-shadow:none; padding:12px 14px;}
+.dd-area{border-top-width:1px; border-right-width:1px; border-bottom-width:1px; border-top-color:var(--line); border-right-color:var(--line); border-bottom-color:var(--line); border-left-width:3px;}
+.dd-area:last-child{border-bottom-width:1px;}
+.dda-head{font-size:12px;}
+.dda-n{font-size:13px;}
+.dda-sec{margin-top:10px;}
+.dda-lbl{margin-bottom:6px;}
+/* linhas curtas por área: rótulo fixo à esquerda e nomes em texto corrido à direita */
+.dda-line{margin-top:8px; font-size:12.5px; line-height:1.55; color:var(--text);}
+.dda-line i{font-style:normal; font-size:11px; color:var(--text-faint); margin-left:3px;}
+.dda-line .dda-tag{display:inline; margin-right:8px; font-size:10.5px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text-faint); white-space:nowrap;}
+
+@media (max-width:1100px){
+  .cal-side{grid-template-columns:minmax(0,1fr); grid-template-areas:"ctrl" "dd" "strip" "areas" "hint";}
+  .dd-areas{grid-template-columns:repeat(2,minmax(0,1fr));}
+  #dimStrip{grid-template-columns:repeat(3,minmax(0,1fr));}
+}
+@media (max-width:640px){
+  .dd-areas{grid-template-columns:minmax(0,1fr);}
+  #dimStrip{grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+
+/* Agendar: o tipo ocupa a linha inteira, com os três cartões lado a lado */
+#folgaFormBody .form-row > .field.wide:first-child{flex:1 1 100%;}

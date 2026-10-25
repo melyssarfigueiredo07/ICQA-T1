@@ -340,6 +340,20 @@
 
       <div class="strip compact cal-resumo" id="folgasStrip"></div>
 
+      <aside class="cal-side" aria-label="Dia selecionado">
+        <div class="cal-side-head">
+          <div class="cal-side-label">Dia selecionado</div>
+          <div class="date-nav">
+            <button class="btn" id="dimPrev" data-act="dim-prev" title="Dia anterior" aria-label="Dia anterior">‹</button>
+            <input type="date" class="dim-data-input" id="dimData" aria-label="Dia selecionado">
+            <button class="btn" id="dimNext" data-act="dim-next" title="Próximo dia" aria-label="Próximo dia">›</button>
+            <button class="btn" id="dimHoje" data-act="dim-hoje">Hoje</button>
+          </div>
+        </div>
+        <div class="strip compact" id="dimStrip"></div>
+        <div id="diaDetalhe"></div>
+        <div class="hint" id="dimHint" style="display:none;"></div>
+      </aside>
       <div class="cal-layout">
         <div class="cal-col">
           <section class="cal-card" id="mesBlocos" aria-label="Calendário do mês">
@@ -366,20 +380,6 @@
           </section>
         </div>
 
-        <aside class="cal-side" aria-label="Dia selecionado">
-          <div class="cal-side-head">
-            <div class="cal-side-label">Dia selecionado</div>
-            <div class="date-nav">
-              <button class="btn" id="dimPrev" data-act="dim-prev" title="Dia anterior" aria-label="Dia anterior">‹</button>
-              <input type="date" class="dim-data-input" id="dimData" aria-label="Dia selecionado">
-              <button class="btn" id="dimNext" data-act="dim-next" title="Próximo dia" aria-label="Próximo dia">›</button>
-              <button class="btn" id="dimHoje" data-act="dim-hoje">Hoje</button>
-            </div>
-          </div>
-          <div class="strip compact" id="dimStrip"></div>
-          <div id="diaDetalhe"></div>
-          <div class="hint" id="dimHint" style="display:none;"></div>
-        </aside>
       </div>
 
       <div class="form-panel fc collapsed" id="folgaFormPanel" data-form="folga">

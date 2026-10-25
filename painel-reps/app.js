@@ -2174,20 +2174,27 @@
     });
     return por;
   }
-  function chipPessoa(x){
-    var cls = "who st-"+x.st+(x.ex ? (x.ex.tipo==="troca-trabalho" ? " ex-trab" : " ex-folga") : "");
-    var sub = x.st==="ativo" ? (x.ex ? x.nota : (x.r.escala ? "Escala "+x.r.escala : "")) : (x.nota || STATUS_LABEL[x.st]);
-    return '<span class="'+cls+'" title="'+esc(x.r.nome+(x.nota ? " · "+x.nota : ""))+'">'+esc(x.r.nome)+(sub ? ' <i>'+esc(sub)+'</i>' : '')+'</span>';
+  // Nome da pessoa e, quando há, a situação (extra, férias, licença, afastado). Escala não entra: está na tabela de escalas.
+  function nomeComNota(x){
+    var sit = (x.st==="folga" && !x.ex) ? "" : (x.nota || ""); // quem está de folga já aparece no rótulo do grupo
+    return esc(x.r.nome)+(sit ? ' <i>'+esc(sit)+'</i>' : '');
   }
+  // Painel do dia: total e, por área, quem trabalha em uma linha e quem está fora agrupado por situação.
   function detalheDiaHTML(iso, cd, hoje){
     var por = pessoasDoDia(iso), neg = cd.banco.length + cd.trocaFolga.length, pos = cd.trocaTrab.length;
     var nota = "pela escala "+cd.base+(neg ? " · −"+plural(neg, "folga extra", "folgas extras") : "")+(pos ? " · +"+plural(pos, "troca", "trocas") : "");
+    var ordemFora = ["folga","ferias","licenca","afastado"];
     var blocos = areasDoDia(cd).map(function(a){
       var g = por[a.key] || {trab:[], fora:[]};
+      var trabalham = g.trab.length ? g.trab.map(nomeComNota).join(", ") : "ninguém";
+      var fora = ordemFora.map(function(st){
+        var grupo = g.fora.filter(function(x){ return x.st===st; });
+        return grupo.length ? '<div class="dda-line"><span class="dda-tag">'+esc(STATUS_LABEL[st])+' ('+grupo.length+')</span><span class="dda-nomes">'+grupo.map(nomeComNota).join(", ")+'</span></div>' : "";
+      }).join("");
       return '<div class="dd-area '+areaCls(a.key)+'" data-area="'+a.key+'">' +
         '<div class="dda-head"><span class="ab-dot"></span>'+esc(areaNome(a.key))+'<span class="dda-n"><b>'+a.total+'</b> de '+a.cad+'</span></div>' +
-        '<div class="dda-sec"><div class="dda-lbl">Trabalhando ('+g.trab.length+')</div><div class="dda-chips">'+(g.trab.length ? g.trab.map(chipPessoa).join("") : '<span class="hint">Ninguém nesta área</span>')+'</div></div>' +
-        (g.fora.length ? '<div class="dda-sec"><div class="dda-lbl">Fora ('+g.fora.length+')</div><div class="dda-chips">'+g.fora.map(chipPessoa).join("")+'</div></div>' : '') +
+        '<div class="dda-line"><span class="dda-tag">Trabalham ('+g.trab.length+')</span><span class="dda-nomes">'+trabalham+'</span></div>' +
+        fora +
       '</div>';
     }).join("");
     return '<div class="dd-head">' +
