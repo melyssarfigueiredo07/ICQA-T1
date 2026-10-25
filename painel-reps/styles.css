@@ -1071,3 +1071,37 @@ tbody tr:last-child td{border-bottom:0;}
 
 /* Agendar: o tipo ocupa a linha inteira, com os três cartões lado a lado */
 #folgaFormBody .form-row > .field.wide:first-child{flex:1 1 100%;}
+
+/* ---------- dimensionamento: tarefas separadas por área ---------- */
+#taskGrid.card-grid{display:block;}
+.dim-sec{margin:0 0 28px;}
+.dim-sec:last-child{margin-bottom:0;}
+.dim-sec-head{display:flex; align-items:center; flex-wrap:wrap; gap:6px 12px; margin:0 0 14px; padding:0 0 10px; border-bottom:1px solid var(--line);}
+.dim-sec-head .ab-dot{width:10px; height:10px; border-radius:3px; background:var(--ac); flex:0 0 auto;}
+.dim-sec-head b{font-size:15px; letter-spacing:-0.01em; color:var(--text);}
+.dim-sec-n{font-size:12.5px; font-weight:600; color:var(--text-dim);}
+.dim-sec-avisos{margin-left:auto; display:flex; gap:6px; flex-wrap:wrap;}
+
+/* ---------- calendário: data numa linha; total com rótulo e marca ao lado ---------- */
+.cal-day .cd-top{display:flex; align-items:center; justify-content:space-between; min-height:0; padding-bottom:5px; border-bottom:1px solid var(--line-soft);}
+.cal-day .cd-tot{display:flex; align-items:baseline; flex-wrap:wrap; gap:2px 6px; margin:2px 0 0; font-size:inherit;}
+.cal-day .cd-tot b{font-size:26px; font-weight:700; line-height:1; letter-spacing:-0.02em; color:var(--text);}
+.cal-day .cd-unid{font-size:11px; font-weight:600; color:var(--text-dim);}
+.cal-day .cd-tot small.neg, .cal-day .cd-tot small.pos{font-size:12px; font-weight:700; margin-left:2px;}
+@media (max-width:640px){ .cal-day .cd-unid{display:none;} }
+
+/* ---------- cards de rep: fundo branco e a cor da escala em destaque ---------- */
+.card.rep-card{background:#FFFFFF;}
+.card.rep-card.st-folga{opacity:1;}
+.card.rep-card.esc-a{--esc:var(--rust); --esc-txt:#FFFFFF;}
+.card.rep-card.esc-b{--esc:var(--escB); --esc-txt:var(--text);}
+.card.rep-card.esc-c{--esc:var(--escC); --esc-txt:var(--text);}
+.card.rep-card.esc-d{--esc:var(--escD); --esc-txt:#FFFFFF;}
+.card.rep-card[class*="esc-"]{border-left:4px solid var(--esc);}
+.card.rep-card[class*="esc-"] .rep-avatar{background:var(--esc); color:var(--esc-txt);}
+.card.rep-card[class*="esc-"] .sq-rows > .sq-row:first-child b{background:var(--esc); color:var(--esc-txt); padding:1px 10px; border-radius:999px; font-size:12.5px;}
+.rep-name{font-size:16px;}
+.sq-rows{border-top:1px solid var(--line-soft); padding-top:8px;}
+.sq-row{font-size:13px; line-height:1.6;}
+.sq-row span{color:var(--text-dim);}
+.sq-row b{color:var(--text); font-weight:600;}

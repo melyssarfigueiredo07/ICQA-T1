@@ -1217,6 +1217,7 @@
     if(dimFiltro==="disp") return effStatus(r, dimDate)==="ativo";
     return true;
   }
+  // Matriz do dimensionamento: uma tabela por área, com as tarefas da área nas colunas e os reps elegíveis nas linhas.
   function renderMatriz(){
     var wrap = document.getElementById("taskMatrix");
     var reps = sortReps(state.reps).filter(repVisivelNoFiltro);
@@ -1224,26 +1225,34 @@
       wrap.innerHTML = '<div class="hint">Nenhum rep nesse filtro.</div>';
       return;
     }
-    var head = '<tr><th class="mx-corner">Rep \\ Tarefa</th>' + state.tasks.map(function(t){
+    wrap.innerHTML = secoesDimensionamento().map(function(s){ return matrizSecaoHTML(s, reps); }).join("") +
+      '<div class="hint" style="margin-top:8px;">Clique numa célula para marcar/desmarcar · no nome da tarefa para marcar todos os elegíveis · no nome do rep para marcar as tarefas dele nesta área. “—” = fora da área; PS não aparecem.</div>';
+  }
+  function matrizSecaoHTML(s, reps){
+    var linhas = reps.filter(function(r){ return s.tarefas.some(function(t){ return repElegivel(t, r); }); });
+    var disponiveis = linhas.filter(function(r){ return effStatus(r, dimDate)==="ativo"; }).length;
+    var cabecalho = '<section class="dim-sec '+areaCls(s.key)+'"><header class="dim-sec-head"><span class="ab-dot"></span><b>'+esc(s.nome)+'</b><span class="dim-sec-n">'+
+      plural(s.tarefas.length, "tarefa", "tarefas")+' · '+plural(linhas.length, "rep", "reps")+' · '+disponiveis+' disponíveis na data</span></header>';
+    if(!linhas.length) return cabecalho + '<div class="hint">Nenhum rep elegível para estas tarefas.</div></section>';
+    var head = '<tr><th class="mx-corner">Rep \\ Tarefa</th>' + s.tarefas.map(function(t){
       var ids = t.repIds||[], fixa = areaFixa(t.nome);
       var resp = state.reps.filter(function(r){ return ids.indexOf(r.id)>-1 && repElegivel(t, r); });
       var disp = resp.filter(function(r){ return effStatus(r, dimDate)==="ativo"; }).length;
       return '<th class="mx-col"><button class="mx-colbtn" data-act="mx-col" data-id="'+t.id+'" title="Marcar/desmarcar todos os elegíveis de '+esc(t.nome)+'">'+
-        esc(t.nome)+'<small>'+(CATEGORIA_LABEL[tarefaArea(t)]||"")+(fixa?" · fixa":"")+'</small><small class="mx-cnt">'+disp+'/'+resp.length+' disp.</small></button></th>';
+        esc(t.nome)+(fixa ? '<small>só '+CATEGORIA_LABEL[fixa]+' (sem PS)</small>' : '')+'<small class="mx-cnt">'+disp+'/'+resp.length+' disp.</small></button></th>';
     }).join("") + '</tr>';
-    var body = reps.map(function(r){
+    var corpo = linhas.map(function(r){
       var st = effStatus(r, dimDate);
-      var cells = state.tasks.map(function(t){
+      var celulas = s.tarefas.map(function(t){
         if(!repElegivel(t, r)) return '<td class="mx-cell na" title="Fora da área desta tarefa">—</td>';
         var on = (t.repIds||[]).indexOf(r.id)>-1;
         return '<td class="mx-cell"><button class="mx-btn'+(on?' on st-'+st:'')+'" data-act="mx-cell" data-task="'+t.id+'" data-rep="'+r.id+'" aria-pressed="'+(on?"true":"false")+'">'+(on?'✓':'')+'</button></td>';
       }).join("");
-      return '<tr><th class="mx-row st-'+st+'"><button class="mx-rowbtn" data-act="mx-row" data-id="'+r.id+'" title="Marcar/desmarcar todas as tarefas elegíveis deste rep">'+
+      return '<tr><th class="mx-row st-'+st+'"><button class="mx-rowbtn" data-act="mx-row" data-id="'+r.id+'" data-area="'+s.key+'" title="Marcar/desmarcar as tarefas deste rep nesta área">'+
         (r.escala?'<span class="esc-dot" style="background:'+ESC_COR[r.escala]+'"></span>':'')+esc(r.nome)+
-        (statusNote(r, dimDate)?' <small>'+esc(statusNote(r, dimDate))+'</small>':'')+'</button></th>'+cells+'</tr>';
+        (statusNote(r, dimDate)?' <small>'+esc(statusNote(r, dimDate))+'</small>':'')+'</button></th>'+celulas+'</tr>';
     }).join("");
-    wrap.innerHTML = '<div class="mx-scroll"><table class="mx">'+'<thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>' +
-      '<div class="hint" style="margin-top:8px;">Clique numa célula para marcar/desmarcar · no nome da tarefa para marcar todos os elegíveis · no nome do rep para marcar todas as tarefas dele. “—” = fora da área; PS não aparecem.</div>';
+    return cabecalho + '<div class="mx-scroll"><table class="mx"><thead>'+head+'</thead><tbody>'+corpo+'</tbody></table></div></section>';
   }
   function toggleMatrizCol(t){
     var lista = elegiveis(t);
@@ -1251,11 +1260,11 @@
     if(todosMarcados(t, lista)) mutarMarcacoes(t.nome+": todos desmarcados", function(){ removeIds(t, lista); });
     else mutarMarcacoes(t.nome+": todos marcados", function(){ addIds(t, lista); });
   }
-  function toggleMatrizRow(r){
-    var ts = state.tasks.filter(function(t){ return repElegivel(t, r); });
+  function toggleMatrizRow(r, area){
+    var ts = state.tasks.filter(function(t){ return repElegivel(t, r) && (!area || tarefaArea(t)===area); });
     if(!ts.length) return;
     var tudo = ts.every(function(t){ return (t.repIds||[]).indexOf(r.id)>-1; });
-    mutarMarcacoes(r.nome+": "+(tudo?"desmarcado de todas":"marcado em todas")+" as tarefas", function(){
+    mutarMarcacoes(r.nome+": "+(tudo?"desmarcado":"marcado")+" em "+(area ? "as tarefas de "+CATEGORIA_LABEL[area] : "todas as tarefas"), function(){
       ts.forEach(function(t){ if(tudo) removeIds(t, [r]); else addIds(t, [r]); });
     });
   }
@@ -1280,6 +1289,78 @@
     var disp = resp.filter(function(r){ return effStatus(r, dimDate)==="ativo"; }).length;
     return {resp:resp, disp:disp, semResp:resp.length===0, sem:resp.length>0 && disp===0};
   }
+  // Cartão de uma tarefa: responsáveis, cobertura na data e as caixas de quem pode assumir.
+  function tarefaCardHTML(t){
+    var ids = t.repIds||[];
+    var area = tarefaArea(t), fixa = areaFixa(t.nome);
+    var cb = coberturaTarefa(t), resp = cb.resp, disp = cb.disp;
+    var fora = state.reps.filter(function(r){return ids.indexOf(r.id)>-1 && !repElegivel(t, r);});
+    var alerta = cb.semResp ? '<span class="tag tag-amber" title="Marque abaixo quem é responsável por esta tarefa">Sem responsáveis</span>' :
+      (cb.sem ? '<span class="tag tag-rust" title="Os responsáveis não estão disponíveis em '+fmtDate(dimDate)+'">Sem cobertura na data</span>' : '');
+    var cov;
+    if(resp.length===0){
+      cov = '<div class="cov"><div class="cov-head"><span>Sem responsáveis'+(fixa?' de '+CATEGORIA_LABEL[fixa]:'')+'</span></div></div>';
+    }else{
+      var pct = Math.round(disp/resp.length*100);
+      var cls = disp===0 ? "cov-bad" : (pct<50 ? "cov-mid" : "cov-ok");
+      cov = '<div class="cov"><div class="cov-head"><span>Disponíveis na data</span><b>'+disp+' de '+resp.length+'</b></div>' +
+        '<div class="cov-bar"><div class="cov-fill '+cls+'" style="width:'+pct+'%"></div></div></div>';
+    }
+    var lista = sortReps(state.reps).filter(function(r){
+      var elegivel = repElegivel(t, r), atribuido = ids.indexOf(r.id)>-1;
+      if(!elegivel && !atribuido) return false;
+      if(dimFiltro==="resp") return atribuido;
+      if(dimFiltro==="disp") return elegivel && effStatus(r, dimDate)==="ativo";
+      return true;
+    });
+    var repChecks = state.reps.length ? (lista.length ? lista.map(function(r){
+      var isResp = ids.indexOf(r.id)>-1;
+      var foraArea = !repElegivel(t, r);
+      var st = foraArea ? "fora" : effStatus(r, dimDate);
+      var nota = foraArea ? repMotivoFora(r) : [r.escala ? r.escala : "", statusNote(r, dimDate)].filter(Boolean).join(" · ");
+      var exr = foraArea ? null : extraDe(r, dimDate);
+      return '<label class="rep-box st-'+st+(isResp?' is-resp':'')+(exr ? (exr.tipo==="troca-trabalho" ? ' ex-trab' : ' ex-folga') : '')+'"><input type="checkbox" class="task-rep-toggle" data-task="'+t.id+'" data-rep="'+r.id+'" '+(isResp?"checked":"")+'>'+
+        esc(r.nome)+(nota?' <small>'+esc(nota)+'</small>':'')+'</label>';
+    }).join("") : '<span class="hint">Nenhum rep nesse filtro'+(fixa?' (só reps de '+CATEGORIA_LABEL[fixa]+', sem PS)':'')+'.</span>') : '<span class="hint">Cadastre reps na aba Equipe.</span>';
+    return '<div class="card" data-key="task:'+esc(t.id)+'">' +
+      '<div class="card-head">' +
+        '<div class="card-title">'+esc(t.nome)+'</div>' +
+        '<div class="row-actions">' +
+          '<button class="btn-ghost" data-act="edit-task" data-id="'+t.id+'">Editar</button>' +
+          '<button class="btn-ghost" data-act="del-task" data-id="'+t.id+'">Excluir</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="card-tags"><span class="tag tag-dark">'+(CATEGORIA_LABEL[area]||"—")+'</span>' +
+        (fixa ? '<span class="tag tag-folga">só reps de '+CATEGORIA_LABEL[fixa]+' (sem PS)</span>' : '') + alerta + '</div>' +
+      cov +
+      taskTools(t) +
+      '<div class="card-section-label">Reps responsáveis</div>' +
+      '<div class="check-list">'+repChecks+'</div>' +
+      (fora.length ? '<div class="hint" style="margin-top:8px;">'+fora.length+' rep(s) de outra área ou PS estão atribuídos e são ignorados no cálculo. Desmarque para limpar.</div>' : '') +
+    '</div>';
+  }
+  // Tarefas agrupadas por área (Inventário e Qualidade primeiro; o que sobrar vai em "Outras"). Dentro da área, ordem de cadastro.
+  function secoesDimensionamento(){
+    var ordem = ["inventario","qualidade"], grupos = {};
+    state.tasks.forEach(function(t){ var k = tarefaArea(t); (grupos[k] = grupos[k] || []).push(t); });
+    var chaves = ordem.concat(Object.keys(grupos).filter(function(k){ return ordem.indexOf(k)<0; }));
+    return chaves.filter(function(k){ return grupos[k]; }).map(function(k){
+      return {key:k, nome:CATEGORIA_LABEL[k] || "Outras", tarefas:grupos[k]};
+    });
+  }
+  // Seção de uma área no modo Cards: cabeçalho com contagens e os cartões da área.
+  function secaoTarefasHTML(s){
+    var coberturas = s.tarefas.map(coberturaTarefa);
+    var sem = coberturas.filter(function(c){ return c.sem; }).length, semResp = coberturas.filter(function(c){ return c.semResp; }).length;
+    var avisos = (sem ? '<span class="tag tag-rust">'+sem+' sem cobertura na data</span>' : '') + (semResp ? '<span class="tag tag-amber">'+semResp+' sem responsáveis</span>' : '');
+    var elegiveis = state.reps.filter(function(r){ return !repEhPS(r) && s.tarefas.some(function(t){ return repElegivel(t, r); }); });
+    var disp = elegiveis.filter(function(r){ return effStatus(r, dimDate)==="ativo"; }).length;
+    return '<section class="dim-sec '+areaCls(s.key)+'">' +
+      '<header class="dim-sec-head"><span class="ab-dot"></span><b>'+esc(s.nome)+'</b><span class="dim-sec-n">'+plural(s.tarefas.length, "tarefa", "tarefas")+' · '+disp+' de '+plural(elegiveis.length, "rep", "reps")+' disponíveis na data</span>'+
+      (avisos ? '<span class="dim-sec-avisos">'+avisos+'</span>' : '')+'</header>' +
+      '<div class="card-grid">'+s.tarefas.map(tarefaCardHTML).join("")+'</div>' +
+    '</section>';
+  }
   function renderTasks(){
     var cobs = state.tasks.map(coberturaTarefa);
     var nSem = cobs.filter(function(c){ return c.sem; }).length, nSemResp = cobs.filter(function(c){ return c.semResp; }).length;
@@ -1302,55 +1383,7 @@
     matriz.style.display = dimView==="matriz" ? "block" : "none";
     if(dimView==="matriz"){ renderMatriz(); grid.innerHTML = ""; renderResumo(); return; }
     matriz.innerHTML = "";
-    grid.innerHTML = state.tasks.map(function(t){
-      var ids = t.repIds||[];
-      var area = tarefaArea(t), fixa = areaFixa(t.nome);
-      var cb = coberturaTarefa(t), resp = cb.resp, disp = cb.disp;
-      var fora = state.reps.filter(function(r){return ids.indexOf(r.id)>-1 && !repElegivel(t, r);});
-      var alerta = cb.semResp ? '<span class="tag tag-amber" title="Marque abaixo quem é responsável por esta tarefa">Sem responsáveis</span>' :
-        (cb.sem ? '<span class="tag tag-rust" title="Os responsáveis não estão disponíveis em '+fmtDate(dimDate)+'">Sem cobertura na data</span>' : '');
-      var cov;
-      if(resp.length===0){
-        cov = '<div class="cov"><div class="cov-head"><span>Sem responsáveis'+(fixa?' de '+CATEGORIA_LABEL[fixa]:'')+'</span></div></div>';
-      }else{
-        var pct = Math.round(disp/resp.length*100);
-        var cls = disp===0 ? "cov-bad" : (pct<50 ? "cov-mid" : "cov-ok");
-        cov = '<div class="cov"><div class="cov-head"><span>Disponíveis na data</span><b>'+disp+' de '+resp.length+'</b></div>' +
-          '<div class="cov-bar"><div class="cov-fill '+cls+'" style="width:'+pct+'%"></div></div></div>';
-      }
-      var lista = sortReps(state.reps).filter(function(r){
-        var elegivel = repElegivel(t, r), atribuido = ids.indexOf(r.id)>-1;
-        if(!elegivel && !atribuido) return false;
-        if(dimFiltro==="resp") return atribuido;
-        if(dimFiltro==="disp") return elegivel && effStatus(r, dimDate)==="ativo";
-        return true;
-      });
-      var repChecks = state.reps.length ? (lista.length ? lista.map(function(r){
-        var isResp = ids.indexOf(r.id)>-1;
-        var foraArea = !repElegivel(t, r);
-        var st = foraArea ? "fora" : effStatus(r, dimDate);
-        var nota = foraArea ? repMotivoFora(r) : [r.escala ? r.escala : "", statusNote(r, dimDate)].filter(Boolean).join(" · ");
-        var exr = foraArea ? null : extraDe(r, dimDate);
-        return '<label class="rep-box st-'+st+(isResp?' is-resp':'')+(exr ? (exr.tipo==="troca-trabalho" ? ' ex-trab' : ' ex-folga') : '')+'"><input type="checkbox" class="task-rep-toggle" data-task="'+t.id+'" data-rep="'+r.id+'" '+(isResp?"checked":"")+'>'+
-          esc(r.nome)+(nota?' <small>'+esc(nota)+'</small>':'')+'</label>';
-      }).join("") : '<span class="hint">Nenhum rep nesse filtro'+(fixa?' (só reps de '+CATEGORIA_LABEL[fixa]+', sem PS)':'')+'.</span>') : '<span class="hint">Cadastre reps na aba Equipe.</span>';
-      return '<div class="card" data-key="task:'+esc(t.id)+'">' +
-        '<div class="card-head">' +
-          '<div class="card-title">'+esc(t.nome)+'</div>' +
-          '<div class="row-actions">' +
-            '<button class="btn-ghost" data-act="edit-task" data-id="'+t.id+'">Editar</button>' +
-            '<button class="btn-ghost" data-act="del-task" data-id="'+t.id+'">Excluir</button>' +
-          '</div>' +
-        '</div>' +
-        '<div class="card-tags"><span class="tag tag-dark">'+(CATEGORIA_LABEL[area]||"—")+'</span>' +
-          (fixa ? '<span class="tag tag-folga">só reps de '+CATEGORIA_LABEL[fixa]+' (sem PS)</span>' : '') + alerta + '</div>' +
-        cov +
-        taskTools(t) +
-        '<div class="card-section-label">Reps responsáveis</div>' +
-        '<div class="check-list">'+repChecks+'</div>' +
-        (fora.length ? '<div class="hint" style="margin-top:8px;">'+fora.length+' rep(s) de outra área ou PS estão atribuídos e são ignorados no cálculo. Desmarque para limpar.</div>' : '') +
-      '</div>';
-    }).join("");
+    grid.innerHTML = secoesDimensionamento().map(secaoTarefasHTML).join("");
 
     renderResumo();
   }
@@ -2152,8 +2185,8 @@
     var fora = cd.ausentes.length ? '<span class="cd-fora">'+cd.ausentes.length+' fora</span>' : "";
     var dica = resumoDia(cd);
     return '<button type="button" class="cal-day'+(fds?' fds':'')+(iso===ctx.hoje?' hoje':'')+(iso===ctx.sel?' sel':'')+'" data-act="dim-dia" data-iso="'+iso+'" data-key="cal:'+iso+'" aria-pressed="'+(iso===ctx.sel?'true':'false')+'" title="'+esc(dica)+'" aria-label="'+esc(diaLongo(iso)+": "+cd.total+" pessoas trabalhando")+'">' +
-      '<span class="cd-top"><b class="cd-n">'+iso.slice(8)+'</b>'+marca+'</span>' +
-      '<span class="cd-tot">'+cd.total+'</span>' +
+      '<span class="cd-top"><b class="cd-n">'+iso.slice(8)+'</b></span>' +
+      '<span class="cd-tot"><b>'+cd.total+'</b><small class="cd-unid">trabalhando</small>'+marca+'</span>' +
       '<span class="cd-areas">'+areas+'</span>' +
       (fora ? '<span class="cd-foot">'+fora+'</span>' : '') +
     '</button>';
@@ -2480,7 +2513,7 @@
     else if(act==="task-fill"){ t = state.tasks.find(function(x){return x.id===btn.dataset.id;}); if(t) fillTask(t, btn.dataset.mode); }
     else if(act==="task-clear"){ t = state.tasks.find(function(x){return x.id===btn.dataset.id;}); if(t) pendingAction(btn, function(){ clearTask(t); }); }
     else if(act==="mx-col"){ t = state.tasks.find(function(x){return x.id===btn.dataset.id;}); if(t) toggleMatrizCol(t); }
-    else if(act==="mx-row"){ r = state.reps.find(function(x){return x.id===btn.dataset.id;}); if(r && !repEhPS(r)) toggleMatrizRow(r); }
+    else if(act==="mx-row"){ r = state.reps.find(function(x){return x.id===btn.dataset.id;}); if(r && !repEhPS(r)) toggleMatrizRow(r, btn.dataset.area); }
     else if(act==="mx-cell"){ toggleTaskRep(btn.dataset.task, btn.dataset.rep); }
     else return false;
     return true;
