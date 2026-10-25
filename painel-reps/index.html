@@ -71,6 +71,10 @@
             <input type="text" id="repNome" placeholder="Nome do rep">
           </div>
           <div class="field">
+            <label>Time</label>
+            <select id="repTime"></select>
+          </div>
+          <div class="field">
             <label>Classificação</label>
             <select id="repClasse">
               <option value="rep">Rep</option>
@@ -391,9 +395,14 @@
         </button>
         <div class="fbody" id="folgaFormBody"><div class="fbody-in"><div class="fbody-pad">
         <div class="form-row">
-          <div class="field">
-            <label>Tipo</label>
-            <select id="folgaTipo">
+          <div class="field wide">
+            <label>O que é</label>
+            <div class="tipo-seg" id="folgaTipoSeg" role="group" aria-label="Tipo de agendamento">
+              <button type="button" class="tipo-btn on" data-act="folga-tipo" data-v="banco" aria-pressed="true"><b>Banco de horas</b><span>Folga num dia de trabalho</span></button>
+              <button type="button" class="tipo-btn" data-act="folga-tipo" data-v="troca" aria-pressed="false"><b>Troca de folga</b><span>Trabalha numa folga, folga num dia de trabalho</span></button>
+              <button type="button" class="tipo-btn" data-act="folga-tipo" data-v="ferias" aria-pressed="false"><b>Férias</b><span>Sai da contagem pelo período</span></button>
+            </div>
+            <select id="folgaTipo" hidden>
               <option value="banco">Banco de horas</option>
               <option value="troca">Troca de folga</option>
               <option value="ferias">Férias</option>
@@ -443,7 +452,6 @@
             </div>
           </div>
         </div>
-        <div class="hint" style="margin-top:10px;"><b>Banco de horas:</b> a pessoa folga num dia que seria de trabalho (−1 pessoa naquele dia; dá para informar um período). <b>Troca de folga:</b> trabalha num dia que seria folga (+1) e folga em outro dia que seria de trabalho (−1). <b>Férias:</b> início e duração; a pessoa sai da contagem durante o período.</div>
         <div class="folga-preview" id="folgaPreview"></div>
         <div class="form-error" id="folgaFormError" style="display:none;"></div>
         </div></div></div>
@@ -456,13 +464,9 @@
             <label>Pessoa</label>
             <select id="folgaFiltroRep"></select>
           </div>
-          <div class="field">
-            <label>Período</label>
-            <select id="folgaFiltroPer">
-              <option value="mes">Mês exibido acima</option>
-              <option value="futuras">De hoje em diante</option>
-              <option value="todas">Todos</option>
-            </select>
+          <div class="field" style="flex:0 0 auto;">
+            <label>Mostrar</label>
+            <div class="fchips" id="folgaPerChips" role="group" aria-label="Período" style="flex-wrap:nowrap;"></div>
           </div>
         </div>
         <table>

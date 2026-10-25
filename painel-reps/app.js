@@ -522,7 +522,32 @@
     formPadrao();
     renderAll();
   }
+  // Campo "Time" do cadastro de rep: escolher outro time transfere o rep ao salvar.
+  function fillRepTime(){
+    document.getElementById("repTime").innerHTML = TIMES.map(function(t){ return '<option value="'+t.key+'">'+esc(t.nome)+'</option>'; }).join("");
+    document.getElementById("repTime").value = timeAtual;
+  }
+  // Leva um rep para outro time: o cadastro, as folgas agendadas e as perdas dele vão junto.
+  // Tarefas e pontos do time de origem deixam de citar o rep. Retorna o nome do time de destino.
+  function transferRep(id, destKey){
+    var rep = state.reps.find(function(r){return r.id===id;});
+    if(!rep || !destKey || destKey===timeAtual || !root.times) return "";
+    var dest = root.times[destKey] = Object.assign(novoEstado(), root.times[destKey]||{});
+    if(!dest.teamName) dest.teamName = timeDef(destKey).nome;
+    var levarFolgas = (state.folgas||[]).filter(function(f){return f.repId===id;});
+    var levarLost = state.lost.filter(function(l){return l.repId===id;});
+    state.reps = state.reps.filter(function(r){return r.id!==id;});
+    state.folgas = (state.folgas||[]).filter(function(f){return f.repId!==id;});
+    state.lost = state.lost.filter(function(l){return l.repId!==id;});
+    state.tasks.forEach(function(t){ t.repIds = (t.repIds||[]).filter(function(x){return x!==id;}); });
+    state.pontos.forEach(function(p){ p.repIds = (p.repIds||[]).filter(function(x){return x!==id;}); });
+    dest.reps.push(rep);
+    dest.folgas = (dest.folgas||[]).concat(levarFolgas);
+    dest.lost = (dest.lost||[]).concat(levarLost);
+    return timeDef(destKey).nome;
+  }
   function buildTimeSel(){
+    fillRepTime();
     var sel = document.getElementById("timeSel");
     sel.innerHTML = TIMES.map(function(t){ return '<option value="'+t.key+'">'+t.nome+'</option>'; }).join("");
     sel.value = timeAtual;
@@ -862,7 +887,7 @@
     var skills = repSkillNames(r);
     document.getElementById("fichaBox").innerHTML =
       '<div class="ficha-head"><div class="rep-avatar">'+esc(repInitials(r.nome))+'</div><div><div class="ficha-name">'+esc(r.nome)+'</div><div class="card-tags" style="margin:6px 0 0;padding:0;border:0;">'+repTags(r)+'</div></div></div>' +
-      sec("Trabalho", trabalho) +
+      sec("Trabalho", row("Time", state.teamName) + trabalho) +
       sec("Férias agendadas", feriasSec) +
       sec("Habilitações", flags.length ? '<div class="sq-flags">'+flags.map(function(f){return '<span class="flag">✓ '+f+'</span>';}).join("")+'</div>' : "") +
       sec("Dados pessoais e contato", contato) +
@@ -893,6 +918,7 @@
     editing.rep = rep.id;
     document.getElementById("repFormTitle").textContent = "Editar rep";
     document.getElementById("repNome").value = rep.nome;
+    document.getElementById("repTime").value = timeAtual;
     document.getElementById("repEscala").value = rep.escala||"";
     document.getElementById("repClasse").value = repClasse(rep);
     document.getElementById("repAdmissao").value = rep.admissao||"";
@@ -922,6 +948,7 @@
     fecharAposEditar("rep");
     document.getElementById("repFormTitle").textContent = "Adicionar rep";
     document.getElementById("repNome").value = "";
+    document.getElementById("repTime").value = timeAtual;
     document.getElementById("repEscala").value = "A";
     document.getElementById("repClasse").value = "rep";
     document.getElementById("repAdmissao").value = "";
@@ -991,11 +1018,12 @@
       idSalvo = data.id;
       state.reps.push(data);
     }
+    var destino = document.getElementById("repTime").value, nomeDestino = transferRep(idSalvo, destino);
     migrateTasks();
     resetRepForm();
     scheduleSave();
     renderAll();
-    toast((editou ? "Atualizado: " : "Adicionado: ")+nome);
+    toast(nomeDestino ? "Transferido para "+nomeDestino+": "+nome : (editou ? "Atualizado: " : "Adicionado: ")+nome);
     destacar("rep:"+idSalvo, editou);
     if(!editou){ var campo = document.getElementById("repNome"); if(campo.offsetParent) campo.focus({preventScroll:true}); }
   }
@@ -1885,6 +1913,11 @@
     document.querySelectorAll("[data-folga]").forEach(function(el){
       el.style.display = el.dataset.folga===tipo ? "" : "none";
     });
+    document.querySelectorAll(".tipo-btn").forEach(function(b){
+      var on = b.dataset.v===tipo;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
     var iniF = document.getElementById("folgaFeriasIni").value, diasF = Math.floor(Number(document.getElementById("folgaFeriasDias").value)) || 0;
     var fimCalc = (isoOk(iniF) && diasF>=1 && diasF<=366) ? Cal.addDays(iniF, diasF-1) : "";
     document.getElementById("folgaFeriasFim").textContent = fimCalc ? fmtDate(fimCalc)+" · retorno em "+fmtDate(Cal.addDays(fimCalc, 1)) : "—";
@@ -1977,7 +2010,14 @@
     if(folgaFiltroRep && !lista.some(function(r){return r.id===folgaFiltroRep;})) folgaFiltroRep = "";
     sel.innerHTML = '<option value="">Todas as pessoas</option>' + lista.map(function(r){ return '<option value="'+esc(r.id)+'">'+esc(r.nome)+'</option>'; }).join("");
     sel.value = folgaFiltroRep;
-    document.getElementById("folgaFiltroPer").value = folgaFiltroPer;
+    renderFolgaPerChips();
+  }
+  var PER_OPC = [["mes","Mês exibido"],["futuras","De hoje em diante"],["todas","Todos"]];
+  function renderFolgaPerChips(){
+    document.getElementById("folgaPerChips").innerHTML = PER_OPC.map(function(p){
+      var on = folgaFiltroPer===p[0];
+      return '<button type="button" class="fchip'+(on?' on':'')+'" data-act="folga-per" data-v="'+p[0]+'" aria-pressed="'+(on?'true':'false')+'">'+p[1]+'</button>';
+    }).join("");
   }
 
   // O que o agendamento está fazendo hoje na contagem (tags + detalhe).
@@ -2502,6 +2542,8 @@
     else if(act==="ponto-filtro"){ pontoFiltro = btn.dataset.v; renderPontos(); }
     else if(act==="toggle-ponto"){ togglePonto(id); }
     else if(act==="goto-sec"){ irParaSecao(btn.dataset.sec); }
+    else if(act==="folga-tipo"){ document.getElementById("folgaTipo").value = btn.dataset.v; folgaTocado = true; folgaFormMudou(); }
+    else if(act==="folga-per"){ folgaFiltroPer = btn.dataset.v; renderFolgas(); }
     else if(act==="aniv-time"){ anivFiltro = btn.dataset.v; renderAniversarios(); }
     else if(act==="mes-view"){ mesView = btn.dataset.mode==="tabela" ? "tabela" : "blocos"; renderMes(); }
     else if(act==="mes-dia"){ setDimDate(Cal.addDays(dimDate, Number(btn.dataset.d)||0)); }
@@ -2603,7 +2645,6 @@
   document.getElementById("folgasHoje").addEventListener("click", function(){ setFolgasMes(todayISO().slice(0,7)); });
   document.getElementById("folgasMesInput").addEventListener("change", function(e){ setFolgasMes(e.target.value); });
   document.getElementById("folgaFiltroRep").addEventListener("change", function(e){ folgaFiltroRep = e.target.value; renderFolgas(); });
-  document.getElementById("folgaFiltroPer").addEventListener("change", function(e){ folgaFiltroPer = e.target.value; renderFolgas(); });
 
   document.getElementById("pontoCategoria").addEventListener("change", function(){
     renderPontoRepsChecklist(editing.ponto ? getCheckedPontoReps() : []);
