@@ -2175,20 +2175,21 @@
     }).join("");
   }
   // Um dia do mês: número, total grande, uma bolinha por área com a contagem e o que mexeu na escala.
+  // Um dia do mês: a data numa faixa própria no topo; o total de pessoas trabalhando com o rótulo logo abaixo;
+  // cada área com a sigla e o número (duas por linha); e, no rodapé, quem está de férias ou licença.
   function celulaDia(cd, ctx){
     var iso = cd.iso, fds = ehFimDeSemana(iso), dl = cd.total - cd.base;
     var areas = areasDoDia(cd).filter(function(a){ return a.cad>0; }).map(function(a){
       var tip = areaNome(a.key)+": "+a.total+" de "+a.cad+(a.total!==a.base ? " (pela escala "+a.base+")" : "");
-      return '<span class="cd-dot '+areaCls(a.key)+'" title="'+esc(tip)+'"><i></i>'+a.total+'</span>';
+      return '<span class="cd-area '+areaCls(a.key)+'" title="'+esc(tip)+'"><small>'+AREA_MINI[a.key]+'</small><b>'+a.total+'</b></span>';
     }).join("");
-    var marca = dl ? '<small class="'+(dl<0?'neg':'pos')+'" title="'+esc(dl<0 ? "Folga extra ou troca a menos que a escala" : "Troca: trabalha em dia de folga")+'">'+(dl<0?'−':'+')+Math.abs(dl)+'</small>' : "";
-    var fora = cd.ausentes.length ? '<span class="cd-fora">'+cd.ausentes.length+' fora</span>' : "";
-    var dica = resumoDia(cd);
-    return '<button type="button" class="cal-day'+(fds?' fds':'')+(iso===ctx.hoje?' hoje':'')+(iso===ctx.sel?' sel':'')+'" data-act="dim-dia" data-iso="'+iso+'" data-key="cal:'+iso+'" aria-pressed="'+(iso===ctx.sel?'true':'false')+'" title="'+esc(dica)+'" aria-label="'+esc(diaLongo(iso)+": "+cd.total+" pessoas trabalhando")+'">' +
+    var marca = dl ? '<span class="cd-marca '+(dl<0?'neg':'pos')+'" title="'+esc(dl<0 ? "Folga extra ou troca a menos que a escala" : "Troca: trabalha em dia de folga")+'">'+(dl<0?'−':'+')+Math.abs(dl)+'</span>' : "";
+    var ausentes = cd.ausentes.length ? '<span class="cd-fora" title="'+esc(cd.ausentes.map(function(x){ return x.r.nome; }).join(", "))+'">'+cd.ausentes.length+' de férias ou licença</span>' : "";
+    return '<button type="button" class="cal-day'+(fds?' fds':'')+(iso===ctx.hoje?' hoje':'')+(iso===ctx.sel?' sel':'')+'" data-act="dim-dia" data-iso="'+iso+'" data-key="cal:'+iso+'" aria-pressed="'+(iso===ctx.sel?'true':'false')+'" title="'+esc(resumoDia(cd))+'" aria-label="'+esc(diaLongo(iso)+": "+cd.total+" pessoas trabalhando")+'">' +
       '<span class="cd-top"><b class="cd-n">'+iso.slice(8)+'</b></span>' +
-      '<span class="cd-tot"><b>'+cd.total+'</b><small class="cd-unid">trabalhando</small>'+marca+'</span>' +
+      '<span class="cd-tot"><b>'+cd.total+'</b>'+marca+'<small class="cd-unid">pessoas trabalhando</small></span>' +
       '<span class="cd-areas">'+areas+'</span>' +
-      (fora ? '<span class="cd-foot">'+fora+'</span>' : '') +
+      (ausentes ? '<span class="cd-foot">'+ausentes+'</span>' : '') +
     '</button>';
   }
   // Grade do mês (domingo a sábado).
