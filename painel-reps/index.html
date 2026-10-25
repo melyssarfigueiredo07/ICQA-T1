@@ -280,6 +280,11 @@
           <button class="seg-btn on" data-act="dim-view" data-mode="cards" aria-pressed="true">Cards</button>
           <button class="seg-btn" data-act="dim-view" data-mode="matriz" aria-pressed="false">Matriz</button>
         </div>
+        <div class="seg" role="group" aria-label="Área">
+          <button class="seg-btn on" data-act="dim-area" data-area="todas" aria-pressed="true">Todas</button>
+          <button class="seg-btn" data-act="dim-area" data-area="inventario" aria-pressed="false">Inventário</button>
+          <button class="seg-btn" data-act="dim-area" data-area="qualidade" aria-pressed="false">Qualidade</button>
+        </div>
         <button class="btn" data-act="fill-skills" title="Marca cada rep nas tarefas que ele sabe realizar (respeitando área e PS)">Preencher pelas habilidades</button>
         <button class="btn" id="dimUndoBtn" data-act="undo" disabled>↩ Desfazer</button>
         <button class="btn" id="dimClearAll" data-act="clear-all">Limpar todas as marcações</button>
@@ -493,6 +498,19 @@
         </div>
         <div class="view-meta" id="anivMeta"></div>
       </div>
+
+      <section class="panel anual-panel" aria-label="Quadro anual de aniversários">
+        <div class="anual-head">
+          <div class="panel-title">Quadro anual</div>
+          <div class="anual-nav">
+            <button class="btn cal-icon" id="anoPrev" aria-label="Ano anterior">‹</button>
+            <div class="anual-ano" id="anoTitulo">—</div>
+            <button class="btn cal-icon" id="anoNext" aria-label="Próximo ano">›</button>
+          </div>
+        </div>
+        <div class="anual-total" id="anoTotal"></div>
+        <div class="anual-grid" id="anualGrid"></div>
+      </section>
 
       <div class="form-panel">
         <div class="mes-head">

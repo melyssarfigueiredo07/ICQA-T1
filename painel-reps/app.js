@@ -42,6 +42,7 @@
   var ESC_COR = {A:"var(--rust)", B:"var(--escB)", C:"var(--escC)", D:"var(--escD)"};
   var dimDate = null, dimFollow = true, dimFiltro = "todos", lastToday = null;
   var dimView = "cards", dimUndo = null, dimMsg = "";
+  var dimArea = "todas"; // "todas" | "inventario" | "qualidade": quais áreas aparecem no Dimensionamento
   var CATEGORIA_LABEL = {inventario:"Inventário", qualidade:"Qualidade", ps_operacoes:"PS Operações", ps_icqa:"PS ICQA"};
   var CLASSE_LABEL = {rep:"Rep", ps:"PS"};
   var CLASSE_TAG = {rep:"tag-teal", ps:"tag-amber"};
@@ -1170,14 +1171,14 @@
   function clearAll(){
     mutarMarcacoes("Todas as marcações limpas", function(){ state.tasks.forEach(function(t){ t.repIds = []; }); });
   }
-  function fillBySkills(){
+  function fillBySkills(area){
     var n = 0, ignoradas = 0;
-    mutarMarcacoes("Preenchido pelas habilidades", function(){
+    mutarMarcacoes(area ? "Preenchido pelas habilidades ("+CATEGORIA_LABEL[area]+")" : "Preenchido pelas habilidades", function(){
       state.reps.forEach(function(r){
         if(repEhPS(r)) return;
         (r.skills||[]).forEach(function(tid){
           var t = state.tasks.find(function(x){ return x.id===tid; });
-          if(!t) return;
+          if(!t || (area && tarefaArea(t)!==area)) return;
           if(!repElegivel(t, r)){ ignoradas++; return; }
           t.repIds = t.repIds || [];
           if(t.repIds.indexOf(r.id)<0){ t.repIds.push(r.id); n++; }
@@ -1185,6 +1186,15 @@
       });
       return n ? "Preenchido pelas habilidades: "+n+" marcação(ões) adicionada(s)"+(ignoradas?" ("+ignoradas+" fora da área ignorada(s))":"")+"." :
         "Nenhuma marcação nova: as habilidades já estão marcadas"+(ignoradas?" ou ficam fora da área":"")+".";
+    });
+  }
+  // Limpa as marcações de todas as tarefas de uma área (volta com "Desfazer").
+  function limparArea(area){
+    var tarefas = state.tasks.filter(function(t){ return tarefaArea(t)===area && (t.repIds||[]).length; });
+    if(!tarefas.length){ dimMsg = "Nada a limpar em "+CATEGORIA_LABEL[area]+"."; renderTasks(); return; }
+    mutarMarcacoes("Limpo: "+CATEGORIA_LABEL[area], function(){
+      tarefas.forEach(function(t){ t.repIds = []; });
+      return "";
     });
   }
   function undoMarcacoes(){
@@ -1225,14 +1235,15 @@
       wrap.innerHTML = '<div class="hint">Nenhum rep nesse filtro.</div>';
       return;
     }
-    wrap.innerHTML = secoesDimensionamento().map(function(s){ return matrizSecaoHTML(s, reps); }).join("") +
+    var secoes = secoesDimensionamento();
+    wrap.innerHTML = (secoes.length ? secoes.map(function(s){ return matrizSecaoHTML(s, reps); }).join("") : '<div class="hint">Nenhuma tarefa nesta área ainda.</div>') +
       '<div class="hint" style="margin-top:8px;">Clique numa célula para marcar/desmarcar · no nome da tarefa para marcar todos os elegíveis · no nome do rep para marcar as tarefas dele nesta área. “—” = fora da área; PS não aparecem.</div>';
   }
   function matrizSecaoHTML(s, reps){
     var linhas = reps.filter(function(r){ return s.tarefas.some(function(t){ return repElegivel(t, r); }); });
     var disponiveis = linhas.filter(function(r){ return effStatus(r, dimDate)==="ativo"; }).length;
     var cabecalho = '<section class="dim-sec '+areaCls(s.key)+'"><header class="dim-sec-head"><span class="ab-dot"></span><b>'+esc(s.nome)+'</b><span class="dim-sec-n">'+
-      plural(s.tarefas.length, "tarefa", "tarefas")+' · '+plural(linhas.length, "rep", "reps")+' · '+disponiveis+' disponíveis na data</span></header>';
+      plural(s.tarefas.length, "tarefa", "tarefas")+' · '+plural(linhas.length, "rep", "reps")+' · '+disponiveis+' disponíveis na data</span>'+acoesAreaHTML(s.key)+'</header>';
     if(!linhas.length) return cabecalho + '<div class="hint">Nenhum rep elegível para estas tarefas.</div></section>';
     var head = '<tr><th class="mx-corner">Rep \\ Tarefa</th>' + s.tarefas.map(function(t){
       var ids = t.repIds||[], fixa = areaFixa(t.nome);
@@ -1271,6 +1282,11 @@
   function renderDimToolbar(){
     Array.prototype.forEach.call(document.querySelectorAll("[data-act='dim-view']"), function(b){
       var on = b.dataset.mode===dimView;
+      b.classList.toggle("on", on);
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-act='dim-area']"), function(b){
+      var on = b.dataset.area===dimArea;
       b.classList.toggle("on", on);
       b.setAttribute("aria-pressed", on ? "true" : "false");
     });
@@ -1319,8 +1335,8 @@
       var st = foraArea ? "fora" : effStatus(r, dimDate);
       var nota = foraArea ? repMotivoFora(r) : [r.escala ? r.escala : "", statusNote(r, dimDate)].filter(Boolean).join(" · ");
       var exr = foraArea ? null : extraDe(r, dimDate);
-      return '<label class="rep-box st-'+st+(isResp?' is-resp':'')+(exr ? (exr.tipo==="troca-trabalho" ? ' ex-trab' : ' ex-folga') : '')+'"><input type="checkbox" class="task-rep-toggle" data-task="'+t.id+'" data-rep="'+r.id+'" '+(isResp?"checked":"")+'>'+
-        esc(r.nome)+(nota?' <small>'+esc(nota)+'</small>':'')+'</label>';
+      return '<label class="rep-box'+(r.escala ? ' esc-'+String(r.escala).toLowerCase() : '')+' st-'+st+(isResp?' is-resp':'')+(exr ? (exr.tipo==="troca-trabalho" ? ' ex-trab' : ' ex-folga') : '')+'"><input type="checkbox" class="task-rep-toggle" data-task="'+t.id+'" data-rep="'+r.id+'" '+(isResp?"checked":"")+'>'+
+        '<i class="rb-dot"></i>'+esc(r.nome)+(nota?' <small>'+esc(nota)+'</small>':'')+'</label>';
     }).join("") : '<span class="hint">Nenhum rep nesse filtro'+(fixa?' (só reps de '+CATEGORIA_LABEL[fixa]+', sem PS)':'')+'.</span>') : '<span class="hint">Cadastre reps na aba Equipe.</span>';
     return '<div class="card" data-key="task:'+esc(t.id)+'">' +
       '<div class="card-head">' +
@@ -1344,9 +1360,14 @@
     var ordem = ["inventario","qualidade"], grupos = {};
     state.tasks.forEach(function(t){ var k = tarefaArea(t); (grupos[k] = grupos[k] || []).push(t); });
     var chaves = ordem.concat(Object.keys(grupos).filter(function(k){ return ordem.indexOf(k)<0; }));
-    return chaves.filter(function(k){ return grupos[k]; }).map(function(k){
+    return chaves.filter(function(k){ return grupos[k] && (dimArea==="todas" || dimArea===k); }).map(function(k){
       return {key:k, nome:CATEGORIA_LABEL[k] || "Outras", tarefas:grupos[k]};
     });
+  }
+  // Botões de uma área: preencher pelas habilidades só dela, ou limpar só as marcações dela.
+  function acoesAreaHTML(area){
+    return '<span class="dim-sec-acoes"><button class="btn" data-act="fill-skills-area" data-area="'+area+'" title="Marca os reps nas tarefas de '+esc(CATEGORIA_LABEL[area])+' que eles sabem realizar">Preencher habilidades</button>'+
+      '<button class="btn" data-act="clear-area" data-area="'+area+'" title="Limpa as marcações de todas as tarefas de '+esc(CATEGORIA_LABEL[area])+'">Limpar área</button></span>';
   }
   // Seção de uma área no modo Cards: cabeçalho com contagens e os cartões da área.
   function secaoTarefasHTML(s){
@@ -1357,7 +1378,7 @@
     var disp = elegiveis.filter(function(r){ return effStatus(r, dimDate)==="ativo"; }).length;
     return '<section class="dim-sec '+areaCls(s.key)+'">' +
       '<header class="dim-sec-head"><span class="ab-dot"></span><b>'+esc(s.nome)+'</b><span class="dim-sec-n">'+plural(s.tarefas.length, "tarefa", "tarefas")+' · '+disp+' de '+plural(elegiveis.length, "rep", "reps")+' disponíveis na data</span>'+
-      (avisos ? '<span class="dim-sec-avisos">'+avisos+'</span>' : '')+'</header>' +
+      (avisos ? '<span class="dim-sec-avisos">'+avisos+'</span>' : '')+acoesAreaHTML(s.key)+'</header>' +
       '<div class="card-grid">'+s.tarefas.map(tarefaCardHTML).join("")+'</div>' +
     '</section>';
   }
@@ -1383,7 +1404,8 @@
     matriz.style.display = dimView==="matriz" ? "block" : "none";
     if(dimView==="matriz"){ renderMatriz(); grid.innerHTML = ""; renderResumo(); return; }
     matriz.innerHTML = "";
-    grid.innerHTML = secoesDimensionamento().map(secaoTarefasHTML).join("");
+    var secoes = secoesDimensionamento();
+    grid.innerHTML = secoes.length ? secoes.map(secaoTarefasHTML).join("") : '<div class="hint">Nenhuma tarefa nesta área ainda.</div>';
 
     renderResumo();
   }
@@ -2392,7 +2414,34 @@
   // ---------- render all ----------
   // ---------- Aniversários: um calendário só, com os reps de todos os times ----------
   // Lê direto de root.times (o time ativo já está lá), então o painel mostra os dois times ao mesmo tempo.
-  var anivMes = "", anivFiltro = "todos";
+  var anivMes = "", anivFiltro = "todos", anivAno = 0;
+  // Quadro anual: 12 meses com a lista de aniversariantes de cada um (os dois times), pelo ano escolhido.
+  function renderAnual(){
+    var hoje = todayISO(), grid = document.getElementById("anualGrid");
+    if(!anivAno) anivAno = Number(hoje.slice(0,4));
+    document.getElementById("anoTitulo").textContent = anivAno;
+    var total = 0, semData = 0, meses = [];
+    for(var m=1; m<=12; m++){
+      var ym = anivAno+"-"+String(m).padStart(2,"0"), dados = anivNoMes(ym);
+      total += dados.itens.length; semData = dados.sem;
+      meses.push({ym:ym, itens:dados.itens.slice().sort(function(a,b){ return a.dia-b.dia || (normNome(a.r.nome)<normNome(b.r.nome) ? -1 : 1); })});
+    }
+    document.getElementById("anoTotal").innerHTML = total+" aniversariante"+(total===1 ? "" : "s")+" em "+anivAno+
+      (semData ? " · "+semData+" sem data cadastrada" : "")+
+      ' <span class="anual-legenda"><i class="am-time t-vinicius"></i>Time Vinicius <i class="am-time t-harley"></i>Time Harley</span>';
+    var atual = hoje.slice(0,7);
+    grid.innerHTML = meses.map(function(x){
+      var nome = mesLabel(x.ym).split(" de ")[0];
+      var lista = x.itens.slice(0,6).map(function(i){
+        return '<li><span class="am-dia">'+String(i.dia).padStart(2,"0")+'</span><span class="am-nome" title="'+esc(i.r.nome)+'">'+esc(i.r.nome)+'</span><i class="am-time t-'+i.time.key+'" title="'+esc(i.time.nome)+'"></i></li>';
+      }).join("");
+      var mais = x.itens.length>6 ? '<li class="am-mais">+'+(x.itens.length-6)+' mais</li>' : "";
+      return '<button type="button" class="anual-mes'+(x.ym===atual ? ' atual' : '')+(x.itens.length ? '' : ' vazio')+'" data-act="anual-mes" data-ym="'+x.ym+'" title="Abrir '+esc(nome)+' no calendário de aniversários" aria-label="'+esc(nome+": "+plural(x.itens.length, "aniversariante", "aniversariantes"))+'">' +
+        '<span class="am-head"><b>'+esc(nome)+'</b><span class="am-n">'+x.itens.length+'</span></span>' +
+        (x.itens.length ? '<ul class="am-lista">'+lista+mais+'</ul>' : '<span class="am-vazio">Sem aniversários</span>') +
+      '</button>';
+    }).join("");
+  }
   function anivNoMes(ym){
     var nd = diasDoMes(ym), dias = [], lista = [], ano = Number(ym.slice(0,4));
     TIMES.forEach(function(t){
@@ -2447,6 +2496,8 @@
   }
   function setAnivMes(ym){ if(/^\d{4}-\d{2}$/.test(ym)){ anivMes = ym; renderAniversarios(); } }
   document.getElementById("anivPrev").addEventListener("click", function(){ setAnivMes(addMeses(anivMes || todayISO().slice(0,7), -1)); });
+  document.getElementById("anoPrev").addEventListener("click", function(){ anivAno = (anivAno || Number(todayISO().slice(0,4))) - 1; renderAnual(); });
+  document.getElementById("anoNext").addEventListener("click", function(){ anivAno = (anivAno || Number(todayISO().slice(0,4))) + 1; renderAnual(); });
   document.getElementById("anivNext").addEventListener("click", function(){ setAnivMes(addMeses(anivMes || todayISO().slice(0,7), 1)); });
   document.getElementById("anivHoje").addEventListener("click", function(){ setAnivMes(todayISO().slice(0,7)); });
   document.getElementById("anivMesInput").addEventListener("change", function(e){ setAnivMes(e.target.value); });
@@ -2457,6 +2508,7 @@
     renderTasks();
     renderFolgas();
     renderAniversarios();
+    renderAnual();
     renderPontos();
     renderLost();
     renderNavBadges();
@@ -2509,6 +2561,10 @@
     else if(act==="goto-view"){ if(viewsDoTime().some(function(v){ return v.key===btn.dataset.view; })) showView(btn.dataset.view); }
     else if(act==="dim-view"){ dimView = btn.dataset.mode==="matriz" ? "matriz" : "cards"; renderTasks(); }
     else if(act==="fill-skills"){ fillBySkills(); }
+    else if(act==="fill-skills-area"){ fillBySkills(btn.dataset.area); }
+    else if(act==="clear-area"){ limparArea(btn.dataset.area); }
+    else if(act==="dim-area"){ dimArea = btn.dataset.area; renderTasks(); }
+    else if(act==="anual-mes"){ setAnivMes(btn.dataset.ym); document.getElementById("anivGrid").scrollIntoView({block:"start", behavior: reduzMov() ? "auto" : "smooth"}); }
     else if(act==="undo"){ undoMarcacoes(); }
     else if(act==="clear-all"){ pendingAction(btn, clearAll); }
     else if(act==="task-fill"){ t = state.tasks.find(function(x){return x.id===btn.dataset.id;}); if(t) fillTask(t, btn.dataset.mode); }
