@@ -2569,6 +2569,18 @@
     if(foco){ var alvo = document.querySelector(foco); if(alvo && alvo.focus) alvo.focus({preventScroll:true}); }
   }
 
+  // Quadros da lista de agendamentos: um por tipo, nesta ordem. Registro sem tipo conhecido cai em banco de horas.
+  var AGENDA_TIPOS = ["banco","troca","ferias","treinamento"];
+  var AGENDA_DICA = {banco:"folga num dia de trabalho", troca:"trabalha numa folga, folga num dia de trabalho", ferias:"sai da contagem pelo período", treinamento:"não conta como trabalhando no período"};
+  var AGENDA_VAZIO = {banco:"Nenhum banco de horas neste filtro.", troca:"Nenhuma troca de folga neste filtro.", ferias:"Nenhuma férias neste filtro.", treinamento:"Nenhum treinamento neste filtro."};
+  function tipoDoAgendamento(f){ return f && TIPO_ROTULO[f.tipo] ? f.tipo : "banco"; }
+  function agendaQuadroHTML(tipo, lista, linha){
+    var corpo = lista.length ? lista.map(function(f){ return linha(f); }).join("") : '<tr><td colspan="5"><span class="hint">'+AGENDA_VAZIO[tipo]+'</span></td></tr>';
+    return '<section class="agenda-quadro" data-tipo="'+tipo+'">' +
+      '<header class="agenda-quadro-head"><span class="tag '+TIPO_TAG[tipo]+'">'+esc(TIPO_ROTULO[tipo])+'</span><b class="num">'+lista.length+'</b><span class="hint">'+esc(AGENDA_DICA[tipo])+'</span></header>' +
+      '<table><thead><tr><th>Pessoa</th><th>Datas</th><th>Efeito na contagem</th><th>Observação</th><th></th></tr></thead><tbody>'+corpo+'</tbody></table>' +
+    '</section>';
+  }
   function renderFolgas(){
     var hoje = todayISO();
     if(!/^\d{4}-\d{2}$/.test(folgasMes)) folgasMes = hoje.slice(0,7);
@@ -2588,20 +2600,13 @@
       if(folgaFiltroPer==="futuras") return ds[ds.length-1]>=hoje;
       return true;
     }).sort(function(a,b){ return folgaIni(a).localeCompare(folgaIni(b)) || repName(a.repId).localeCompare(repName(b.repId), "pt-BR"); });
-    var body = document.getElementById("folgasLista"), vazio = document.getElementById("folgasEmpty");
-    if(!todos.length){
-      body.innerHTML = "";
-      vazio.style.display = "block";
-      vazio.innerHTML = (state.folgas||[]).length ? '<b>Nenhum agendamento nesse filtro</b>Mude o mês ou o filtro acima para ver os demais.' : '<b>Nenhuma folga agendada</b>Use o formulário acima para agendar uma folga de banco de horas ou uma troca de folga.';
-    }else{
-      vazio.style.display = "none";
-      body.innerHTML = todos.map(function(f){
-       try{
+    // ----- agendamentos em quadros, um por tipo (o mesmo filtro de pessoa e período vale para todos) -----
+    var linha = function(f){
+      try{
         var r = repPorId(f.repId), ef = folgaEfeito(f), passado = folgaFim(f) && folgaFim(f)<hoje;
         var nome = r ? '<span class="esc-dot" style="background:'+(ESC_COR[r.escala]||"var(--text-faint)")+'"></span>'+esc(r.nome)+(modoUnificado ? '<small class="hint" style="display:block;">'+esc(timeDef(timeDoRep(r.id)).nome)+'</small>' : '') : '<span class="hint">(rep removido)</span>';
         return '<tr class="'+(passado?'fd-passado':'')+'" data-key="folga:'+esc(f.id)+'">' +
           '<td>'+nome+'</td>' +
-          '<td><span class="tag '+(TIPO_TAG[f.tipo]||'tag-teal')+'">'+esc(TIPO_ROTULO[f.tipo]||'Banco de horas')+'</span></td>' +
           '<td class="num">'+folgaDatasTexto(f)+'</td>' +
           '<td>'+ef.tags.map(function(t){return '<span class="tag '+t.cls+'">'+esc(t.txt)+'</span>';}).join(" ")+(ef.det.length?'<div class="hint">'+esc(ef.det.join(" · "))+'</div>':'')+'</td>' +
           '<td>'+esc(f.obs||"")+'</td>' +
@@ -2612,10 +2617,12 @@
         '</tr>';
        }catch(e){
         // um registro com dados estranhos não pode apagar a lista inteira
-        return '<tr><td colspan="5"><span class="hint">Registro com dados inválidos.</span></td><td class="row-actions"><button class="btn-ghost" data-act="del-folga" data-id="'+esc(f && f.id)+'">Excluir</button></td></tr>';
+        return '<tr><td colspan="4"><span class="hint">Registro com dados inválidos.</span></td><td class="row-actions"><button class="btn-ghost" data-act="del-folga" data-id="'+esc(f && f.id)+'">Excluir</button></td></tr>';
        }
-      }).join("");
-    }
+    };
+    document.getElementById("folgasLista").innerHTML = AGENDA_TIPOS.map(function(tipo){
+      return agendaQuadroHTML(tipo, todos.filter(function(f){ return tipoDoAgendamento(f)===tipo; }), linha);
+    }).join("");
     folgaPreview();
   }
 

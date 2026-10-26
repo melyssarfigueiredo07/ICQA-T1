@@ -1080,3 +1080,11 @@ body.tela-calendario{background:#EFF1F4;}
 .dim-time-bloco{margin:0 0 30px;}
 .dim-time-head{display:flex; align-items:baseline; gap:10px; margin:0 0 14px; padding:0 0 10px; border-bottom:2px solid var(--text);}
 .dim-time-head b{font-size:16px; letter-spacing:-0.01em; color:var(--text);}
+
+/* Agendamentos em quadros, um por tipo (banco de horas, troca de folga, férias, treinamento) */
+.agenda-quadros{display:grid; gap:14px; margin-top:4px;}
+.agenda-quadro{border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); overflow:hidden;}
+.agenda-quadro-head{display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:10px 14px; border-bottom:1px solid var(--line-soft); background:var(--panel-2);}
+.agenda-quadro-head b{font-size:13px; color:var(--text);}
+.agenda-quadro-head .hint{margin:0 0 0 auto; font-size:11.5px;}
+.agenda-quadro table{margin:0;}
