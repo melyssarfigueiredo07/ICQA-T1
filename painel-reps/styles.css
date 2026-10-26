@@ -577,7 +577,7 @@ tr.flash td{animation:flash-bg 1.7s ease-out;}
 .search input{width:100%; padding-left:34px; background:var(--panel) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238B92A0' stroke-width='2.2' stroke-linecap='round'><circle cx='11' cy='11' r='7'/><path d='m20 20-3.5-3.5'/></svg>") no-repeat 11px center; background-size:15px;}
 .fchips{display:flex; flex-wrap:wrap; gap:6px;}
 /* tipo de agendamento: três cartões em vez de um seletor */
-.tipo-seg{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px;}
+.tipo-seg{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px;}
 .tipo-btn{display:flex; flex-direction:column; align-items:flex-start; gap:3px; padding:10px 12px; text-align:left; font:inherit; background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); color:var(--text-dim); cursor:pointer; transition:border-color .15s ease, background-color .15s ease, box-shadow .15s ease;}
 .tipo-btn b{font-size:13px; color:var(--text); font-weight:600;}
 .tipo-btn span{font-size:11.5px; line-height:1.35;}
@@ -589,6 +589,7 @@ tr.flash td{animation:flash-bg 1.7s ease-out;}
 .transfer-row select{flex:1 1 140px; min-width:0;}
 .transfer-box .hint{margin-top:6px; font-size:11.5px;}
 .tipo-btn:focus-visible{outline:2px solid var(--teal); outline-offset:2px;}
+@media (max-width:900px){ .tipo-seg{grid-template-columns:repeat(2,minmax(0,1fr));} }
 @media (max-width:640px){ .tipo-seg{grid-template-columns:1fr;} }
 .fchip{font:inherit; font-size:12.5px; font-weight:600; padding:5px 12px; border-radius:999px; border:1px solid var(--line); background:var(--panel); color:var(--text-dim); cursor:pointer; white-space:nowrap; transition:background-color .15s ease, border-color .15s ease, color .15s ease, transform .12s ease;}
 .fchip b{margin-left:6px; font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:600; color:var(--text-faint);}
@@ -1059,3 +1060,14 @@ body.tela-calendario{background:#EFF1F4;}
 :where(#sec-dia) tbody tr:last-child td{border-bottom:1px solid var(--line-soft);}
 #sec-dia .tag{letter-spacing:normal;}
 #sec-dia .mes-head{padding-bottom:0; border-bottom:0;}
+
+/* Treinamento (agendamento): a pessoa não conta como trabalhando no período. A régua da escala continua visível. */
+.tag-treino{background:#ECEDFB; color:#2E3186; border-color:#C5C8F3;}
+.lg-dot.st-treinamento{background:repeating-linear-gradient(135deg,#F6F6FD 0 4px,#ECEDFB 4px 8px); border:1px dashed #3B3F9E;}
+.who.st-treinamento{background:#ECEDFB; border-color:#C5C8F3; color:#2E3186;}
+.nm.st-treinamento{color:#2E3186; font-weight:600;}
+.card.rep-card.st-treinamento, .rep-box.st-treinamento{background:#FFFFFF; border-top-style:dashed; border-right-style:dashed; border-bottom-style:dashed; border-top-color:#3B3F9E; border-right-color:#3B3F9E; border-bottom-color:#3B3F9E;}
+.rep-box.st-treinamento{color:#2E3186;}
+.rep-box.st-treinamento .rb-dot{background:#3B3F9E;}
+.mx-row.st-treinamento .mx-rowbtn{color:#2E3186;}
+.mx-btn.on.st-treinamento{background:#FFFFFF; color:#2E3186;}

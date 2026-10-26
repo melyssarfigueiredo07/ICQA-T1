@@ -38,8 +38,8 @@
   ];
 
   var Cal = window.EscalaCal;
-  var STATUS_LABEL = {ativo:"Ativo", folga:"Folga", ferias:"Férias", licenca:"Licença", afastado:"Afastado"};
-  var STATUS_TAG = {ativo:"tag-green", folga:"tag-folga", ferias:"tag-ferias", licenca:"tag-licenca", afastado:"tag-rust"};
+  var STATUS_LABEL = {ativo:"Ativo", folga:"Folga", ferias:"Férias", licenca:"Licença", afastado:"Afastado", treinamento:"Treinamento"};
+  var STATUS_TAG = {ativo:"tag-green", folga:"tag-folga", ferias:"tag-ferias", licenca:"tag-licenca", afastado:"tag-rust", treinamento:"tag-treino"};
   var ESC_COR = {A:"var(--rust)", B:"var(--escB)", C:"var(--escC)", D:"var(--escD)"};
   var dimDate = null, dimFollow = true, dimFiltro = "todos", lastToday = null;
   var dimView = "cards", dimUndo = null, dimMsg = "";
@@ -150,6 +150,7 @@
       if(iso>=r.afastInicio && iso<=fim) return st;
     }
     if(feriasDe(r, iso)) return "ferias"; // férias agendadas no Calendário
+    if(treinoDe(r, iso)) return "treinamento"; // treinamento agendado: a pessoa não conta como trabalhando
     if(ESCALAS.indexOf(r.escala)>-1){
       var marcado = Cal.isMarcado(r.escala, iso);
       var folga = modoEscalaDe(r)==="trabalho" ? !marcado : marcado;
@@ -162,6 +163,7 @@
   //               { id, repId, tipo:"troca", dataFolga, dataTrabalho, obs } → trabalha em dataTrabalho (era folga)
   //                                                                            e folga em dataFolga (era dia de trabalho)
   //               { id, repId, tipo:"ferias", data, dias, obs } → férias de `data` por `dias` dias (fim = data + dias − 1)
+  //               { id, repId, tipo:"treinamento", data, dataFim?, obs } → fora da contagem de trabalho em [data, dataFim]
   // O efeito é sempre calculado sobre a situação pela escala (nunca soma/subtrai "no escuro"): folga extra só
   // vale em dia de trabalho e a troca só vale em dia de folga; fora disso o agendamento fica "sem efeito".
   var folgaIgnorar = ""; // id ignorado ao simular (edição/prévia no formulário)
@@ -177,6 +179,17 @@
       if(!f || f.tipo!=="ferias" || f.repId!==r.id || f.id===folgaIgnorar) continue;
       var fim = feriasFim(f);
       if(fim && iso>=f.data && iso<=fim) return f;
+    }
+    return null;
+  }
+  // Treinamento agendado que cobre o dia (ou null). Vale como as férias: o dia não conta como trabalhando.
+  function treinoDe(r, iso){
+    var L = state.folgas || [];
+    for(var i=0;i<L.length;i++){
+      var f = L[i];
+      if(!f || f.tipo!=="treinamento" || f.repId!==r.id || f.id===folgaIgnorar) continue;
+      var fim = f.dataFim || f.data;
+      if(isoOk(f.data) && iso>=f.data && iso<=fim) return f;
     }
     return null;
   }
@@ -218,6 +231,7 @@
     var fim = "";
     if(st==="ferias"){ var fa = feriasDe(r, iso); fim = fa ? feriasFim(fa) : afastFim(r); }
     else if(st==="licenca"){ fim = afastFim(r); }
+    else if(st==="treinamento"){ var tr = treinoDe(r, iso); fim = tr ? (tr.dataFim||"") : ""; }
     return STATUS_LABEL[st] + (fim ? " até "+fmtDate(fim) : "");
   }
   // Rótulo curto da situação (tags): troca "Folga" por "Folga extra" / "Trabalha (troca)" quando for o caso.
@@ -785,7 +799,7 @@
       el.innerHTML = '<div class="tc-head"><div><div class="tc-name">'+esc(nome)+'</div><div class="tc-sub">Nenhuma pessoa cadastrada ainda · '+esc(dia)+'</div></div></div>';
       return;
     }
-    var c = {ativo:0, folga:0, ferias:0, licenca:0, afastado:0};
+    var c = {ativo:0, folga:0, ferias:0, licenca:0, afastado:0, treinamento:0};
     reps.forEach(function(r){ c[effStatus(r, hoje)]++; });
     var cd = contagemDia(hoje), areas = areasDoDia(cd), nPS = reps.filter(repEhPS).length;
     var extras = cd.banco.length + cd.trocaFolga.length, trocas = cd.trocaTrab.length;
@@ -906,7 +920,7 @@
   function repCardHTML(r){
     var escCls = ESCALAS.indexOf(r.escala)>-1 ? " esc-"+r.escala.toLowerCase() : "";
     var eff = effStatus(r, todayISO());
-    var stCls = (eff==="ferias"||eff==="licenca"||eff==="folga") ? " st-"+eff : "";
+    var stCls = (eff==="ferias"||eff==="licenca"||eff==="folga"||eff==="treinamento") ? " st-"+eff : "";
     var afastado = (r.status==="ferias"||r.status==="licenca") ? periodoTexto(r) : "";
     var rows = qrow("Escala", r.escala) +
       qrow("Admissão", r.admissao ? fmtDate(r.admissao) : "", "num") +
@@ -1144,7 +1158,7 @@
     if(!calAtiva()){ calSujo = true; return; }
 
     // contadores do dia com TODOS (reps e PS); os presentes por área ficam nos blocos por área (renderMes)
-    var c = {ativo:0, folga:0, ferias:0, licenca:0, afastado:0};
+    var c = {ativo:0, folga:0, ferias:0, licenca:0, afastado:0, treinamento:0};
     state.reps.forEach(function(r){ c[effStatus(r, dimDate)]++; });
     var extraFolga = cdDia.banco.length + cdDia.trocaFolga.length;
     document.getElementById("dimStrip").innerHTML =
@@ -1910,8 +1924,8 @@
     if(f.tipo==="ferias") return [f.data, feriasFim(f)].filter(isoOk).sort();
     return (f.tipo==="troca" ? [f.dataFolga, f.dataTrabalho] : [f.data, f.dataFim||f.data]).filter(isoOk).sort();
   }
-  var TIPO_ROTULO = {banco:"Banco de horas", troca:"Troca de folga", ferias:"Férias"};
-  var TIPO_TAG = {banco:"tag-teal", troca:"tag-amber", ferias:"tag-ferias"};
+  var TIPO_ROTULO = {banco:"Banco de horas", troca:"Troca de folga", ferias:"Férias", treinamento:"Treinamento"};
+  var TIPO_TAG = {banco:"tag-teal", troca:"tag-amber", ferias:"tag-ferias", treinamento:"tag-treino"};
   function folgaIni(f){ return folgaDatas(f)[0] || ""; }
   function folgaFim(f){ var d = folgaDatas(f); return d[d.length-1] || ""; }
 
@@ -1921,6 +1935,7 @@
     if(base==="folga") return n+" já está de folga em "+diaMes(iso)+" pela escala";
     if(base==="ferias") return n+" está de férias em "+diaMes(iso);
     if(base==="licenca") return n+" está de licença em "+diaMes(iso);
+    if(base==="treinamento") return n+" está em treinamento em "+diaMes(iso);
     if(base==="afastado") return n+" está afastado(a) em "+diaMes(iso);
     return n+" já trabalha em "+diaMes(iso)+" pela escala";
   }
@@ -1929,7 +1944,8 @@
   function folgaLerForm(){
     var g = function(id){ return document.getElementById(id).value; };
     var tipo = g("folgaTipo");
-    return {tipo: (tipo==="troca" || tipo==="ferias") ? tipo : "banco", repId:g("folgaRep"), data:g("folgaData"), dataFim:g("folgaDataFim"),
+    var trei = tipo==="treinamento";
+    return {tipo: (tipo==="troca" || tipo==="ferias" || trei) ? tipo : "banco", repId:g("folgaRep"), data:g(trei ? "folgaTreinoIni" : "folgaData"), dataFim:g(trei ? "folgaTreinoFim" : "folgaDataFim"),
             trabalha:g("folgaTrabalha"), folgaEm:g("folgaFolgaEm"), feriasIni:g("folgaFeriasIni"), feriasDias:g("folgaFeriasDias"), obs:g("folgaObs").trim()};
   }
   // Avalia o agendamento contra a escala de hoje (ignorando o que está sendo editado) e monta a prévia do impacto.
@@ -1993,11 +2009,38 @@
         if(folg) res.linhas.push({cls:"mute", texto:plural(folg, "dia", "dias")+" caem em folga pela escala (viram férias, sem mudar a presença)"});
         if(aus) res.linhas.push({cls:"mute", texto:plural(aus, "dia", "dias")+" já eram férias, licença ou afastamento pelo cadastro"});
         var dentro = (state.folgas||[]).filter(function(f){
-          return f.repId===r.id && f.id!==editing.folga && (f.tipo==="banco" || f.tipo==="troca") && folgaDatas(f).some(function(x){ return x>=d.feriasIni && x<=fimF; });
+          return f.repId===r.id && f.id!==editing.folga && (f.tipo==="banco" || f.tipo==="troca" || f.tipo==="treinamento") && folgaDatas(f).some(function(x){ return x>=d.feriasIni && x<=fimF; });
         }).length;
-        if(dentro) res.linhas.push({cls:"warn", texto:plural(dentro, "agendamento", "agendamentos")+" de banco de horas/troca dentro do período deixa(m) de ter efeito (a pessoa já estará de férias)"});
+        if(dentro) res.linhas.push({cls:"warn", texto:plural(dentro, "agendamento", "agendamentos")+" de banco de horas, troca ou treinamento dentro do período deixa(m) de ter efeito (a pessoa já estará de férias)"});
         res.ok = true;
         res.entry = {tipo:"ferias", repId:r.id, data:d.feriasIni, dias:nDias, obs:d.obs};
+      }else if(d.tipo==="treinamento"){
+        if(!isoOk(d.data)){ res.erro = "Informe o início do treinamento."; res.incompleto = true; return res; }
+        var fimT = isoOk(d.dataFim) ? d.dataFim : d.data;
+        if(fimT < d.data){ res.erro = "A data final não pode ser antes da data inicial."; return res; }
+        var nT = diasEntre(d.data, fimT);
+        if(nT>31){ res.erro = "O treinamento pode ter no máximo 31 dias."; return res; }
+        var efeitoT = 0, folgaT = 0;
+        for(i=0;i<nT;i++){
+          iso = Cal.addDays(d.data, i);
+          var efT = effStatus(r, iso);
+          if(efT==="ativo"){
+            efeitoT++; antes = contagemDia(iso).total;
+            res.linhas.push({iso:iso, cls:"ok", antes:antes, depois:antes-1, rot:"treinamento"});
+          }else if(baseStatus(r, iso)==="folga"){
+            folgaT++;
+            res.linhas.push({iso:iso, cls:"mute", txt:"já é folga pela escala · vira treinamento, sem mudar a contagem"});
+          }else{
+            res.linhas.push({iso:iso, cls:"mute", txt:(efT==="folga" ? "já é folga" : STATUS_LABEL[efT].toLowerCase())+" — sem efeito"});
+          }
+        }
+        if(!efeitoT && !folgaT){ res.erro = "Sem efeito: "+r.nome+" não trabalha em nenhum dia do período."; return res; }
+        var dentroT = (state.folgas||[]).filter(function(f){
+          return f.repId===r.id && f.id!==editing.folga && (f.tipo==="banco" || f.tipo==="troca") && folgaDatas(f).some(function(x){ return x>=d.data && x<=fimT; });
+        }).length;
+        if(dentroT) res.linhas.push({cls:"warn", texto:plural(dentroT, "agendamento", "agendamentos")+" de banco de horas/troca dentro do período deixa(m) de ter efeito (a pessoa já estará em treinamento)"});
+        res.ok = true;
+        res.entry = {tipo:"treinamento", repId:r.id, data:d.data, dataFim: fimT!==d.data ? fimT : "", obs:d.obs};
       }else{
         if(!isoOk(d.trabalha) || !isoOk(d.folgaEm)){ res.erro = "Informe os dois dias da troca."; res.incompleto = true; return res; }
         if(d.trabalha===d.folgaEm){ res.erro = "Os dois dias da troca precisam ser diferentes."; return res; }
@@ -2027,14 +2070,14 @@
       html = mostra.map(function(l){
         if(l.texto!==undefined) return '<div class="fp-line '+l.cls+'">'+esc(l.texto)+'</div>';
         if(l.cls==="ok"){
-          var rot = l.rot==="trabalha" ? "Trabalha" : "Folga";
+          var rot = l.rot==="trabalha" ? "Trabalha" : l.rot==="treinamento" ? "Treinamento" : "Folga";
           return '<div class="fp-line ok"><b>'+fmtDate(l.iso)+'</b> <span>'+esc(diaSemana(l.iso))+'</span> · '+rot+' · pessoas trabalhando: '+l.antes+' → <b>'+l.depois+'</b></div>';
         }
         return '<div class="fp-line mute"><b>'+fmtDate(l.iso)+'</b> <span>'+esc(diaSemana(l.iso))+'</span> · '+esc(l.txt)+'</div>';
       }).join("");
       if(av.linhas.length>max) html += '<div class="fp-line mute">… e mais '+(av.linhas.length-max)+' dia(s)</div>';
     }else if(av.incompleto){
-      html = '<div class="fp-line mute">'+(d.tipo==="banco" ? "Escolha a pessoa e a data para ver quantas pessoas trabalham no dia." : d.tipo==="ferias" ? "Escolha a pessoa, o início e a duração para ver o impacto na contagem." : "Escolha a pessoa e os dois dias para ver o impacto na contagem.")+'</div>';
+      html = '<div class="fp-line mute">'+(d.tipo==="banco" ? "Escolha a pessoa e a data para ver quantas pessoas trabalham no dia." : d.tipo==="treinamento" ? "Escolha a pessoa e o início do treinamento para ver quantas pessoas deixam de trabalhar." : d.tipo==="ferias" ? "Escolha a pessoa, o início e a duração para ver o impacto na contagem." : "Escolha a pessoa e os dois dias para ver o impacto na contagem.")+'</div>';
     }
     // antes de a pessoa mexer no formulário o aviso fica discreto (a data de hoje vem preenchida por padrão)
     if(av.erro && !av.incompleto) html += '<div class="fp-line '+(folgaTocado ? 'bad' : 'mute')+'">'+esc(av.erro)+'</div>';
@@ -2042,7 +2085,7 @@
   }
   function folgaFormMudou(){
     var tipo = document.getElementById("folgaTipo").value;
-    if(tipo!=="troca" && tipo!=="ferias") tipo = "banco";
+    if(tipo!=="troca" && tipo!=="ferias" && tipo!=="treinamento") tipo = "banco";
     document.querySelectorAll("[data-folga]").forEach(function(el){
       el.style.display = el.dataset.folga===tipo ? "" : "none";
     });
@@ -2064,6 +2107,8 @@
     document.getElementById("folgaTipo").value = "banco";
     document.getElementById("folgaData").value = todayISO();
     document.getElementById("folgaDataFim").value = "";
+    document.getElementById("folgaTreinoIni").value = todayISO();
+    document.getElementById("folgaTreinoFim").value = "";
     document.getElementById("folgaTrabalha").value = "";
     document.getElementById("folgaFolgaEm").value = "";
     document.getElementById("folgaFeriasIni").value = "";
@@ -2081,11 +2126,13 @@
     abrirParaEditar("folga");
     editing.folga = f.id;
     document.getElementById("folgaFormTitle").textContent = "Editar agendamento";
-    document.getElementById("folgaTipo").value = (f.tipo==="troca" || f.tipo==="ferias") ? f.tipo : "banco";
+    document.getElementById("folgaTipo").value = (f.tipo==="troca" || f.tipo==="ferias" || f.tipo==="treinamento") ? f.tipo : "banco";
     fillFolgaRepSelect();
     document.getElementById("folgaRep").value = f.repId;
     document.getElementById("folgaData").value = f.tipo==="ferias" ? "" : (f.data || "");
     document.getElementById("folgaDataFim").value = f.dataFim || "";
+    document.getElementById("folgaTreinoIni").value = f.tipo==="treinamento" ? (f.data || "") : "";
+    document.getElementById("folgaTreinoFim").value = f.tipo==="treinamento" ? (f.dataFim || "") : "";
     document.getElementById("folgaFeriasIni").value = f.tipo==="ferias" ? (f.data || "") : "";
     document.getElementById("folgaFeriasDias").value = f.tipo==="ferias" ? (f.dias || "") : "30";
     document.getElementById("folgaTrabalha").value = f.dataTrabalho || "";
@@ -2166,6 +2213,24 @@
       else tags.push({cls:"tag-ferias", txt: tr ? plural(tr, "dia de trabalho", "dias de trabalho")+" em férias" : "só dias de folga"});
       if(fo && tr) det.push("inclui "+plural(fo, "dia", "dias")+" de folga pela escala");
       if(au) det.push("já ausente (férias/licença/afastado) em "+plural(au, "dia", "dias"));
+      return {tags:tags, det:det};
+    }
+    if(f.tipo==="treinamento"){
+      var fimTr = f.dataFim || f.data, nTr = (isoOk(f.data) && isoOk(fimTr)) ? diasEntre(f.data, fimTr) : 0;
+      if(!(nTr>0)) return {tags:[{cls:"tag-rust", txt:"datas inválidas"}], det:[]};
+      var efTr = 0, jaTr = 0, ausTr = 0, antigoIgnTr = folgaIgnorar;
+      folgaIgnorar = f.id; // o que a pessoa seria sem este treinamento
+      try{
+        for(var kTr=0;kTr<nTr && kTr<400;kTr++){
+          var eTr = effStatus(r, Cal.addDays(f.data, kTr));
+          if(eTr==="ativo") efTr++; else if(eTr==="folga") jaTr++; else ausTr++;
+        }
+      }finally{ folgaIgnorar = antigoIgnTr; }
+      if(efTr===nTr) tags.push({cls:"tag-treino", txt:"−1 em "+(nTr===1 ? "1 dia" : nTr+" dias")});
+      else if(efTr===0) tags.push({cls:"tag-rust", txt:"sem efeito"});
+      else tags.push({cls:"tag-treino", txt:"−1 em "+efTr+" de "+nTr+" dias"});
+      if(jaTr) det.push("já é folga em "+plural(jaTr, "dia", "dias"));
+      if(ausTr) det.push("já ausente (férias, licença, afastado ou treinamento) em "+plural(ausTr, "dia", "dias"));
       return {tags:tags, det:det};
     }
     if(f.tipo==="troca"){
@@ -2813,7 +2878,7 @@
   document.getElementById("lostSaveBtn").addEventListener("click", saveLost);
   document.getElementById("lostCancelBtn").addEventListener("click", resetLostForm);
 
-  ["folgaTipo","folgaRep","folgaData","folgaDataFim","folgaTrabalha","folgaFolgaEm","folgaFeriasIni","folgaFeriasDias","folgaObs"].forEach(function(id){
+  ["folgaTipo","folgaRep","folgaData","folgaDataFim","folgaTreinoIni","folgaTreinoFim","folgaTrabalha","folgaFolgaEm","folgaFeriasIni","folgaFeriasDias","folgaObs"].forEach(function(id){
     document.getElementById(id).addEventListener("input", function(){ folgaTocado = true; folgaFormMudou(); });
     document.getElementById(id).addEventListener("change", function(){ folgaTocado = true; folgaFormMudou(); });
   });

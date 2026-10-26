@@ -296,6 +296,7 @@
         <span class="lg"><i class="lg-dot st-ferias"></i>Férias</span>
         <span class="lg"><i class="lg-dot st-licenca"></i>Licença</span>
         <span class="lg"><i class="lg-dot st-afastado"></i>Afastado</span>
+        <span class="lg"><i class="lg-dot st-treinamento"></i>Treinamento</span>
         <span class="lg"><i class="lg-dot st-fora"></i>Fora da área</span>
         <span class="lg"><i class="lg-dot is-resp"></i>Borda escura = responsável pela tarefa</span>
       </div>
@@ -402,11 +403,13 @@
               <button type="button" class="tipo-btn on" data-act="folga-tipo" data-v="banco" aria-pressed="true"><b>Banco de horas</b><span>Folga num dia de trabalho</span></button>
               <button type="button" class="tipo-btn" data-act="folga-tipo" data-v="troca" aria-pressed="false"><b>Troca de folga</b><span>Trabalha numa folga, folga num dia de trabalho</span></button>
               <button type="button" class="tipo-btn" data-act="folga-tipo" data-v="ferias" aria-pressed="false"><b>Férias</b><span>Sai da contagem pelo período</span></button>
+              <button type="button" class="tipo-btn" data-act="folga-tipo" data-v="treinamento" aria-pressed="false"><b>Treinamento</b><span>Não conta como trabalhando no período</span></button>
             </div>
             <select id="folgaTipo" hidden>
               <option value="banco">Banco de horas</option>
               <option value="troca">Troca de folga</option>
               <option value="ferias">Férias</option>
+              <option value="treinamento">Treinamento</option>
             </select>
           </div>
           <div class="field grow2">
@@ -420,6 +423,14 @@
           <div class="field" data-folga="banco">
             <label>Até (opcional)</label>
             <input type="date" id="folgaDataFim">
+          </div>
+          <div class="field" data-folga="treinamento" style="display:none;">
+            <label>Início do treinamento</label>
+            <input type="date" id="folgaTreinoIni">
+          </div>
+          <div class="field" data-folga="treinamento" style="display:none;">
+            <label>Até (opcional)</label>
+            <input type="date" id="folgaTreinoFim">
           </div>
           <div class="field" data-folga="troca" style="display:none;">
             <label>Trabalha em (era folga)</label>
