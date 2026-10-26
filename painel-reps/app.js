@@ -19,6 +19,7 @@
      seedTasks:["Contagem","Stock Audit","Lost","RR/ER","Hunter"]}
   ];
   var timeAtual = TIMES[0].key;
+  var UNIFICADO = "unificado", modoUnificado = false; // "Calendário unificado" no seletor de time (não é um time)
   var root = { times:{} };
   function timeDef(key){ return TIMES.filter(function(t){ return t.key===(key||timeAtual); })[0] || TIMES[0]; }
   var state = novoEstado();
@@ -151,7 +152,7 @@
     if(feriasDe(r, iso)) return "ferias"; // férias agendadas no Calendário
     if(ESCALAS.indexOf(r.escala)>-1){
       var marcado = Cal.isMarcado(r.escala, iso);
-      var folga = state.escalaModo==="trabalho" ? !marcado : marcado;
+      var folga = modoEscalaDe(r)==="trabalho" ? !marcado : marcado;
       return folga ? "folga" : "ativo";
     }
     return "ativo";
@@ -453,6 +454,70 @@
     usarDados(res.state);
     if(temDados(res.state)) teveDados = true;
   }
+  // ---------- Calendário unificado ----------
+  // No seletor de time, "Calendário unificado" mostra o Calendário com os dois times juntos. `state` vira a junção
+  // dos dois (só na memória): cada time continua guardado à parte em root.times, e as gravações voltam para o
+  // time da pessoa. Por isso a soma dos números da guia unificada é a soma dos números de cada time.
+  function estadoUnificado(){
+    var u = novoEstado();
+    u.teamName = "Calendário unificado";
+    u.modoPorRep = {};
+    TIMES.forEach(function(t, i){
+      var d = root.times[t.key] || novoEstado();
+      (d.reps||[]).forEach(function(r){ u.reps.push(r); u.modoPorRep[r.id] = d.escalaModo || "folga"; });
+      u.folgas = u.folgas.concat(d.folgas||[]);
+      if(i===0) u.escalaModo = d.escalaModo || "folga";
+    });
+    return u;
+  }
+  // `state` é o time ativo ou, na guia unificada, a junção dos dois (refeita a cada mudança).
+  function atualizarEstadoAtivo(){ state = modoUnificado ? estadoUnificado() : root.times[timeAtual]; }
+  // Time que guarda a pessoa ou o agendamento (é para onde a gravação vai).
+  function timeDoRep(repId){
+    var k = TIMES.filter(function(t){ var d = root.times[t.key]; return d && (d.reps||[]).some(function(r){ return r.id===repId; }); })[0];
+    return k ? k.key : timeAtual;
+  }
+  function timeDaFolga(id){
+    var k = TIMES.filter(function(t){ var d = root.times[t.key]; return d && (d.folgas||[]).some(function(f){ return f && f.id===id; }); })[0];
+    return k ? k.key : null;
+  }
+  // Modo da escala de cada pessoa: na guia unificada, cada rep segue a configuração do próprio time.
+  function modoEscalaDe(r){ return state.modoPorRep ? (state.modoPorRep[r.id] || "folga") : state.escalaModo; }
+  // Nas listas de escolha da guia unificada, cada pessoa mostra o time de origem.
+  function sufixoTime(r){ return modoUnificado ? " · "+timeDef(timeDoRep(r.id)).nome : ""; }
+  // Grava o agendamento no time da pessoa; se a pessoa mudou de time na edição, o agendamento muda de time junto.
+  function gravarFolga(entry, idAntigo){
+    var destino = timeDoRep(entry.repId), time = root.times[destino] || (root.times[destino] = novoEstado());
+    if(!Array.isArray(time.folgas)) time.folgas = [];
+    if(idAntigo){
+      var origem = timeDaFolga(idAntigo);
+      entry.id = idAntigo;
+      if(origem && origem!==destino) root.times[origem].folgas = root.times[origem].folgas.filter(function(f){ return f.id!==idAntigo; });
+      var i = time.folgas.findIndex(function(x){ return x.id===idAntigo; });
+      if(i>-1) time.folgas[i] = entry; else time.folgas.push(entry);
+    }else{
+      entry.id = uid();
+      time.folgas.push(entry);
+    }
+    atualizarEstadoAtivo();
+  }
+  // Seletor de time no topo: na guia unificada mostra "Calendário unificado" e esconde o nome do time.
+  function aplicarTopo(){
+    var sel = document.getElementById("timeSel"), nome = document.getElementById("teamNameInput");
+    var valor = modoUnificado ? UNIFICADO : timeAtual;
+    if(sel && sel.value!==valor) sel.value = valor;
+    if(nome){
+      nome.style.display = modoUnificado ? "none" : "";
+      if(!modoUnificado) nome.value = state.teamName || "";
+    }
+  }
+  // Título da página do Calendário: a mesma página, com o nome da guia em que está.
+  function aplicarTituloCalendario(){
+    var t = document.querySelector("#view-calendario .view-title"), s = document.querySelector("#view-calendario .view-sub");
+    if(t) t.textContent = modoUnificado ? "Calendário unificado" : "Calendário";
+    if(s) s.textContent = modoUnificado ? "Quantas pessoas trabalham por dia somando os dois times, com folgas extras, trocas e férias" : "Quantas pessoas trabalham por dia, com folgas extras, trocas e férias";
+  }
+
   // Lê o estado cru do Grid (formato novo ou antigo) e deixa `state` apontando para os dados do time ativo.
   function usarDados(raw){
     raw = raw || {};
@@ -468,9 +533,8 @@
     // (a estrutura nova só é gravada na próxima ação do usuário, nunca ao abrir)
     migrateReps();
     migrateTasks();
-    document.getElementById("teamNameInput").value = state.teamName || "";
-    var sel = document.getElementById("timeSel");
-    if(sel && sel.value!==timeAtual) sel.value = timeAtual;
+    atualizarEstadoAtivo();
+    aplicarTopo();
     ajustarAbas();
   }
   // ---------- backup / restauração (cópia fora do Grid) ----------
@@ -513,8 +577,11 @@
     toast("Backup restaurado");
   }
   function trocarTime(key){
-    if(key===timeAtual) return;
-    timeAtual = key;
+    var unificado = key===UNIFICADO;
+    if(!unificado && !modoUnificado && key===timeAtual) return; // mesmo time, nada a trocar
+    if(unificado && modoUnificado) return;                      // já está na guia unificada
+    if(!unificado) timeAtual = key;
+    modoUnificado = unificado;
     dimUndo = null; dimMsg = "";
     limparFiltros();
     formAberto = {}; formAntes = {};
@@ -544,7 +611,8 @@
   }
   function buildTimeSel(){
     var sel = document.getElementById("timeSel");
-    sel.innerHTML = TIMES.map(function(t){ return '<option value="'+t.key+'">'+t.nome+'</option>'; }).join("");
+    sel.innerHTML = TIMES.map(function(t){ return '<option value="'+t.key+'">'+t.nome+'</option>'; }).join("") +
+      '<option value="'+UNIFICADO+'">Calendário unificado</option>';
     sel.value = timeAtual;
     sel.addEventListener("change", function(e){ trocarTime(e.target.value); });
   }
@@ -579,15 +647,18 @@
   // Abas disponíveis no time ativo (sem `views` = todas). Os dados das abas ocultas ficam guardados.
   var viewAtual = VIEWS[0].key, navTime = null;
   function viewsDoTime(){
+    if(modoUnificado) return [{key:"calendario", label:"Calendário unificado"}];
     var permitidas = timeDef().views;
     return VIEWS.filter(function(v){ return !permitidas || permitidas.indexOf(v.key)>-1; });
   }
   function ajustarAbas(){
-    if(navTime===timeAtual) return;
-    navTime = timeAtual;
+    var chave = modoUnificado ? UNIFICADO : timeAtual;
+    if(navTime===chave) return;
+    navTime = chave;
     buildNav();
     var ok = viewsDoTime().some(function(v){ return v.key===viewAtual; });
     showView(ok ? viewAtual : viewsDoTime()[0].key);
+    aplicarTituloCalendario();
   }
   var VIEW_ICONS = {
     equipe: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.4"/><path d="M2.8 20c0-3.4 2.8-6 6.2-6s6.2 2.6 6.2 6"/><circle cx="17.4" cy="9.2" r="2.6"/><path d="M17.6 14.2c2.4.3 4.2 2.3 4.2 4.8"/></svg>',
@@ -2030,15 +2101,7 @@
     if(!av.ok){ showFormError("folgaFormError", av.erro || "Revise os dados."); return; }
     clearFormError("folgaFormError");
     var entry = av.entry, editou = !!editing.folga;
-    if(!Array.isArray(state.folgas)) state.folgas = [];
-    if(editing.folga){
-      var i = state.folgas.findIndex(function(x){return x.id===editing.folga;});
-      entry.id = editing.folga;
-      if(i>-1) state.folgas[i] = entry; else state.folgas.push(entry);
-    }else{
-      entry.id = uid();
-      state.folgas.push(entry);
-    }
+    gravarFolga(entry, editing.folga || "");
     folgasMes = folgaIni(entry).slice(0,7) || folgasMes; // mostra o mês do agendamento para ver o efeito
     resetFolgaForm();
     scheduleSave();
@@ -2049,7 +2112,9 @@
     destacar("folga:"+entry.id, editou);
   }
   function deleteFolga(id){
-    state.folgas = (state.folgas||[]).filter(function(f){return f.id!==id;});
+    var dono = timeDaFolga(id);
+    if(dono) root.times[dono].folgas = root.times[dono].folgas.filter(function(f){return f.id!==id;});
+    atualizarEstadoAtivo();
     if(editing.folga===id) resetFolgaForm();
     scheduleSave();
     renderAll();
@@ -2062,7 +2127,7 @@
     if(!lista.length){ sel.innerHTML = '<option value="">Nenhum rep cadastrado</option>'; return; }
     sel.innerHTML = lista.map(function(r){
       var ps = repEhPS(r) ? ' · '+(areaEhPS(areaDe(r)) ? areaNome(areaDe(r)) : 'PS') : '';
-      return '<option value="'+esc(r.id)+'">'+esc(r.nome)+(r.escala?' · Escala '+esc(r.escala):'')+esc(ps)+'</option>';
+      return '<option value="'+esc(r.id)+'">'+esc(r.nome)+(r.escala?' · Escala '+esc(r.escala):'')+esc(ps)+esc(sufixoTime(r))+'</option>';
     }).join("");
     if(atual && lista.some(function(r){return r.id===atual;})) sel.value = atual;
   }
@@ -2070,7 +2135,7 @@
     var sel = document.getElementById("folgaFiltroRep");
     var lista = sortReps(state.reps);
     if(folgaFiltroRep && !lista.some(function(r){return r.id===folgaFiltroRep;})) folgaFiltroRep = "";
-    sel.innerHTML = '<option value="">Todas as pessoas</option>' + lista.map(function(r){ return '<option value="'+esc(r.id)+'">'+esc(r.nome)+'</option>'; }).join("");
+    sel.innerHTML = '<option value="">Todas as pessoas</option>' + lista.map(function(r){ return '<option value="'+esc(r.id)+'">'+esc(r.nome)+esc(sufixoTime(r))+'</option>'; }).join("");
     sel.value = folgaFiltroRep;
     renderFolgaPerChips();
   }
@@ -2401,7 +2466,7 @@
       body.innerHTML = todos.map(function(f){
        try{
         var r = repPorId(f.repId), ef = folgaEfeito(f), passado = folgaFim(f) && folgaFim(f)<hoje;
-        var nome = r ? '<span class="esc-dot" style="background:'+(ESC_COR[r.escala]||"var(--text-faint)")+'"></span>'+esc(r.nome) : '<span class="hint">(rep removido)</span>';
+        var nome = r ? '<span class="esc-dot" style="background:'+(ESC_COR[r.escala]||"var(--text-faint)")+'"></span>'+esc(r.nome)+(modoUnificado ? '<small class="hint" style="display:block;">'+esc(timeDef(timeDoRep(r.id)).nome)+'</small>' : '') : '<span class="hint">(rep removido)</span>';
         return '<tr class="'+(passado?'fd-passado':'')+'" data-key="folga:'+esc(f.id)+'">' +
           '<td>'+nome+'</td>' +
           '<td><span class="tag '+(TIPO_TAG[f.tipo]||'tag-teal')+'">'+esc(TIPO_ROTULO[f.tipo]||'Banco de horas')+'</span></td>' +
@@ -2723,7 +2788,13 @@
   // (botões ‹ › Hoje e o campo de data existem no Calendário e no Dimensionamento: tratados por data-act / classe)
   document.getElementById("dimFiltro").addEventListener("change", function(e){ dimFiltro = e.target.value; renderTasks(); });
   document.getElementById("escalaModo").addEventListener("change", function(e){
-    state.escalaModo = e.target.value==="trabalho" ? "trabalho" : "folga";
+    var modo = e.target.value==="trabalho" ? "trabalho" : "folga";
+    // a escala é a mesma para os dois times: na guia unificada a escolha vale para os dois
+    TIMES.forEach(function(t){
+      if(!modoUnificado && t.key!==timeAtual) return;
+      (root.times[t.key] || (root.times[t.key] = novoEstado())).escalaModo = modo;
+    });
+    atualizarEstadoAtivo();
     scheduleSave();
     renderAll();
   });
@@ -2760,6 +2831,7 @@
   });
 
   document.getElementById("teamNameInput").addEventListener("input", function(e){
+    if(modoUnificado) return;
     state.teamName = e.target.value;
     renderTeamCard();
     scheduleSave();
