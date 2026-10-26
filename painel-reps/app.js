@@ -1960,6 +1960,7 @@
   // FOLGAS EXTRAS (banco de horas e troca de folga)
   // =====================================================================
   var folgasMes = "", folgaFiltroRep = "", folgaFiltroPer = "mes", folgaTocado = false;
+  var folgaOcultaBanco = true, folgaOcultaPassados = true; // a lista começa sem o banco de horas e sem as datas já passadas
   var ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
   function isoOk(s){ return ISO_RE.test(String(s||"")); }
   function diasEntre(a, b){ return Cal.diasDesdeEpoch(b) - Cal.diasDesdeEpoch(a) + 1; } // inclusivo
@@ -1997,8 +1998,8 @@
   function folgaFim(f){ var d = folgaDatas(f); return d[d.length-1] || ""; }
 
   // Por que um dia não muda nada (ou "" se muda).
-  function motivoSemEfeito(r, iso, base){
-    var n = r.nome;
+  function motivoSemEfeito(r, iso, base, nome){
+    var n = nome || r.nome; // a lista de agendamentos passa o nome curto
     if(base==="folga") return n+" já está de folga em "+diaMes(iso)+" pela escala";
     if(base==="ferias") return n+" está de férias em "+diaMes(iso);
     if(base==="licenca") return n+" está de licença em "+diaMes(iso);
@@ -2307,8 +2308,8 @@
       var okT = !!aT && aT.f===f, okF = !!aF && aF.f===f;
       tags.push({cls: okT?"tag-green":"tag-rust", txt: okT ? "+1 trabalha em "+diaMes(f.dataTrabalho) : "trabalha: sem efeito"});
       tags.push({cls: okF?"tag-green":"tag-rust", txt: okF ? "−1 folga em "+diaMes(f.dataFolga) : "folga: sem efeito"});
-      if(!okT) det.push(aT ? "dia de trabalho já coberto por outro agendamento" : motivoSemEfeito(r, f.dataTrabalho, bT));
-      if(!okF) det.push(aF ? "folga já coberta por outro agendamento" : motivoSemEfeito(r, f.dataFolga, bF));
+      if(!okT) det.push(aT ? "dia de trabalho já coberto por outro agendamento" : motivoSemEfeito(r, f.dataTrabalho, bT, nomeCurto(r.nome)));
+      if(!okF) det.push(aF ? "folga já coberta por outro agendamento" : motivoSemEfeito(r, f.dataFolga, bF, nomeCurto(r.nome)));
       return {tags:tags, det:det};
     }
     var d0 = f.data, fimOk = !f.dataFim || isoOk(f.dataFim), n = (isoOk(d0) && fimOk) ? diasEntre(d0, f.dataFim||d0) : 0, ef = 0, ja = 0, aus = 0, cob = 0;
@@ -2341,6 +2342,7 @@
   // PESSOAS TRABALHANDO POR DIA (blocos por área, calendário de blocos, detalhe do dia e tabela)
   // =====================================================================
   var mesView = "blocos"; // "blocos" (calendário com um bloco por dia) | "tabela" (dia a dia detalhado)
+  var mesOcultaQuadro = false; // o quadro geral do dia (aberto ao clicar num dia) pode ser escondido
   function aplicarMesView(){
     var p = document.getElementById("sec-dia");
     p.dataset.mesview = mesView;
@@ -2480,6 +2482,7 @@
     var inpMes = document.getElementById("folgasMesInput");
     if(inpMes.value!==ym) inpMes.value = ym;
     aplicarMesView();
+    document.getElementById("mesQuadroBtn").textContent = mesOcultaQuadro ? "Mostrar quadro geral" : "Ocultar quadro geral";
     // o clique num dia redesenha o calendário: devolve o foco ao mesmo botão (uso pelo teclado)
     var ae = document.activeElement, foco = null;
     if(ae && ae.closest && ae.dataset){
@@ -2519,7 +2522,7 @@
       if(mesView==="blocos"){
         document.getElementById("mesLegAreas").innerHTML = legendaAreasHTML(dias);
         var ctx = {hoje:hoje, sel:sel, min:(menor.total<maior.total ? menor.total : null)};
-        document.getElementById("calGrid").innerHTML = calendarioHTML(dias, ym, ctx, sel ? {idx:Number(sel.slice(8))-1, html:detalheDiaHTML(sel, dias[Number(sel.slice(8))-1], hoje)} : null);
+        document.getElementById("calGrid").innerHTML = calendarioHTML(dias, ym, ctx, sel && !mesOcultaQuadro ? {idx:Number(sel.slice(8))-1, html:detalheDiaHTML(sel, dias[Number(sel.slice(8))-1], hoje)} : null);
         document.getElementById("mesDica").style.display = sel ? "none" : "block";
         wrap.innerHTML = ""; // a tabela só é montada quando a visão Tabela está escolhida
       }else{
@@ -2574,8 +2577,17 @@
   var AGENDA_DICA = {banco:"folga num dia de trabalho", troca:"trabalha numa folga, folga num dia de trabalho", ferias:"sai da contagem pelo período", treinamento:"não conta como trabalhando no período"};
   var AGENDA_VAZIO = {banco:"Nenhum banco de horas neste filtro.", troca:"Nenhuma troca de folga neste filtro.", ferias:"Nenhuma férias neste filtro.", treinamento:"Nenhum treinamento neste filtro."};
   function tipoDoAgendamento(f){ return f && TIPO_ROTULO[f.tipo] ? f.tipo : "banco"; }
-  function agendaQuadroHTML(tipo, lista, linha){
-    var corpo = lista.length ? lista.map(function(f){ return linha(f); }).join("") : '<tr><td colspan="5"><span class="hint">'+AGENDA_VAZIO[tipo]+'</span></td></tr>';
+  // Nome e primeiro sobrenome para os quadros: "Ana Beatriz Pereira de Oliveira" vira "Ana Pereira".
+  // Partículas (de, da, e...) não contam. Com duas ou três partes, a segunda é o sobrenome; com mais,
+  // o primeiro sobrenome é o penúltimo nome, porque os sobrenomes costumam ser os dois últimos.
+  var PARTICULAS_NOME = {de:1, da:1, do:1, das:1, dos:1, e:1};
+  function nomeCurto(nome){
+    var partes = String(nome||"").trim().split(/\s+/).filter(function(p){ return p && !PARTICULAS_NOME[p.toLowerCase()]; });
+    if(partes.length<2) return partes.join(" ");
+    return partes[0]+" "+partes[Math.max(1, partes.length-2)];
+  }
+  function agendaQuadroHTML(tipo, lista, linha, vazio){
+    var corpo = lista.length ? lista.map(function(f){ return linha(f); }).join("") : '<tr><td colspan="5"><span class="hint">'+esc(vazio || AGENDA_VAZIO[tipo])+'</span></td></tr>';
     return '<section class="agenda-quadro" data-tipo="'+tipo+'">' +
       '<header class="agenda-quadro-head"><span class="tag '+TIPO_TAG[tipo]+'">'+esc(TIPO_ROTULO[tipo])+'</span><b class="num">'+lista.length+'</b><span class="hint">'+esc(AGENDA_DICA[tipo])+'</span></header>' +
       '<table><thead><tr><th>Pessoa</th><th>Datas</th><th>Efeito na contagem</th><th>Observação</th><th></th></tr></thead><tbody>'+corpo+'</tbody></table>' +
@@ -2604,7 +2616,7 @@
     var linha = function(f){
       try{
         var r = repPorId(f.repId), ef = folgaEfeito(f), passado = folgaFim(f) && folgaFim(f)<hoje;
-        var nome = r ? '<span class="esc-dot" style="background:'+(ESC_COR[r.escala]||"var(--text-faint)")+'"></span>'+esc(r.nome)+(modoUnificado ? '<small class="hint" style="display:block;">'+esc(timeDef(timeDoRep(r.id)).nome)+'</small>' : '') : '<span class="hint">(rep removido)</span>';
+        var nome = r ? '<span class="agenda-pessoa" title="'+esc(r.nome+(modoUnificado ? " · "+timeDef(timeDoRep(r.id)).nome : ""))+'">'+esc(nomeCurto(r.nome))+'</span>' : '<span class="hint">(rep removido)</span>';
         return '<tr class="'+(passado?'fd-passado':'')+'" data-key="folga:'+esc(f.id)+'">' +
           '<td>'+nome+'</td>' +
           '<td class="num">'+folgaDatasTexto(f)+'</td>' +
@@ -2620,8 +2632,17 @@
         return '<tr><td colspan="4"><span class="hint">Registro com dados inválidos.</span></td><td class="row-actions"><button class="btn-ghost" data-act="del-folga" data-id="'+esc(f && f.id)+'">Excluir</button></td></tr>';
        }
     };
-    document.getElementById("folgasLista").innerHTML = AGENDA_TIPOS.map(function(tipo){
-      return agendaQuadroHTML(tipo, todos.filter(function(f){ return tipoDoAgendamento(f)===tipo; }), linha);
+    // Banco de horas e datas já passadas começam ocultos: os chips "Ocultar" mostram ou escondem cada um.
+    var passou = function(f){ try{ var fim = folgaFim(f); return !!fim && fim<hoje; }catch(e){ return false; } };
+    var doTipo = function(tipo){ return todos.filter(function(f){ return tipoDoAgendamento(f)===tipo; }); };
+    var chipsOcultar = [["banco","Banco de horas",folgaOcultaBanco,doTipo("banco").length],["passados","Datas passadas",folgaOcultaPassados,todos.filter(passou).length]];
+    document.getElementById("folgaOcultaChips").innerHTML = chipsOcultar.map(function(c){
+      return '<button type="button" class="fchip'+(c[2]?' on':'')+'" data-act="folga-oculta" data-v="'+c[0]+'" aria-pressed="'+(c[2]?'true':'false')+'">'+c[1]+' <b>'+c[3]+'</b></button>';
+    }).join("");
+    document.getElementById("folgasLista").innerHTML = AGENDA_TIPOS.filter(function(tipo){ return !(tipo==="banco" && folgaOcultaBanco); }).map(function(tipo){
+      var lista = doTipo(tipo), mostrar = folgaOcultaPassados ? lista.filter(function(f){ return !passou(f); }) : lista;
+      var vazio = !mostrar.length && folgaOcultaPassados && lista.some(function(f){ return passou(f); }) ? "Só há datas passadas neste filtro. Use “Datas passadas” para ver." : AGENDA_VAZIO[tipo];
+      return agendaQuadroHTML(tipo, mostrar, linha, vazio);
     }).join("");
     folgaPreview();
   }
@@ -2852,8 +2873,10 @@
     else if(act==="toggle-ponto"){ togglePonto(id); }
     else if(act==="folga-tipo"){ document.getElementById("folgaTipo").value = btn.dataset.v; folgaTocado = true; folgaFormMudou(); }
     else if(act==="folga-per"){ folgaFiltroPer = btn.dataset.v; renderFolgas(); }
+    else if(act==="folga-oculta"){ if(btn.dataset.v==="banco") folgaOcultaBanco = !folgaOcultaBanco; else folgaOcultaPassados = !folgaOcultaPassados; renderFolgas(); }
     else if(act==="filtro-time"){ mudarFiltroTime(btn.dataset.tab, btn.dataset.v); }
     else if(act==="mes-view"){ mesView = btn.dataset.mode==="tabela" ? "tabela" : "blocos"; renderMes(); }
+    else if(act==="mes-quadro"){ mesOcultaQuadro = !mesOcultaQuadro; renderMes(); }
     else if(act==="goto-sec"){ irParaSecao(btn.dataset.sec); }
     else if(act==="mes-dia"){ setDimDate(Cal.addDays(dimDate, Number(btn.dataset.d)||0)); }
     else if(act==="edit-folga"){ startFolgaEdit((state.folgas||[]).find(function(f){return f.id===id;})); }

@@ -1088,3 +1088,4 @@ body.tela-calendario{background:#EFF1F4;}
 .agenda-quadro-head b{font-size:13px; color:var(--text);}
 .agenda-quadro-head .hint{margin:0 0 0 auto; font-size:11.5px;}
 .agenda-quadro table{margin:0;}
+.mes-ferr{display:flex; justify-content:flex-end; margin:0 0 8px;}

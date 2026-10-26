@@ -377,6 +377,7 @@
         <div id="mesBlocos">
           <div class="area-legend" id="mesLegAreas"></div>
           <div class="hint" id="mesDica" style="display:none; margin:0 0 10px;">Clique num dia do calendário para ver quem trabalha e quem está fora em cada área.</div>
+          <div class="mes-ferr"><button type="button" class="btn" id="mesQuadroBtn" data-act="mes-quadro">Ocultar quadro geral</button></div>
           <div class="cal-wrap">
             <div class="cal-head" aria-hidden="true"><span class="fds">Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span class="fds">Sáb</span></div>
             <div class="cal-grid" id="calGrid"></div>
@@ -479,6 +480,10 @@
           <div class="field" style="flex:0 0 auto;">
             <label>Mostrar</label>
             <div class="fchips" id="folgaPerChips" role="group" aria-label="Período" style="flex-wrap:nowrap;"></div>
+          </div>
+          <div class="field" style="flex:0 0 auto;">
+            <label>Ocultar</label>
+            <div class="fchips" id="folgaOcultaChips" role="group" aria-label="Ocultar na lista" style="flex-wrap:nowrap;"></div>
           </div>
         </div>
         <div id="folgasLista" class="agenda-quadros"></div>
