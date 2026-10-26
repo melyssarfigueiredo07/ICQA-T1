@@ -1071,3 +1071,12 @@ body.tela-calendario{background:#EFF1F4;}
 .rep-box.st-treinamento .rb-dot{background:#3B3F9E;}
 .mx-row.st-treinamento .mx-rowbtn{color:#2E3186;}
 .mx-btn.on.st-treinamento{background:#FFFFFF; color:#2E3186;}
+
+/* Calendário unificado: filtro de time em cada guia; no dimensionamento "todos os times" é só para ver */
+.filtro-time{display:inline-flex; flex-wrap:wrap; justify-content:flex-end; margin-bottom:8px;}
+.dim-consolidado [data-act="fill-skills"], .dim-consolidado [data-act="undo"], .dim-consolidado [data-act="clear-all"], .dim-consolidado .dim-sec-acoes{display:none !important;}
+.dim-consolidado #taskFormPanel{display:none !important;}
+.dim-so-leitura{margin:0 0 16px;}
+.dim-time-bloco{margin:0 0 30px;}
+.dim-time-head{display:flex; align-items:baseline; gap:10px; margin:0 0 14px; padding:0 0 10px; border-bottom:2px solid var(--text);}
+.dim-time-head b{font-size:16px; letter-spacing:-0.01em; color:var(--text);}

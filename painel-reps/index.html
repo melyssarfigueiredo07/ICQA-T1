@@ -209,7 +209,7 @@
           <div class="view-title">Dimensionamento</div>
           <div class="view-sub">Quem é responsável por cada tarefa e quem está disponível na data</div>
         </div>
-        <div class="view-meta" id="taskMeta"></div>
+        <div class="view-meta"><div class="seg filtro-time" data-tab="dimensionamento" role="group" aria-label="Filtrar por time"></div><div id="taskMeta"></div></div>
       </div>
 
       <div class="form-panel dim-bar">
@@ -319,7 +319,7 @@
           <div class="view-title">Calendário</div>
           <div class="view-sub">Quantas pessoas trabalham por dia, com folgas extras, trocas e férias</div>
         </div>
-        <div class="view-meta" id="folgasMeta"></div>
+        <div class="view-meta"><div class="seg filtro-time" data-tab="calendario" role="group" aria-label="Filtrar por time"></div><div id="folgasMeta"></div></div>
       </div>
 
       <nav class="sec-index" id="calIndex" aria-label="Seções do Calendário">
@@ -496,7 +496,7 @@
           <div class="view-title">Aniversários</div>
           <div class="view-sub">Aniversariantes dos dois times num calendário só</div>
         </div>
-        <div class="view-meta" id="anivMeta"></div>
+        <div class="view-meta"><div class="seg filtro-time" data-tab="aniversarios" role="group" aria-label="Filtrar por time"></div><div id="anivMeta"></div></div>
       </div>
 
       <section class="panel anual-panel" aria-label="Quadro anual de aniversários">
@@ -522,7 +522,6 @@
             <button class="btn" id="anivHoje">Este mês</button>
           </div>
         </div>
-        <div class="fchips" id="anivTimes" role="group" aria-label="Filtrar time" style="margin-bottom:12px;"></div>
         <div class="cal-wrap">
           <div class="cal-head" aria-hidden="true"><span class="fds">Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span class="fds">Sáb</span></div>
           <div class="cal-grid" id="anivGrid"></div>

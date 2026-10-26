@@ -14,12 +14,15 @@
     "contagem":"inventario"
   };
   var TIMES = [
-    {key:"vinicius", nome:"Time Vinicius", areaFixa:ICQA_AREA_FIXA},
-    {key:"harley", nome:"Time Harley", areaFixa:{}, views:["equipe","dimensionamento","calendario","aniversarios"],
+    {key:"vinicius", nome:"Time Vinicius", areaFixa:ICQA_AREA_FIXA, views:["equipe","pontos","lost"]},
+    {key:"harley", nome:"Time Harley", areaFixa:{}, views:["equipe"],
      seedTasks:["Contagem","Stock Audit","Lost","RR/ER","Hunter"]}
   ];
   var timeAtual = TIMES[0].key;
   var UNIFICADO = "unificado", modoUnificado = false; // "Calendário unificado" no seletor de time (não é um time)
+  // Guias do Calendário unificado, na ordem da barra, e o filtro de time de cada uma (todos os times ou um só).
+  var UNIFICADO_VIEWS = ["calendario","aniversarios","dimensionamento"];
+  var filtroTime = {calendario:"todos", aniversarios:"todos", dimensionamento:"todos"};
   var root = { times:{} };
   function timeDef(key){ return TIMES.filter(function(t){ return t.key===(key||timeAtual); })[0] || TIMES[0]; }
   var state = novoEstado();
@@ -289,8 +292,8 @@
   }
   function repMotivoFora(r){ return repEhPS(r) ? "PS não considerado" : "fora da área"; }
   // Time novo: cria as tarefas iniciais uma única vez (ids fixos, então dois acessos simultâneos não duplicam).
-  function seedTasks(){
-    var seed = timeDef().seedTasks;
+  function seedTasks(key){
+    var seed = timeDef(key).seedTasks;
     if(!seed || state.seeded) return;
     state.seeded = true;
     if(!(state.tasks||[]).length){
@@ -480,12 +483,46 @@
       var d = root.times[t.key] || novoEstado();
       (d.reps||[]).forEach(function(r){ u.reps.push(r); u.modoPorRep[r.id] = d.escalaModo || "folga"; });
       u.folgas = u.folgas.concat(d.folgas||[]);
+      u.tasks = u.tasks.concat(d.tasks||[]); u.pontos = u.pontos.concat(d.pontos||[]); u.lost = u.lost.concat(d.lost||[]);
       if(i===0) u.escalaModo = d.escalaModo || "folga";
     });
     return u;
   }
   // `state` é o time ativo ou, na guia unificada, a junção dos dois (refeita a cada mudança).
-  function atualizarEstadoAtivo(){ state = modoUnificado ? estadoUnificado() : root.times[timeAtual]; }
+  function atualizarEstadoAtivo(){
+    if(!modoUnificado){ state = timeComDados(timeAtual); return; } // existe mesmo antes da primeira leitura do Grid
+    var f = UNIFICADO_VIEWS.indexOf(viewAtual)>-1 ? filtroTime[viewAtual] : "todos";
+    state = f==="todos" ? estadoUnificado() : timeComDados(f);
+  }
+  // Dados de um time, criando o registro se ainda não existir. Gravar aqui grava no time.
+  function timeComDados(key){ return root.times[key] || (root.times[key] = novoEstado()); }
+  // Roda `fn` com `state` apontando para o time dado (para montar a parte de um time no consolidado).
+  function comTime(key, fn){
+    var salvo = state;
+    state = timeComDados(key);
+    try{ return fn(); }finally{ state = salvo; }
+  }
+  // Filtro de time de uma guia do Calendário unificado (botões na barra de cada guia).
+  function renderFiltrosTime(){
+    var opcoes = [{key:"todos", nome:"Todos os times"}].concat(TIMES);
+    document.querySelectorAll(".filtro-time").forEach(function(el){
+      var tab = el.dataset.tab, atual = filtroTime[tab];
+      if(el.dataset.atual===atual && el.childElementCount) return;
+      el.dataset.atual = atual;
+      el.innerHTML = opcoes.map(function(o){
+        var on = o.key===atual;
+        return '<button type="button" class="seg-btn'+(on?' on':'')+'" data-act="filtro-time" data-tab="'+tab+'" data-v="'+o.key+'" aria-pressed="'+(on?'true':'false')+'">'+esc(o.nome)+'</button>';
+      }).join("");
+    });
+  }
+  function mudarFiltroTime(tab, v){
+    if(!(tab in filtroTime) || filtroTime[tab]===v) return;
+    filtroTime[tab] = v;
+    dimUndo = null; dimMsg = "";
+    atualizarEstadoAtivo();
+    resetRepForm(); resetTaskForm(); resetPontoForm(); resetLostForm(); resetFolgaForm();
+    renderAll();
+  }
   // Time que guarda a pessoa ou o agendamento (é para onde a gravação vai).
   function timeDoRep(repId){
     var k = TIMES.filter(function(t){ var d = root.times[t.key]; return d && (d.reps||[]).some(function(r){ return r.id===repId; }); })[0];
@@ -528,8 +565,9 @@
   // Título da página do Calendário: a mesma página, com o nome da guia em que está.
   function aplicarTituloCalendario(){
     var t = document.querySelector("#view-calendario .view-title"), s = document.querySelector("#view-calendario .view-sub");
-    if(t) t.textContent = modoUnificado ? "Calendário unificado" : "Calendário";
-    if(s) s.textContent = modoUnificado ? "Quantas pessoas trabalham por dia somando os dois times, com folgas extras, trocas e férias" : "Quantas pessoas trabalham por dia, com folgas extras, trocas e férias";
+    var f = filtroTime.calendario;
+    if(t) t.textContent = "Calendário";
+    if(s) s.textContent = f==="todos" ? "Quantas pessoas trabalham por dia somando os times, com folgas extras, trocas e férias" : "Quantas pessoas trabalham por dia no "+timeDef(f).nome+", com folgas extras, trocas e férias";
   }
 
   // Lê o estado cru do Grid (formato novo ou antigo) e deixa `state` apontando para os dados do time ativo.
@@ -547,6 +585,8 @@
     // (a estrutura nova só é gravada na próxima ação do usuário, nunca ao abrir)
     migrateReps();
     migrateTasks();
+    // as tarefas iniciais de cada time existem desde a leitura (a guia unificada mostra o Harley sem trocar de time)
+    TIMES.forEach(function(t){ comTime(t.key, function(){ seedTasks(t.key); }); });
     atualizarEstadoAtivo();
     aplicarTopo();
     ajustarAbas();
@@ -661,7 +701,7 @@
   // Abas disponíveis no time ativo (sem `views` = todas). Os dados das abas ocultas ficam guardados.
   var viewAtual = VIEWS[0].key, navTime = null;
   function viewsDoTime(){
-    if(modoUnificado) return [{key:"calendario", label:"Calendário unificado"}];
+    if(modoUnificado) return UNIFICADO_VIEWS.map(function(k){ return VIEWS.filter(function(v){ return v.key===k; })[0]; });
     var permitidas = timeDef().views;
     return VIEWS.filter(function(v){ return !permitidas || permitidas.indexOf(v.key)>-1; });
   }
@@ -731,8 +771,10 @@
     if(h) document.documentElement.style.setProperty("--nav-h", h+"px");
   }
   function showView(key){
-    var mudou = key!==viewAtual;
+    var mudou = key!==viewAtual, anterior = viewAtual;
     viewAtual = key;
+    if(mudou && anterior==="dimensionamento") dimUndo = null; // a desfazer é da guia que saiu da tela
+    atualizarEstadoAtivo();
     document.body.classList.toggle("tela-calendario", key==="calendario");
     Array.prototype.forEach.call(document.querySelectorAll(".view"), function(v){
       var on = v.dataset.view===key;
@@ -747,6 +789,7 @@
     });
     if(key==="calendario" && calSujo){ calSujo = false; renderDim(); renderMes(); }
     if(mudou && window.pageYOffset>0) window.scrollTo(0, 0);
+    if(mudou && modoUnificado) renderAll(); // a guia nova é desenhada com o time (ou os times) do filtro dela
     atualizarScroll();
   }
   function tickClock(){
@@ -1315,14 +1358,14 @@
   }
   // Matriz do dimensionamento: uma tabela por área, com as tarefas da área nas colunas e os reps elegíveis nas linhas.
   function renderMatriz(){
-    var wrap = document.getElementById("taskMatrix");
+    document.getElementById("taskMatrix").innerHTML = matrizHTML();
+  }
+  // Matriz do time em uso (texto): usada na visão de um time e, por time, no consolidado.
+  function matrizHTML(){
     var reps = sortReps(state.reps).filter(repVisivelNoFiltro);
-    if(!reps.length){
-      wrap.innerHTML = '<div class="hint">Nenhum rep nesse filtro.</div>';
-      return;
-    }
+    if(!reps.length) return '<div class="hint">Nenhum rep nesse filtro.</div>';
     var secoes = secoesDimensionamento();
-    wrap.innerHTML = (secoes.length ? secoes.map(function(s){ return matrizSecaoHTML(s, reps); }).join("") : '<div class="hint">Nenhuma tarefa nesta área ainda.</div>') +
+    return (secoes.length ? secoes.map(function(s){ return matrizSecaoHTML(s, reps); }).join("") : '<div class="hint">Nenhuma tarefa nesta área ainda.</div>') +
       '<div class="hint" style="margin-top:8px;">Clique numa célula para marcar/desmarcar · no nome da tarefa para marcar todos os elegíveis · no nome do rep para marcar as tarefas dele nesta área. “—” = fora da área; PS não aparecem.</div>';
   }
   function matrizSecaoHTML(s, reps){
@@ -1469,6 +1512,10 @@
     '</section>';
   }
   function renderTasks(){
+    var todos = modoUnificado && filtroTime.dimensionamento==="todos";
+    document.getElementById("view-dimensionamento").classList.toggle("dim-consolidado", todos);
+    if(todos) return renderTasksTodos();
+    document.getElementById("taskGrid").inert = false; document.getElementById("taskMatrix").inert = false;
     var cobs = state.tasks.map(coberturaTarefa);
     var nSem = cobs.filter(function(c){ return c.sem; }).length, nSemResp = cobs.filter(function(c){ return c.semResp; }).length;
     var metaEl = document.getElementById("taskMeta");
@@ -1494,6 +1541,26 @@
     grid.innerHTML = secoes.length ? secoes.map(secaoTarefasHTML).join("") : '<div class="hint">Nenhuma tarefa nesta área ainda.</div>';
 
     renderResumo();
+  }
+  // Dimensionamento com "Todos os times": cada time em seu bloco, só para ver (sem ações de escrita).
+  function renderTasksTodos(){
+    var grid = document.getElementById("taskGrid"), matriz = document.getElementById("taskMatrix"), empty = document.getElementById("taskEmpty");
+    var totalTarefas = TIMES.reduce(function(n, t){ return n + ((root.times[t.key] || {}).tasks || []).length; }, 0);
+    document.getElementById("taskMeta").textContent = totalTarefas + " tarefa(s) nos dois times";
+    renderDimToolbar();
+    empty.style.display = "none";
+    grid.style.display = dimView==="cards" ? "" : "none";
+    matriz.style.display = dimView==="matriz" ? "block" : "none";
+    var blocos = '<div class="hint dim-so-leitura">Visão dos dois times, só para ver. Para marcar responsáveis, escolha um time no filtro acima.</div>' +
+      TIMES.map(function(t){ return comTime(t.key, function(){ return dimTimeHTML(t); }); }).join("");
+    grid.innerHTML = dimView==="cards" ? blocos : "";
+    matriz.innerHTML = dimView==="matriz" ? blocos : "";
+    grid.inert = true; matriz.inert = true;
+    renderResumo();
+  }
+  function dimTimeHTML(t){
+    var corpo = dimView==="matriz" ? matrizHTML() : (secoesDimensionamento().map(secaoTarefasHTML).join("") || '<div class="hint">Nenhuma tarefa nesta área ainda.</div>');
+    return '<section class="dim-time-bloco"><header class="dim-time-head"><b>'+esc(t.nome)+'</b><span class="dim-sec-n">'+plural(state.tasks.length, "tarefa", "tarefas")+'</span></header>'+corpo+'</section>';
   }
   function renderResumo(){
     var wrap = document.getElementById("resumoGrid");
@@ -2555,7 +2622,7 @@
   // ---------- render all ----------
   // ---------- Aniversários: um calendário só, com os reps de todos os times ----------
   // Lê direto de root.times (o time ativo já está lá), então o painel mostra os dois times ao mesmo tempo.
-  var anivMes = "", anivFiltro = "todos", anivAno = 0;
+  var anivMes = "", anivAno = 0;
   // Quadro anual: 12 meses com a lista de aniversariantes de cada um (os dois times), pelo ano escolhido.
   function renderAnual(){
     var hoje = todayISO(), grid = document.getElementById("anualGrid");
@@ -2609,17 +2676,11 @@
     if(!/^\d{4}-\d{2}$/.test(anivMes)) anivMes = hoje.slice(0,7);
     var ym = anivMes, ano = Number(ym.slice(0,4)), mes = Number(ym.slice(5,7));
     var dados = anivNoMes(ym), nd = dados.nd;
-    var contagem = {todos:dados.itens.length};
-    TIMES.forEach(function(t){ contagem[t.key] = dados.itens.filter(function(x){ return x.time.key===t.key; }).length; });
-    document.getElementById("anivTimes").innerHTML = [{key:"todos", nome:"Todos os times"}].concat(TIMES).map(function(t){
-      var on = anivFiltro===t.key;
-      return '<button type="button" class="fchip'+(on?' on':'')+'" data-act="aniv-time" data-v="'+t.key+'" aria-pressed="'+(on?'true':'false')+'">'+esc(t.nome)+'<b>'+contagem[t.key]+'</b></button>';
-    }).join("");
     document.getElementById("anivMesSub").innerHTML = 'Mês · '+esc(mesLabel(ym));
     document.getElementById("anivMesInput").value = ym;
     document.getElementById("anivMeta").textContent = dados.itens.length+" aniversariante(s) no mês" + (dados.sem ? " · "+dados.sem+" sem data cadastrada" : "");
 
-    var visiveis = dados.itens.filter(function(x){ return anivFiltro==="todos" || x.time.key===anivFiltro; });
+    var visiveis = dados.itens.filter(function(x){ return filtroTime.aniversarios==="todos" || x.time.key===filtroTime.aniversarios; });
     var por = {};
     visiveis.forEach(function(x){ (por[x.dia] = por[x.dia] || []).push(x); });
     var cells = [], vazios = new Date(Date.UTC(ano, mes-1, 1)).getUTCDay(), i;
@@ -2633,7 +2694,7 @@
     document.getElementById("anivGrid").innerHTML = cells.join("");
     var hint = document.getElementById("anivHint");
     hint.style.display = visiveis.length ? "none" : "";
-    hint.textContent = "Nenhum aniversariante neste mês"+(anivFiltro==="todos" ? "" : " para "+timeDef(anivFiltro).nome)+".";
+    hint.textContent = "Nenhum aniversariante neste mês"+(filtroTime.aniversarios==="todos" ? "" : " para "+timeDef(filtroTime.aniversarios).nome)+".";
   }
   function setAnivMes(ym){ if(/^\d{4}-\d{2}$/.test(ym)){ anivMes = ym; renderAniversarios(); } }
   document.getElementById("anivPrev").addEventListener("click", function(){ setAnivMes(addMeses(anivMes || todayISO().slice(0,7), -1)); });
@@ -2644,6 +2705,8 @@
   document.getElementById("anivMesInput").addEventListener("change", function(e){ setAnivMes(e.target.value); });
 
   function renderAll(){
+    renderFiltrosTime();
+    aplicarTituloCalendario();
     renderEquipe();
     renderDim();
     renderTasks();
@@ -2782,7 +2845,7 @@
     else if(act==="toggle-ponto"){ togglePonto(id); }
     else if(act==="folga-tipo"){ document.getElementById("folgaTipo").value = btn.dataset.v; folgaTocado = true; folgaFormMudou(); }
     else if(act==="folga-per"){ folgaFiltroPer = btn.dataset.v; renderFolgas(); }
-    else if(act==="aniv-time"){ anivFiltro = btn.dataset.v; renderAniversarios(); }
+    else if(act==="filtro-time"){ mudarFiltroTime(btn.dataset.tab, btn.dataset.v); }
     else if(act==="mes-view"){ mesView = btn.dataset.mode==="tabela" ? "tabela" : "blocos"; renderMes(); }
     else if(act==="goto-sec"){ irParaSecao(btn.dataset.sec); }
     else if(act==="mes-dia"){ setDimDate(Cal.addDays(dimDate, Number(btn.dataset.d)||0)); }
