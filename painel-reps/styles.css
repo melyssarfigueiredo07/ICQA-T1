@@ -678,17 +678,20 @@ tr.flash td{animation:flash-bg 1.7s ease-out;}
   --a-psop:#D98A0B;   --a-psop-dim:#FCEFD6;   --a-psop-dk:#8A4B04;
   --a-psicqa:#0E9AA7; --a-psicqa-dim:#DDF3F5; --a-psicqa-dk:#0B6A74;
   --a-outra:#8B92A0;  --a-outra-dim:#EEF0F4;  --a-outra-dk:#4A5160;
+  --a-insumos:#B8478A; --a-insumos-dim:#F7E6F1; --a-insumos-dk:#7E2C5C;
 }
 .a-inv{--ac:var(--a-inv); --ad:var(--a-inv-dim); --adk:var(--a-inv-dk);}
 .a-qual{--ac:var(--a-qual); --ad:var(--a-qual-dim); --adk:var(--a-qual-dk);}
 .a-psop{--ac:var(--a-psop); --ad:var(--a-psop-dim); --adk:var(--a-psop-dk);}
 .a-psicqa{--ac:var(--a-psicqa); --ad:var(--a-psicqa-dim); --adk:var(--a-psicqa-dk);}
 .a-outra{--ac:var(--a-outra); --ad:var(--a-outra-dim); --adk:var(--a-outra-dk);}
+.a-insumos{--ac:var(--a-insumos); --ad:var(--a-insumos-dim); --adk:var(--a-insumos-dk);}
 .strip-cell.b-a-inv{border-left-color:var(--a-inv);}
 .strip-cell.b-a-qual{border-left-color:var(--a-qual);}
 .strip-cell.b-a-psop{border-left-color:var(--a-psop);}
 .strip-cell.b-a-psicqa{border-left-color:var(--a-psicqa);}
 .strip-cell.b-a-outra{border-left-color:var(--a-outra);}
+.strip-cell.b-a-insumos{border-left-color:var(--a-insumos);}
 
 /* ---------- Pessoas trabalhando por dia ---------- */
 .mes-head{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px;}
@@ -861,6 +864,7 @@ tbody tr:last-child td{border-bottom:0;}
   --a-psop-dim:#F5F5F5;
   --a-psicqa-dim:#F5F5F5;
   --a-outra-dim:#F5F5F5;
+  --a-insumos-dim:#F5F5F5;
 }
 .card.rep-card.st-ferias, .card.rep-card.st-licenca, .rep-box.st-ferias, .rep-box.st-licenca, .mx-btn.on.st-ferias, .mx-btn.on.st-licenca{background:#FFFFFF;}
 
@@ -1045,7 +1049,7 @@ tbody tr:last-child td{border-bottom:0;}
 @media (max-width:820px) { .dia-ctl .field, .dia-ctl .field:last-child{flex:0 0 auto;} }
 
 /* Calendário: paleta, sombras e medidas do formato original (as outras abas seguem o tema novo) */
-#view-calendario{--bg:#EFF1F4; --a-inv-dim:#E8EFFC; --a-outra-dim:#EEF0F4; --a-psicqa-dim:#DDF3F5; --a-psop-dim:#FCEFD6; --a-qual-dim:#EFEAFB; --amber-dim:#FBEDD9; --escB-dim:#FBF3D9; --escC-dim:#E4F1FB; --escD-dim:#EFE7FA; --green-dim:#E4F5EC; --line:#E2E4EA; --panel-2:#F3F4F7; --radius:8px; --rust-dim:#FBE3E1; --shadow-1:0 1px 2px rgba(20,20,30,0.04), 0 1px 8px rgba(20,20,30,0.05); --shadow-2:0 10px 22px rgba(20,20,30,0.12); --teal:#2F6FE4; --teal-dim:#E8EFFC;}
+#view-calendario{--bg:#EFF1F4; --a-inv-dim:#E8EFFC; --a-outra-dim:#EEF0F4; --a-insumos-dim:#F7E6F1; --a-psicqa-dim:#DDF3F5; --a-psop-dim:#FCEFD6; --a-qual-dim:#EFEAFB; --amber-dim:#FBEDD9; --escB-dim:#FBF3D9; --escC-dim:#E4F1FB; --escD-dim:#EFE7FA; --green-dim:#E4F5EC; --line:#E2E4EA; --panel-2:#F3F4F7; --radius:8px; --rust-dim:#FBE3E1; --shadow-1:0 1px 2px rgba(20,20,30,0.04), 0 1px 8px rgba(20,20,30,0.05); --shadow-2:0 10px 22px rgba(20,20,30,0.12); --teal:#2F6FE4; --teal-dim:#E8EFFC;}
 body.tela-calendario{background:#EFF1F4;}
 #view-calendario .view-title{font-size:22px; letter-spacing:-0.01em;}
 #view-calendario .view-sub{color:var(--text-dim); font-size:13px; margin-top:3px;}
@@ -1089,3 +1093,26 @@ body.tela-calendario{background:#EFF1F4;}
 .agenda-quadro-head .hint{margin:0 0 0 auto; font-size:11.5px;}
 .agenda-quadro table{margin:0;}
 .mes-ferr{display:flex; justify-content:flex-end; margin:0 0 8px;}
+
+/* ---------- Pedidos aguardando aprovação, separados por time ---------- */
+.pedidos-times{display:grid; gap:14px; margin:0 0 22px;}
+.pedido-time{border:1px solid var(--line); border-radius:var(--radius); background:var(--panel); overflow:hidden;}
+.pedido-time-head{display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--panel-2); border-bottom:1px solid var(--line-soft);}
+.pedido-time-head b{font-size:13px; color:var(--text);}
+.pedido{display:grid; gap:6px; padding:12px 14px; border-bottom:1px solid var(--line-soft);}
+.pedido:last-child{border-bottom:0;}
+.pedido-quem{display:flex; align-items:center; gap:8px; flex-wrap:wrap; font-size:13.5px;}
+.pedido-datas{font-size:13px; color:var(--text-dim);}
+.pedido-acoes{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+.pedido-acoes select{min-width:220px;}
+.pedido-erro{font-size:12.5px; color:var(--rust);}
+.pedido-vazio{padding:12px 14px;}
+.pedido.aviso{background:var(--amber-dim);}
+
+/* ---------- Importar respostas do forms ---------- */
+.forms-importa{margin:0 0 22px;}
+.forms-linha{display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:0 0 10px;}
+.forms-importa textarea{width:100%; box-sizing:border-box; font-family:'IBM Plex Mono',monospace; font-size:12px; border:1px solid var(--line); border-radius:var(--radius); padding:8px 10px; background:var(--panel); color:var(--text);}
+.forms-mapa{display:grid; grid-template-columns:repeat(auto-fill,minmax(210px,1fr)); gap:10px; margin:10px 0 6px;}
+.forms-mapa label{display:grid; gap:4px; font-size:12px; color:var(--text-dim);}
+.forms-acao{display:flex; align-items:flex-end;}

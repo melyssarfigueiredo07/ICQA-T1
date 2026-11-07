@@ -325,6 +325,7 @@
       <nav class="sec-index" id="calIndex" aria-label="Seções do Calendário">
         <button type="button" class="fchip on" data-act="goto-sec" data-sec="sec-dia">Painel do dia</button>
         <button type="button" class="fchip" data-act="goto-sec" data-sec="sec-agendar">Agendar</button>
+        <button type="button" class="fchip" data-act="goto-sec" data-sec="sec-pedidos">Pedidos <b id="calIdxPedidos"></b></button>
         <button type="button" class="fchip" data-act="goto-sec" data-sec="sec-lista">Agendamentos <b id="calIdxN"></b></button>
       </nav>
 
@@ -468,6 +469,25 @@
         <div class="folga-preview" id="folgaPreview"></div>
         <div class="form-error" id="folgaFormError" style="display:none;"></div>
         </div></div></div>
+      </div>
+
+      <div class="panel" id="sec-pedidos" data-sec>
+        <div class="panel-title">Pedidos</div>
+        <div class="hint" style="margin:0 0 14px;">Respostas do forms aguardando aprovação, separadas por time. Aprovar agenda direto no calendário. Depois de aprovado, avise a pessoa.</div>
+        <div class="forms-importa">
+          <div class="sub-title">Importar respostas do forms <small>no forms, aba Respostas › ⋮ › Fazer o download das respostas (.csv)</small></div>
+          <div class="forms-linha">
+            <input type="file" id="formsArquivo" accept=".csv,.tsv,.txt,text/csv">
+            <button type="button" class="btn" data-act="forms-ler">Ler texto colado</button>
+          </div>
+          <textarea id="formsTexto" rows="3" placeholder="ou cole aqui o conteúdo do CSV (ou as linhas copiadas da planilha)"></textarea>
+          <div class="forms-mapa" id="formsMapa"></div>
+          <div class="hint" id="formsStatus"></div>
+        </div>
+        <div class="sub-title">Aguardando aprovação <small id="pedidosPendN"></small></div>
+        <div class="pedidos-times" id="pedidosPend"></div>
+        <div class="sub-title">Avisar a pessoa <small id="pedidosAvisoN"></small></div>
+        <div class="pedidos-times" id="pedidosAvisos"></div>
       </div>
 
       <div class="panel" id="sec-lista" data-sec>

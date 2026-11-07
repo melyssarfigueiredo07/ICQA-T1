@@ -4,7 +4,7 @@
   // ---------- window.GRID.state: armazenamento nativo do Grid, compartilhado e ao vivo ----------
   // Estado vazio de um time. Sempre listas NOVAS: reaproveitar um objeto padrão faria times novos
   // compartilharem as mesmas listas (e o que se cadastra num aparece no outro).
-  function novoEstado(){ return { teamName:"", reps:[], tasks:[], pontos:[], lost:[], folgas:[], escalaModo:"folga" }; }
+  function novoEstado(){ return { teamName:"", reps:[], tasks:[], pontos:[], lost:[], folgas:[], solicitacoes:[], escalaModo:"folga" }; }
   // O estado do Grid guarda um conjunto de dados por time: { times: { vinicius:{...}, harley:{...} } }.
   // Dados antigos (sem "times", direto na raiz) são lidos como Time Vinicius. `state` = dados do time ativo.
   var ICQA_AREA_FIXA = {
@@ -47,7 +47,7 @@
   var dimDate = null, dimFollow = true, dimFiltro = "todos", lastToday = null;
   var dimView = "cards", dimUndo = null, dimMsg = "";
   var dimArea = "todas"; // "todas" | "inventario" | "qualidade": quais áreas aparecem no Dimensionamento
-  var CATEGORIA_LABEL = {inventario:"Inventário", qualidade:"Qualidade", ps_operacoes:"PS Operações", ps_icqa:"PS ICQA"};
+  var CATEGORIA_LABEL = {inventario:"Inventário", qualidade:"Qualidade", ps_operacoes:"PS Operações", ps_icqa:"PS ICQA", insumos:"Insumos em área"};
   var CLASSE_LABEL = {rep:"Rep", ps:"PS"};
   var CLASSE_TAG = {rep:"tag-teal", ps:"tag-amber"};
   var ESCALAS = ["A","B","C","D"];
@@ -243,15 +243,15 @@
     if(ex) return ex.tipo==="troca-trabalho" ? "Trabalha (troca)" : "Folga extra";
     return STATUS_LABEL[effStatus(r, iso)];
   }
-  // Áreas usadas para separar quem está presente (Área cadastrada do rep). Fora dessas quatro vai em "Sem área".
-  var AREAS_PRESENCA = ["inventario","qualidade","ps_operacoes","ps_icqa"];
-  var AREA_CURTA = {inventario:"Inv", qualidade:"Qual", ps_operacoes:"PS Op", ps_icqa:"PS ICQA", outra:"Outras"};
-  var AREA_MINI = {inventario:"Inv", qualidade:"Qual", ps_operacoes:"Op", ps_icqa:"ICQA", outra:"Out"}; // rótulo dos blocos pequenos do calendário
+  // Áreas usadas para separar quem está presente (Área cadastrada do rep). Fora dessas vai em "Sem área".
+  var AREAS_PRESENCA = ["inventario","qualidade","ps_operacoes","ps_icqa","insumos"];
+  var AREA_CURTA = {inventario:"Inv", qualidade:"Qual", ps_operacoes:"PS Op", ps_icqa:"PS ICQA", insumos:"Insumos", outra:"Outras"};
+  var AREA_MINI = {inventario:"Inv", qualidade:"Qual", ps_operacoes:"Op", ps_icqa:"ICQA", insumos:"Ins", outra:"Out"}; // rótulo dos blocos pequenos do calendário
   function areaDe(r){ return AREAS_PRESENCA.indexOf(r.categoria)>-1 ? r.categoria : "outra"; }
   function areaNome(k){ return k==="outra" ? "Sem área" : (CATEGORIA_LABEL[k]||k); }
   function areaEhPS(k){ return k.indexOf("ps_")===0; }
   // Cada área tem uma cor própria em todo o painel (classe a-inv, a-qual, a-psop, a-psicqa, a-outra).
-  var AREA_ID = {inventario:"inv", qualidade:"qual", ps_operacoes:"psop", ps_icqa:"psicqa"};
+  var AREA_ID = {inventario:"inv", qualidade:"qual", ps_operacoes:"psop", ps_icqa:"psicqa", insumos:"insumos"};
   function areaCls(k){ return "a-"+(AREA_ID[k]||"outra"); }
   function areaCor(k){ return "var(--"+areaCls(k)+")"; }
   // Pessoas em um dia, TODAS as classes (rep e PS), com a quebra por Área cadastrada:
@@ -744,14 +744,14 @@
   }
   // Contadores nas abas: o que importa ver sem abrir a aba (pendências em âmbar).
   function renderNavBadges(){
-    var hoje = todayISO();
+    var hoje = todayISO(), pedidos = contarPedidos();
     var semCob = state.tasks.filter(function(t){ return coberturaTarefa(t).sem; }).length;
     var pend = state.pontos.filter(function(p){ return p.status!=="concluido"; }).length;
     var agend = (state.folgas||[]).filter(function(f){ return f && typeof f==="object" && folgaFim(f) && folgaFim(f)>=hoje; }).length;
     var info = {
       equipe:{n:state.reps.length, tip:state.reps.length+" pessoa(s) cadastrada(s)"},
       dimensionamento:{n:state.tasks.length, warn:semCob>0, tip:state.tasks.length+" tarefa(s)"+(semCob ? " · "+semCob+" sem cobertura na data" : "")},
-      calendario:{n:agend, tip:agend+" agendamento(s) em andamento ou futuros"},
+      calendario:{n:agend, warn:(pedidos.pendentes+pedidos.avisar)>0, tip:agend+" agendamento(s) em andamento ou futuros"+(pedidos.pendentes ? " · "+pedidos.pendentes+" pedido(s) aguardando aprovação" : "")+(pedidos.avisar ? " · "+pedidos.avisar+" pessoa(s) para avisar" : "")},
       aniversarios:{n:anivNoMes(todayISO().slice(0,7)).itens.length, tip:"Aniversariantes do mês, dos dois times"},
       pontos:{n:pend, warn:pend>0, tip:pend+" ponto(s) pendente(s)"},
       lost:{n:state.lost.length, tip:state.lost.length+" registro(s)"}
@@ -900,6 +900,7 @@
     ["repBusca","pontoBusca"].forEach(function(id){ var el = document.getElementById(id); if(el) el.value = ""; });
   }
   function renderEquipe(){
+    sincronizarAreasRep();
     renderTeamCard();
     if(!editing.rep) renderRepSkillsChecklist(getCheckedRepSkills());
     renderRepGrid();
@@ -2647,6 +2648,262 @@
     folgaPreview();
   }
 
+  // ----- Pedidos (respostas do forms) aguardando aprovação, separados por time -----
+  // Cada pedido fica em root.times[time].solicitacoes: {id, nome, repId, tipo, data, dataFim, dataFolga, dataTrabalho, dias, obs, status, recebidoEm, folgaId, avisado}.
+  // status: "pendente" | "aprovada" | "recusada". Aprovado e ainda não avisado vira lembrete para avisar a pessoa.
+  var pedidoErro = {}, pedidoEscolha = {}, pedidosHTMLAnterior = "";
+  function pedidosDoTime(key){ var t = root.times[key]; return t && Array.isArray(t.solicitacoes) ? t.solicitacoes : []; }
+  function pedidoDe(key, id){ return pedidosDoTime(key).filter(function(p){ return p.id===id; })[0] || null; }
+  function repDoTime(key, repId){ var t = root.times[key]; return ((t && t.reps) || []).filter(function(r){ return r.id===repId; })[0] || null; }
+  // Pessoa do pedido pelo nome digitado no forms: só vale quando bate com um único rep do time.
+  function repDoNomePedido(key, nome){
+    var alvo = normNome(nome), achados = ((root.times[key] && root.times[key].reps) || []).filter(function(r){ return normNome(r.nome)===alvo; });
+    return achados.length===1 ? achados[0].id : "";
+  }
+  function contarPedidos(){
+    var c = {pendentes:0, avisar:0};
+    TIMES.forEach(function(t){
+      pedidosDoTime(t.key).forEach(function(p){
+        if(p.status==="pendente") c.pendentes++;
+        else if(p.status==="aprovada" && !p.avisado) c.avisar++;
+      });
+    });
+    return c;
+  }
+  function pedidoDatasHTML(p){
+    return folgaDatasTexto({tipo:p.tipo, data:p.data, dataFim:p.dataFim, dataFolga:p.dataFolga, dataTrabalho:p.dataTrabalho, dias:p.dias});
+  }
+  function pedidoPendenteHTML(key, p){
+    var reps = ((root.times[key] && root.times[key].reps) || []).slice().sort(function(a,b){ return a.nome.localeCompare(b.nome, "pt-BR"); });
+    var atual = pedidoEscolha[p.id] || p.repId || repDoNomePedido(key, p.nome);
+    var opcoes = '<option value="">Escolha a pessoa</option>' + reps.map(function(r){
+      return '<option value="'+esc(r.id)+'"'+(r.id===atual ? ' selected' : '')+'>'+esc(r.nome)+(r.escala ? ' · Escala '+esc(r.escala) : '')+'</option>';
+    }).join("");
+    return '<div class="pedido" data-pedido="'+esc(p.id)+'">' +
+      '<div class="pedido-quem"><b>'+esc(p.nome||"(sem nome)")+'</b><span class="tag '+(TIPO_TAG[p.tipo]||"tag-teal")+'">'+esc(TIPO_ROTULO[p.tipo]||p.tipo)+'</span></div>' +
+      '<div class="pedido-datas">'+pedidoDatasHTML(p)+'</div>' +
+      (p.obs ? '<div class="hint">'+esc(p.obs)+'</div>' : '') +
+      '<div class="pedido-acoes"><select data-pedido-rep="'+esc(p.id)+'" aria-label="Pessoa do pedido">'+opcoes+'</select>' +
+        '<button type="button" class="btn btn-primary" data-act="pedido-aprovar" data-time="'+esc(key)+'" data-id="'+esc(p.id)+'">Aprovar e agendar</button>' +
+        '<button type="button" class="btn-ghost" data-act="pedido-recusar" data-time="'+esc(key)+'" data-id="'+esc(p.id)+'">Recusar</button></div>' +
+      (pedidoErro[p.id] ? '<div class="pedido-erro">'+esc(pedidoErro[p.id])+'</div>' : '') +
+    '</div>';
+  }
+  function pedidoAvisoHTML(key, p){
+    var r = repDoTime(key, p.repId);
+    return '<div class="pedido aviso" data-pedido="'+esc(p.id)+'">' +
+      '<div class="pedido-quem">Avisar <b>'+esc(r ? r.nome : p.nome)+'</b> que o pedido de '+esc((TIPO_ROTULO[p.tipo]||"folga").toLowerCase())+' foi aprovado e agendado</div>' +
+      '<div class="pedido-datas">'+pedidoDatasHTML(p)+'</div>' +
+      '<div class="pedido-acoes"><button type="button" class="btn btn-primary" data-act="pedido-avisado" data-time="'+esc(key)+'" data-id="'+esc(p.id)+'">Já avisei</button></div>' +
+    '</div>';
+  }
+  function pedidosGrupoHTML(key, itens, linha, vazio){
+    var ordem = itens.slice().sort(function(a,b){ return String(a.recebidoEm||"").localeCompare(String(b.recebidoEm||"")); });
+    return '<div class="pedido-time" data-time="'+esc(key)+'">' +
+      '<header class="pedido-time-head"><b>'+esc(timeDef(key).nome)+'</b><span class="num">'+ordem.length+'</span></header>' +
+      (ordem.length ? ordem.map(function(p){ return linha(key, p); }).join("") : '<div class="hint pedido-vazio">'+esc(vazio)+'</div>') +
+    '</div>';
+  }
+  function renderPedidos(){
+    var htmlPend = "", htmlAvisar = "";
+    TIMES.forEach(function(t){
+      var lista = pedidosDoTime(t.key);
+      htmlPend += pedidosGrupoHTML(t.key, lista.filter(function(p){ return p.status==="pendente"; }), pedidoPendenteHTML, "Nenhum pedido aguardando aprovação.");
+      htmlAvisar += pedidosGrupoHTML(t.key, lista.filter(function(p){ return p.status==="aprovada" && !p.avisado; }), pedidoAvisoHTML, "Ninguém para avisar.");
+    });
+    // só reescreve as listas quando algo mudou, para não perder a pessoa escolhida numa linha
+    var assinatura = htmlPend + "\u0001" + htmlAvisar;
+    if(assinatura!==pedidosHTMLAnterior){
+      pedidosHTMLAnterior = assinatura;
+      document.getElementById("pedidosPend").innerHTML = htmlPend;
+      document.getElementById("pedidosAvisos").innerHTML = htmlAvisar;
+    }
+    var c = contarPedidos();
+    document.getElementById("pedidosPendN").textContent = c.pendentes ? c.pendentes+" aguardando" : "";
+    document.getElementById("pedidosAvisoN").textContent = c.avisar ? c.avisar+" para avisar" : "";
+    document.getElementById("calIdxPedidos").textContent = (c.pendentes+c.avisar) || "";
+  }
+  // Aprova: valida com a escala do time do pedido e, se der certo, agenda direto no calendário.
+  function aprovarPedido(key, id){
+    var p = pedidoDe(key, id);
+    if(!p || p.status!=="pendente") return;
+    var sel = document.querySelector('[data-pedido-rep="'+id+'"]'), r = repDoTime(key, sel ? sel.value : "");
+    if(!r){ pedidoErro[id] = "Escolha uma pessoa deste time."; renderAll(); return; }
+    var d = {tipo:p.tipo, repId:r.id, data:p.data||"", dataFim:p.dataFim||"", trabalha:p.dataTrabalho||"", folgaEm:p.dataFolga||"", feriasIni:p.data||"", feriasDias:p.dias||"", obs:p.obs||""};
+    var antigo = editing.folga, av;
+    editing.folga = null; // aprovar outro pedido não deve ignorar o agendamento que está aberto no formulário
+    try{ av = comTime(key, function(){ return folgaAvaliar(d); }); }finally{ editing.folga = antigo; }
+    if(!av.ok){ pedidoErro[id] = av.erro || "Este pedido não pode ser agendado."; renderAll(); return; }
+    delete pedidoErro[id];
+    gravarFolga(av.entry, "");
+    p.status = "aprovada"; p.repId = r.id; p.folgaId = av.entry.id; p.decididoEm = todayISO(); p.avisado = false;
+    folgasMes = folgaIni(av.entry).slice(0,7) || folgasMes; // mostra no calendário o mês do agendamento
+    scheduleSave();
+    renderAll();
+    toast("Agendado: "+(TIPO_ROTULO[p.tipo]||"")+" · "+r.nome+". Avise a pessoa.");
+  }
+  function recusarPedido(key, id){
+    var p = pedidoDe(key, id);
+    if(!p || p.status!=="pendente") return;
+    p.status = "recusada"; p.decididoEm = todayISO(); delete pedidoErro[id];
+    scheduleSave();
+    renderAll();
+    toast("Pedido recusado");
+  }
+  function marcarAvisado(key, id){
+    var p = pedidoDe(key, id);
+    if(!p || p.status!=="aprovada") return;
+    p.avisado = true; p.avisadoEm = todayISO();
+    scheduleSave();
+    renderAll();
+    toast("Pessoa avisada");
+  }
+  // "Insumos em área" é opção só do Time Harley: a lista de Área do formulário acompanha o time ativo.
+  function sincronizarAreasRep(){
+    var sel = document.getElementById("repCategoria");
+    if(!sel) return;
+    var tem = !!sel.querySelector('option[value="insumos"]'), deve = timeAtual==="harley";
+    if(deve && !tem) sel.insertAdjacentHTML("beforeend", '<option value="insumos">'+CATEGORIA_LABEL.insumos+'</option>');
+    if(!deve && tem){
+      if(sel.value==="insumos") sel.value = "inventario";
+      sel.querySelector('option[value="insumos"]').remove();
+    }
+  }
+
+  // ----- Importar respostas do forms (CSV baixado da aba Respostas) -----
+  // Lê o CSV, mostra qual coluna é cada campo (o palpite vem do nome da coluna) e cria os pedidos pendentes.
+  // Sem coluna de time, o time sai do nome: só vale quando o nome bate com um único rep de um só time.
+  var formsLido = null;
+  var FORMS_CAMPOS = [
+    {k:"carimbo", rotulo:"Carimbo (data e hora da resposta)", pistas:["carimbo"]},
+    {k:"nome", rotulo:"Pessoa", pistas:["nome", "colaborador", "pessoa"]},
+    {k:"time", rotulo:"Time", pistas:["time", "equipe"]},
+    {k:"tipo", rotulo:"Tipo do pedido", pistas:["tipo", "solicit"]},
+    {k:"dataFolga", rotulo:"Dia de folga (troca)", pistas:["folga"]},
+    {k:"dataTrabalho", rotulo:"Dia de trabalho (troca)", pistas:["trabalh"]},
+    {k:"dataFim", rotulo:"Data final", pistas:["final", "fim", "ate"]},
+    {k:"dias", rotulo:"Dias (férias)", pistas:["dias", "quantidade"]},
+    {k:"obs", rotulo:"Observação", pistas:["observ", "coment"]},
+    {k:"data", rotulo:"Data inicial", pistas:["inicio", "inicial", "data"]}
+  ];
+  // CSV com vírgula, ponto e vírgula ou tabulação (o que vier do Sheets ou do Excel), com aspas e quebras de linha dentro do campo.
+  function csvLer(texto){
+    var t = String(texto || "").replace(/^﻿/, "");
+    var primeira = t.split(/\r?\n/)[0] || "";
+    var n = {",":(primeira.match(/,/g) || []).length, ";":(primeira.match(/;/g) || []).length, "\t":(primeira.match(/\t/g) || []).length};
+    var sep = n["\t"] > n[","] && n["\t"] > n[";"] ? "\t" : (n[";"] > n[","] ? ";" : ",");
+    var linhas = [], linha = [], campo = "", aspas = false;
+    for(var i = 0; i < t.length; i++){
+      var c = t[i];
+      if(aspas){
+        if(c === '"'){ if(t[i+1] === '"'){ campo += '"'; i++; } else { aspas = false; } }
+        else { campo += c; }
+      }else if(c === '"'){ aspas = true; }
+      else if(c === sep){ linha.push(campo); campo = ""; }
+      else if(c === "\n" || c === "\r"){
+        if(c === "\r" && t[i+1] === "\n") i++;
+        linha.push(campo); campo = "";
+        if(linha.length > 1 || linha[0] !== "") linhas.push(linha);
+        linha = [];
+      }else{ campo += c; }
+    }
+    if(campo !== "" || linha.length){ linha.push(campo); if(linha.length > 1 || linha[0] !== "") linhas.push(linha); }
+    return linhas;
+  }
+  function dataValida(y, mo, d){
+    var t = new Date(Date.UTC(y, mo-1, d));
+    return t.getUTCFullYear()===y && t.getUTCMonth()===mo-1 && t.getUTCDate()===d ? y+"-"+String(mo).padStart(2,"0")+"-"+String(d).padStart(2,"0") : "";
+  }
+  // Data do forms: 2026-11-09, 09/11/2026 (dia/mês, como no Brasil) ou 11/25/2026 (mês/dia, quando o segundo número passa de 12).
+  function dataDoForms(txt){
+    var s = String(txt || "").trim(), m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if(m) return dataValida(+m[1], +m[2], +m[3]);
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})/);
+    if(!m) return "";
+    var a = +m[1], b = +m[2], y = +m[3] < 100 ? +m[3] + 2000 : +m[3];
+    return b > 12 ? dataValida(y, a, b) : dataValida(y, b, a);
+  }
+  function tipoDoForms(txt){
+    var s = normNome(txt);
+    if(s.indexOf("banco") > -1) return "banco";
+    if(s.indexOf("troca") > -1) return "troca";
+    if(s.indexOf("ferias") > -1) return "ferias";
+    if(s.indexOf("treina") > -1) return "treinamento";
+    return "";
+  }
+  function timeDoForms(txt){
+    var s = normNome(txt);
+    return s.indexOf("harley") > -1 ? "harley" : (s.indexOf("vinicius") > -1 ? "vinicius" : "");
+  }
+  function timeDoNomeForms(nome){
+    var achados = TIMES.filter(function(t){ return repDoNomePedido(t.key, nome) !== ""; });
+    return achados.length === 1 ? achados[0].key : "";
+  }
+  function formsLer(texto){
+    var status = document.getElementById("formsStatus"), mapa = document.getElementById("formsMapa");
+    var linhas = csvLer(texto);
+    if(linhas.length < 2){
+      formsLido = null; mapa.innerHTML = "";
+      status.textContent = "Não achei linhas de respostas. Confira se o texto é o CSV das respostas.";
+      return;
+    }
+    var cab = linhas[0].map(function(h){ return String(h).trim(); });
+    formsLido = {linhas: linhas.slice(1)};
+    var usados = {};
+    mapa.innerHTML = FORMS_CAMPOS.map(function(campo){
+      var palpite = -1;
+      cab.some(function(h, i){
+        if(usados[i] || !campo.pistas.some(function(p){ return normNome(h).indexOf(p) > -1; })) return false;
+        palpite = i; return true;
+      });
+      if(palpite > -1) usados[palpite] = true;
+      return '<label>' + esc(campo.rotulo) + '<select data-forms-campo="' + campo.k + '">' +
+        '<option value="">— não usar —</option>' +
+        cab.map(function(h, i){ return '<option value="' + i + '"' + (i === palpite ? ' selected' : '') + '>' + esc(h || "(sem título)") + '</option>'; }).join("") +
+        '</select></label>';
+    }).join("") + '<div class="forms-acao"><button type="button" class="btn btn-primary" data-act="forms-importar">Importar pedidos</button></div>';
+    status.textContent = formsLido.linhas.length + " resposta(s) lida(s). Confira as colunas e clique em Importar pedidos.";
+  }
+  function formsImportar(){
+    var status = document.getElementById("formsStatus");
+    if(!formsLido){ status.textContent = "Leia as respostas antes de importar."; return; }
+    var col = {};
+    Array.prototype.forEach.call(document.querySelectorAll("[data-forms-campo]"), function(s){ col[s.dataset.formsCampo] = s.value === "" ? -1 : Number(s.value); });
+    var jaTem = {};
+    TIMES.forEach(function(t){ pedidosDoTime(t.key).forEach(function(p){ if(p.chave) jaTem[p.chave] = true; }); });
+    var res = {criados:0, repetidos:0, semTime:[], tipo:[], semData:[]};
+    formsLido.linhas.forEach(function(linha, n){
+      var v = function(k){ return col[k] >= 0 ? String(linha[col[k]] || "").trim() : ""; };
+      var nome = v("nome"), quem = nome || "linha " + (n + 2);
+      if(!nome && !v("data") && !v("tipo")) return; // linha em branco
+      var tipo = tipoDoForms(v("tipo"));
+      if(!tipo){ res.tipo.push(quem); return; }
+      var dados = {data:dataDoForms(v("data")), dataFim:dataDoForms(v("dataFim")), dataFolga:dataDoForms(v("dataFolga")), dataTrabalho:dataDoForms(v("dataTrabalho")), dias:parseInt(v("dias"), 10) || 0};
+      if(tipo === "ferias" && !dados.dias && dados.data && dados.dataFim) dados.dias = diasEntre(dados.data, dados.dataFim);
+      var completo = tipo === "troca" ? (dados.dataFolga && dados.dataTrabalho) : (tipo === "ferias" ? (dados.data && dados.dias > 0) : dados.data);
+      if(!completo){ res.semData.push(quem); return; }
+      var key = timeDoForms(v("time")) || timeDoNomeForms(nome);
+      if(!key){ res.semTime.push(quem); return; }
+      var recebido = v("carimbo");
+      var chave = [recebido, normNome(nome), tipo, dados.data, dados.dataFim, dados.dataFolga, dados.dataTrabalho, dados.dias].join("|");
+      if(jaTem[chave]){ res.repetidos++; return; }
+      jaTem[chave] = true;
+      var time = timeComDados(key);
+      if(!Array.isArray(time.solicitacoes)) time.solicitacoes = [];
+      time.solicitacoes.push({id:uid(), nome:nome, repId:repDoNomePedido(key, nome), tipo:tipo, data:dados.data, dataFim:dados.dataFim, dataFolga:dados.dataFolga, dataTrabalho:dados.dataTrabalho, dias:dados.dias, obs:v("obs"), status:"pendente", recebidoEm:recebido, origem:"forms", chave:chave});
+      res.criados++;
+    });
+    scheduleSave();
+    renderAll();
+    var partes = ["Importados: " + res.criados];
+    if(res.repetidos) partes.push("já estavam na lista: " + res.repetidos);
+    if(res.semTime.length) partes.push("sem time (inclua a coluna Time ou use o nome exato do cadastro): " + res.semTime.join(", "));
+    if(res.tipo.length) partes.push("tipo não reconhecido: " + res.tipo.join(", "));
+    if(res.semData.length) partes.push("faltam datas: " + res.semData.join(", "));
+    status.textContent = partes.join(" · ");
+    toast("Importados " + res.criados + " pedido(s)");
+  }
+
   // ---------- render all ----------
   // ---------- Aniversários: um calendário só, com os reps de todos os times ----------
   // Lê direto de root.times (o time ativo já está lá), então o painel mostra os dois times ao mesmo tempo.
@@ -2739,6 +2996,7 @@
     renderDim();
     renderTasks();
     renderFolgas();
+    renderPedidos();
     renderAniversarios();
     renderAnual();
     renderPontos();
@@ -2746,7 +3004,7 @@
     renderNavBadges();
   }
 
-  var SEC_IDS = {"sec-dia":"sec-dia", "sec-agendar":"folgaFormPanel", "sec-lista":"sec-lista"};
+  var SEC_IDS = {"sec-dia":"sec-dia", "sec-agendar":"folgaFormPanel", "sec-pedidos":"sec-pedidos", "sec-lista":"sec-lista"};
   function secAtiva(key){
     Array.prototype.forEach.call(document.querySelectorAll("#calIndex .fchip"), function(c){ c.classList.toggle("on", c.dataset.sec===key); });
   }
@@ -2877,6 +3135,11 @@
     else if(act==="filtro-time"){ mudarFiltroTime(btn.dataset.tab, btn.dataset.v); }
     else if(act==="mes-view"){ mesView = btn.dataset.mode==="tabela" ? "tabela" : "blocos"; renderMes(); }
     else if(act==="mes-quadro"){ mesOcultaQuadro = !mesOcultaQuadro; renderMes(); }
+    else if(act==="pedido-aprovar"){ aprovarPedido(btn.dataset.time, id); }
+    else if(act==="pedido-recusar"){ recusarPedido(btn.dataset.time, id); }
+    else if(act==="pedido-avisado"){ marcarAvisado(btn.dataset.time, id); }
+    else if(act==="forms-ler"){ formsLer(document.getElementById("formsTexto").value); }
+    else if(act==="forms-importar"){ formsImportar(); }
     else if(act==="goto-sec"){ irParaSecao(btn.dataset.sec); }
     else if(act==="mes-dia"){ setDimDate(Cal.addDays(dimDate, Number(btn.dataset.d)||0)); }
     else if(act==="edit-folga"){ startFolgaEdit((state.folgas||[]).find(function(f){return f.id===id;})); }
@@ -2927,6 +3190,14 @@
   document.getElementById("repBusca").addEventListener("input", function(e){ repBusca = e.target.value; renderRepGrid(); });
   document.getElementById("pontoBusca").addEventListener("input", function(e){ pontoBusca = e.target.value; renderPontos(); });
 
+  document.getElementById("formsArquivo").addEventListener("change", function(e){
+    var arq = e.target.files && e.target.files[0];
+    if(!arq) return;
+    var leitor = new FileReader();
+    leitor.onload = function(){ document.getElementById("formsTexto").value = leitor.result; formsLer(leitor.result); };
+    leitor.readAsText(arq, "utf-8");
+  });
+  document.addEventListener("change", function(e){ if(e.target.dataset && e.target.dataset.pedidoRep) pedidoEscolha[e.target.dataset.pedidoRep] = e.target.value; });
   document.addEventListener("change", function(e){
     if(e.target.classList.contains("dim-data-input")){ setDimDate(e.target.value); return; }
     if(e.target.classList.contains("task-rep-toggle")){
