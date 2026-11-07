@@ -783,8 +783,6 @@ tr.flash td{animation:flash-bg 1.7s ease-out;}
 .who.ex-trab{border-left:4px solid var(--teal);}
 
 /* alternância Blocos / Tabela */
-#sec-dia[data-mesview="blocos"] #folgasDias{display:none;}
-#sec-dia[data-mesview="tabela"] #mesBlocos{display:none;}
 
 @media (max-width:1000px){
   .ac{justify-content:center; padding-left:4px; padding-right:4px;}
@@ -1092,7 +1090,6 @@ body.tela-calendario{background:#EFF1F4;}
 .agenda-quadro-head b{font-size:13px; color:var(--text);}
 .agenda-quadro-head .hint{margin:0 0 0 auto; font-size:11.5px;}
 .agenda-quadro table{margin:0;}
-.mes-ferr{display:flex; justify-content:flex-end; margin:0 0 8px;}
 
 /* ---------- Pedidos aguardando aprovação, separados por time ---------- */
 .pedidos-times{display:grid; gap:14px; margin:0 0 22px;}

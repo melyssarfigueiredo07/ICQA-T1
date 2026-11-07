@@ -329,13 +329,9 @@
         <button type="button" class="fchip" data-act="goto-sec" data-sec="sec-lista">Agendamentos <b id="calIdxN"></b></button>
       </nav>
 
-      <div class="form-panel dim-panel" id="sec-dia" data-sec data-mesview="blocos">
+      <div class="form-panel dim-panel" id="sec-dia" data-sec>
         <div class="mes-head">
           <div class="form-panel-title">Painel do dia</div>
-          <div class="seg" role="group" aria-label="Como ver o mês">
-            <button type="button" class="seg-btn on" data-act="mes-view" data-mode="blocos" aria-pressed="true" title="Um bloco por dia, com as áreas em cores">Blocos</button>
-            <button type="button" class="seg-btn" data-act="mes-view" data-mode="tabela" aria-pressed="false" title="Tabela dia a dia com os nomes de quem está fora">Tabela</button>
-          </div>
         </div>
         <div class="form-row dia-ctl">
           <div class="field" style="flex:0 0 auto;">
@@ -375,15 +371,6 @@
         <div class="hint" id="dimHint" style="display:none; margin-top:8px;"></div>
         <div class="sub-title mes-sub" id="mesSub">Mês</div>
         <div class="strip compact" id="folgasStrip"></div>
-        <div id="mesBlocos">
-          <div class="area-legend" id="mesLegAreas"></div>
-          <div class="hint" id="mesDica" style="display:none; margin:0 0 10px;">Clique num dia do calendário para ver quem trabalha e quem está fora em cada área.</div>
-          <div class="mes-ferr"><button type="button" class="btn" id="mesQuadroBtn" data-act="mes-quadro">Ocultar quadro geral</button></div>
-          <div class="cal-wrap">
-            <div class="cal-head" aria-hidden="true"><span class="fds">Dom</span><span>Seg</span><span>Ter</span><span>Qua</span><span>Qui</span><span>Sex</span><span class="fds">Sáb</span></div>
-            <div class="cal-grid" id="calGrid"></div>
-          </div>
-        </div>
         <div class="fd-wrap" id="folgasDias"></div>
         <div class="dim-legend" id="folgasLegenda"></div>
         <div class="hint" id="folgasHint" style="display:none; margin-top:8px;"></div>
