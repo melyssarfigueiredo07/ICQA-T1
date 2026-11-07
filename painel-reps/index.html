@@ -380,15 +380,7 @@
         <div class="sec-corpo">
         <div class="hint" style="margin:0 0 14px;">Respostas do forms aguardando aprovação, separadas por time. Aprovar agenda direto no calendário. Depois de aprovado, avise a pessoa.</div>
         <div class="forms-importa">
-          <div class="sub-title">Importar respostas do forms <small>no forms, aba Respostas › ⋮ › Fazer o download das respostas (.csv)</small></div>
-          <div class="forms-linha">
-            <input type="file" id="formsArquivo" accept=".csv,.tsv,.txt,text/csv">
-            <button type="button" class="btn" data-act="forms-ler">Ler texto colado</button>
-            <button type="button" class="btn" data-act="forms-planilha" title="Lê a planilha de respostas pelo Grid e importa os pedidos. Só funciona com o Painel aberto no Grid.">Atualizar da planilha do forms</button>
-          </div>
-          <textarea id="formsTexto" rows="3" placeholder="ou cole aqui o conteúdo do CSV (ou as linhas copiadas da planilha)"></textarea>
-          <div class="forms-mapa" id="formsMapa"></div>
-          <div class="hint" id="formsStatus"></div>
+          <div class="hint" id="formsStatus">A planilha de respostas do forms é lida sozinha a cada minuto, com o Painel aberto no Grid.</div>
         </div>
         <div class="sub-title">Aguardando aprovação <small id="pedidosPendN"></small></div>
         <div class="pedidos-times" id="pedidosPend"></div>

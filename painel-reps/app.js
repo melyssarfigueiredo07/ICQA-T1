@@ -2660,10 +2660,10 @@
     }
   }
 
-  // ----- Importar respostas do forms (CSV baixado da aba Respostas) -----
-  // Lê o CSV, mostra qual coluna é cada campo (o palpite vem do nome da coluna) e cria os pedidos pendentes.
+  // ----- Respostas do forms, lidas sozinhas da planilha pelo Grid -----
+  // Cada resposta vira um pedido pendente. A coluna de cada campo sai do nome do cabeçalho.
   // Sem coluna de time, o time sai do nome (só vale quando bate com um único rep) ou do nome do time no líder.
-  var formsLido = null, formsCabAtual = "", formsLendo = false;
+  var formsLendo = false;
   // Ordem = ordem na tela. Formulário de banco de horas: Nome, Data, Saldo de horas, Escala e Líder.
   var FORMS_CAMPOS = [
     {k:"carimbo", rotulo:"Carimbo (data e hora da resposta)", pistas:["carimbo"]},
@@ -2680,30 +2680,6 @@
     {k:"dias", rotulo:"Dias (férias)", pistas:["dias", "quantidade"]},
     {k:"obs", rotulo:"Observação", pistas:["observ", "coment"]}
   ];
-  // CSV com vírgula, ponto e vírgula ou tabulação (o que vier do Sheets ou do Excel), com aspas e quebras de linha dentro do campo.
-  function csvLer(texto){
-    var t = String(texto || "").replace(/^﻿/, "");
-    var primeira = t.split(/\r?\n/)[0] || "";
-    var n = {",":(primeira.match(/,/g) || []).length, ";":(primeira.match(/;/g) || []).length, "\t":(primeira.match(/\t/g) || []).length};
-    var sep = n["\t"] > n[","] && n["\t"] > n[";"] ? "\t" : (n[";"] > n[","] ? ";" : ",");
-    var linhas = [], linha = [], campo = "", aspas = false;
-    for(var i = 0; i < t.length; i++){
-      var c = t[i];
-      if(aspas){
-        if(c === '"'){ if(t[i+1] === '"'){ campo += '"'; i++; } else { aspas = false; } }
-        else { campo += c; }
-      }else if(c === '"'){ aspas = true; }
-      else if(c === sep){ linha.push(campo); campo = ""; }
-      else if(c === "\n" || c === "\r"){
-        if(c === "\r" && t[i+1] === "\n") i++;
-        linha.push(campo); campo = "";
-        if(linha.length > 1 || linha[0] !== "") linhas.push(linha);
-        linha = [];
-      }else{ campo += c; }
-    }
-    if(campo !== "" || linha.length){ linha.push(campo); if(linha.length > 1 || linha[0] !== "") linhas.push(linha); }
-    return linhas;
-  }
   function dataValida(y, mo, d){
     var t = new Date(Date.UTC(y, mo-1, d));
     return t.getUTCFullYear()===y && t.getUTCMonth()===mo-1 && t.getUTCDate()===d ? y+"-"+String(mo).padStart(2,"0")+"-"+String(d).padStart(2,"0") : "";
@@ -2735,26 +2711,10 @@
     var achados = TIMES.filter(function(t){ return repDoNomePedido(t.key, nome) !== ""; });
     return achados.length === 1 ? achados[0].key : "";
   }
-  // CSV colado ou enviado: mostra as colunas e espera o clique em Importar pedidos.
-  function formsLer(texto){
-    var status = document.getElementById("formsStatus");
-    var n = formsLerLinhas(csvLer(texto));
-    status.textContent = n ? n + " resposta(s) lida(s). Confira as colunas e clique em Importar pedidos." : "Não achei linhas de respostas. Confira se o texto é o CSV das respostas.";
-  }
-  // Mostra as colunas (com o palpite de cada campo) e guarda as respostas. Devolve quantas são.
-  // Recebe matriz de linhas (CSV lido ou valores da planilha pelo Grid); a linha 1 é o cabeçalho.
-  function formsLerLinhas(linhas){
-    var mapa = document.getElementById("formsMapa");
-    linhas = (linhas || []).filter(function(l){ return Array.isArray(l) && l.some(function(c){ return String(c == null ? "" : c).trim() !== ""; }); });
-    if(linhas.length < 2){ formsLido = null; formsCabAtual = ""; mapa.innerHTML = ""; return 0; }
-    var cab = linhas[0].map(function(h){ return String(h == null ? "" : h).trim(); });
-    formsLido = {linhas: linhas.slice(1)};
-    // mesmo cabeçalho: a caixa de colunas fica como está, com a escolha de quem já mexeu nela
-    var assinatura = cab.join("\u0001");
-    if(assinatura === formsCabAtual && mapa.children.length) return formsLido.linhas.length;
-    formsCabAtual = assinatura;
-    var usados = {}, palpites = {};
-    // a data entra por último: "Data final" ou "Dia de folga" não podem ocupar o campo Data
+  // Importa as respostas lidas como pedidos pendentes. "prefixo" (opcional) abre a mensagem, ex.: de onde vieram as linhas.
+  // Quais colunas da planilha são cada campo, pelo nome do cabeçalho (o campo Data entra por último). Coluna não achada: -1.
+  function formsColunas(cab){
+    var usados = {}, col = {};
     FORMS_CAMPOS.slice().sort(function(a, b){ return (a.k === "data") - (b.k === "data"); }).forEach(function(campo){
       var palpite = -1;
       cab.some(function(h, i){
@@ -2762,30 +2722,16 @@
         palpite = i; return true;
       });
       if(palpite > -1) usados[palpite] = true;
-      palpites[campo.k] = palpite;
+      col[campo.k] = palpite;
     });
-    mapa.innerHTML = FORMS_CAMPOS.map(function(campo){
-      var palpite = palpites[campo.k];
-      return '<label>' + esc(campo.rotulo) + '<select data-forms-campo="' + campo.k + '">' +
-        '<option value="">— não usar —</option>' +
-        cab.map(function(h, i){ return '<option value="' + i + '"' + (i === palpite ? ' selected' : '') + '>' + esc(h || "(sem título)") + '</option>'; }).join("") +
-        '</select></label>';
-    }).join("") + '<div class="forms-acao"><label class="forms-time">Time das linhas sem time<select id="formsTimePadrao"><option value="">— escolher depois —</option>' +
-      TIMES.map(function(t){ return '<option value="' + t.key + '">' + esc(timeDef(t.key).nome) + '</option>'; }).join("") +
-      '</select></label><button type="button" class="btn btn-primary" data-act="forms-importar">Importar pedidos</button></div>';
-    return formsLido.linhas.length;
+    return col;
   }
-  // Importa as respostas lidas como pedidos pendentes. "prefixo" (opcional) abre a mensagem, ex.: de onde vieram as linhas.
-  function formsImportar(prefixo, silencioso){
+  function formsImportar(linhas, col, prefixo, silencioso){
     var status = document.getElementById("formsStatus");
-    if(!formsLido){ if(!silencioso) status.textContent = "Leia as respostas antes de importar."; return; }
-    var col = {};
-    Array.prototype.forEach.call(document.querySelectorAll("[data-forms-campo]"), function(s){ col[s.dataset.formsCampo] = s.value === "" ? -1 : Number(s.value); });
-    var timePadrao = (document.getElementById("formsTimePadrao") || {}).value || "";
     var jaTem = {};
     TIMES.forEach(function(t){ pedidosDoTime(t.key).forEach(function(p){ if(p.chave) jaTem[p.chave] = true; }); });
     var res = {criados:0, repetidos:0, semTime:[], tipo:[], semData:[]};
-    formsLido.linhas.forEach(function(linha, n){
+    linhas.forEach(function(linha, n){
       var v = function(k){ return col[k] >= 0 ? String(linha[col[k]] || "").trim() : ""; };
       var nome = v("nome"), quem = nome || "linha " + (n + 2);
       if(!nome && !v("data") && !v("tipo")) return; // linha em branco
@@ -2797,8 +2743,8 @@
       var completo = tipo === "troca" ? (dados.dataFolga && dados.dataTrabalho) : (tipo === "ferias" ? (dados.data && dados.dias > 0) : dados.data);
       if(!completo){ res.semData.push(quem); return; }
       // time: coluna Time, depois o nome no cadastro (um único rep), depois o nome do time no líder (ex.: Time Vinicius)
-      // sem time na coluna, no cadastro nem no líder: vai para o time escolhido na caixa acima, se houver
-      var key = timeDoForms(v("time")) || timeDoNomeForms(nome) || timeDoForms(v("lider")) || timePadrao;
+      // sem time na coluna, no cadastro nem no líder: a linha fica de fora e aparece na mensagem
+      var key = timeDoForms(v("time")) || timeDoNomeForms(nome) || timeDoForms(v("lider"));
       if(!key){ res.semTime.push(quem); return; }
       var recebido = v("carimbo");
       var chave = [recebido, normNome(nome), tipo, dados.data, dados.dataFim, dados.dataFolga, dados.dataTrabalho, dados.dias].join("|");
@@ -2816,7 +2762,7 @@
     var partes = (prefixo ? [prefixo] : []).concat(["Importados: " + res.criados]);
     if(!(col.tipo >= 0)) partes.push("sem coluna de tipo: entram como banco de horas");
     if(res.repetidos) partes.push("já estavam na lista: " + res.repetidos);
-    if(res.semTime.length) partes.push("sem time: escolha o time na caixa acima e importe de novo · " + res.semTime.join(", "));
+    if(res.semTime.length) partes.push("sem time (o nome não está no cadastro e o Líder não traz o nome do time): " + res.semTime.join(", "));
     if(res.tipo.length) partes.push("tipo não reconhecido: " + res.tipo.join(", "));
     if(res.semData.length) partes.push("faltam datas: " + res.semData.join(", "));
     status.textContent = partes.join(" · ");
@@ -2867,13 +2813,15 @@
     }).then(function(dados){
       // a leitura voltou: se a caixa dizia que a atualização automática parou, ela volta ao normal
       if(silencioso && status.textContent.indexOf("Atualização automática parada") === 0) status.textContent = "";
-      var n = formsLerLinhas(gridCampo(dados, "values") || []);
+      var linhas = (gridCampo(dados, "values") || []).filter(function(l){ return Array.isArray(l) && l.some(function(c){ return String(c == null ? "" : c).trim() !== ""; }); });
+      var n = linhas.length > 1 ? linhas.length - 1 : 0;
       if(!n){
         if(!silencioso) status.textContent = "A aba “" + aba + "” ainda não tem respostas (só o cabeçalho, ou vazia).";
         return;
       }
       var lidas = "Lidas " + n + " resposta(s) da aba “" + aba + "”";
-      formsImportar(silencioso ? "Atualização automática · " + lidas : lidas, silencioso);
+      var cab = linhas[0].map(function(h){ return String(h == null ? "" : h).trim(); });
+      formsImportar(linhas.slice(1), formsColunas(cab), silencioso ? "Atualização automática · " + lidas : lidas, silencioso);
     }).catch(function(e){
       var msg = "Não consegui ler a planilha pelo Grid: " + erroGrid(e) + ". Confira se o Google do dono está conectado e se a planilha está vinculada a este documento.";
       status.textContent = silencioso ? "Atualização automática parada. " + msg : msg;
@@ -2883,6 +2831,7 @@
   var FORMS_AUTO_MS = 60000, formsAutoTimer = null;
   function startFormsAuto(){
     if(formsAutoTimer) return;
+    formsAtualizarDaPlanilha(true);
     formsAutoTimer = setInterval(function(){ formsAtualizarDaPlanilha(true); }, FORMS_AUTO_MS);
   }
   // Pedidos e Agendamentos podem ser ocultados: o cabeçalho fica, com o botão para mostrar de novo.
@@ -3161,9 +3110,6 @@
     else if(act==="pedido-aprovar"){ aprovarPedido(btn.dataset.time, id); }
     else if(act==="pedido-recusar"){ recusarPedido(btn.dataset.time, id); }
     else if(act==="pedido-avisado"){ marcarAvisado(btn.dataset.time, id); }
-    else if(act==="forms-ler"){ formsLer(document.getElementById("formsTexto").value); }
-    else if(act==="forms-importar"){ formsImportar(); }
-    else if(act==="forms-planilha"){ formsAtualizarDaPlanilha(); }
     else if(act==="goto-sec"){ irParaSecao(btn.dataset.sec); }
     else if(act==="edit-folga"){ startFolgaEdit((state.folgas||[]).find(function(f){return f.id===id;})); }
     else if(act==="del-folga"){ pendingDelete(btn, deleteFolga, id); }
@@ -3213,13 +3159,6 @@
   document.getElementById("repBusca").addEventListener("input", function(e){ repBusca = e.target.value; renderRepGrid(); });
   document.getElementById("pontoBusca").addEventListener("input", function(e){ pontoBusca = e.target.value; renderPontos(); });
 
-  document.getElementById("formsArquivo").addEventListener("change", function(e){
-    var arq = e.target.files && e.target.files[0];
-    if(!arq) return;
-    var leitor = new FileReader();
-    leitor.onload = function(){ document.getElementById("formsTexto").value = leitor.result; formsLer(leitor.result); };
-    leitor.readAsText(arq, "utf-8");
-  });
   document.addEventListener("change", function(e){ if(e.target.dataset && e.target.dataset.pedidoRep) pedidoEscolha[e.target.dataset.pedidoRep] = e.target.value; });
   document.addEventListener("change", function(e){
     if(e.target.classList.contains("dim-data-input")){ setDimDate(e.target.value); return; }
