@@ -47,7 +47,7 @@
   var dimDate = null, dimFollow = true, dimFiltro = "todos", lastToday = null;
   var dimView = "cards", dimUndo = null, dimMsg = "";
   var dimArea = "todas"; // "todas" | "inventario" | "qualidade": quais áreas aparecem no Dimensionamento
-  var CATEGORIA_LABEL = {inventario:"Inventário", qualidade:"Qualidade", ps_operacoes:"PS Operações", ps_icqa:"PS ICQA", insumos:"Insumos em área"};
+  var CATEGORIA_LABEL = {inventario:"Inventário", qualidade:"Qualidade", ps_operacoes:"PS Operações", ps_icqa:"PS ICQA", insumos:"Insumos"};
   var CLASSE_LABEL = {rep:"Rep", ps:"PS"};
   var CLASSE_TAG = {rep:"tag-teal", ps:"tag-amber"};
   var ESCALAS = ["A","B","C","D"];
@@ -2758,7 +2758,7 @@
     renderAll();
     toast("Pessoa avisada");
   }
-  // "Insumos em área" é opção só do Time Harley: a lista de Área do formulário acompanha o time ativo.
+  // "Insumos" é opção só do Time Harley: a lista de Área do formulário acompanha o time ativo.
   function sincronizarAreasRep(){
     var sel = document.getElementById("repCategoria");
     if(!sel) return;
