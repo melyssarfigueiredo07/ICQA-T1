@@ -2564,6 +2564,7 @@
       '<div class="pedido-quem"><b>'+esc(p.nome||"(sem nome)")+'</b><span class="tag '+(TIPO_TAG[p.tipo]||"tag-teal")+'">'+esc(TIPO_ROTULO[p.tipo]||p.tipo)+'</span></div>' +
       '<div class="pedido-datas">'+pedidoDatasHTML(p)+'</div>' +
       (p.obs ? '<div class="hint">'+esc(p.obs)+'</div>' : '') +
+      (p.saldo || p.escala || p.lider ? '<div class="hint">Saldo de horas: '+esc(p.saldo||"—")+' · Escala: '+esc(p.escala||"—")+' · Líder: '+esc(p.lider||"—")+'</div>' : '') +
       '<div class="pedido-acoes"><select data-pedido-rep="'+esc(p.id)+'" aria-label="Pessoa do pedido">'+opcoes+'</select>' +
         '<button type="button" class="btn btn-primary" data-act="pedido-aprovar" data-time="'+esc(key)+'" data-id="'+esc(p.id)+'">Aprovar e agendar</button>' +
         '<button type="button" class="btn-ghost" data-act="pedido-recusar" data-time="'+esc(key)+'" data-id="'+esc(p.id)+'">Recusar</button></div>' +
@@ -2653,19 +2654,23 @@
 
   // ----- Importar respostas do forms (CSV baixado da aba Respostas) -----
   // Lê o CSV, mostra qual coluna é cada campo (o palpite vem do nome da coluna) e cria os pedidos pendentes.
-  // Sem coluna de time, o time sai do nome: só vale quando o nome bate com um único rep de um só time.
+  // Sem coluna de time, o time sai do nome (só vale quando bate com um único rep) ou do nome do time no líder.
   var formsLido = null;
+  // Ordem = ordem na tela. Formulário de banco de horas: Nome, Data, Saldo de horas, Escala e Líder.
   var FORMS_CAMPOS = [
     {k:"carimbo", rotulo:"Carimbo (data e hora da resposta)", pistas:["carimbo"]},
-    {k:"nome", rotulo:"Pessoa", pistas:["nome", "colaborador", "pessoa"]},
+    {k:"nome", rotulo:"Nome", pistas:["nome", "colaborador", "pessoa"]},
+    {k:"data", rotulo:"Data", pistas:["inicio", "inicial", "data"]},
+    {k:"saldo", rotulo:"Saldo de horas", pistas:["saldo"]},
+    {k:"escala", rotulo:"Escala", pistas:["escala"]},
+    {k:"lider", rotulo:"Líder", pistas:["lider", "gestor", "chefe"]},
     {k:"time", rotulo:"Time", pistas:["time", "equipe"]},
-    {k:"tipo", rotulo:"Tipo do pedido", pistas:["tipo", "solicit"]},
+    {k:"tipo", rotulo:"Tipo do pedido (sem coluna: banco de horas)", pistas:["tipo", "solicit"]},
     {k:"dataFolga", rotulo:"Dia de folga (troca)", pistas:["folga"]},
     {k:"dataTrabalho", rotulo:"Dia de trabalho (troca)", pistas:["trabalh"]},
     {k:"dataFim", rotulo:"Data final", pistas:["final", "fim", "ate"]},
     {k:"dias", rotulo:"Dias (férias)", pistas:["dias", "quantidade"]},
-    {k:"obs", rotulo:"Observação", pistas:["observ", "coment"]},
-    {k:"data", rotulo:"Data inicial", pistas:["inicio", "inicial", "data"]}
+    {k:"obs", rotulo:"Observação", pistas:["observ", "coment"]}
   ];
   // CSV com vírgula, ponto e vírgula ou tabulação (o que vier do Sheets ou do Excel), com aspas e quebras de linha dentro do campo.
   function csvLer(texto){
@@ -2736,14 +2741,19 @@
     if(linhas.length < 2){ formsLido = null; mapa.innerHTML = ""; return 0; }
     var cab = linhas[0].map(function(h){ return String(h == null ? "" : h).trim(); });
     formsLido = {linhas: linhas.slice(1)};
-    var usados = {};
-    mapa.innerHTML = FORMS_CAMPOS.map(function(campo){
+    var usados = {}, palpites = {};
+    // a data entra por último: "Data final" ou "Dia de folga" não podem ocupar o campo Data
+    FORMS_CAMPOS.slice().sort(function(a, b){ return (a.k === "data") - (b.k === "data"); }).forEach(function(campo){
       var palpite = -1;
       cab.some(function(h, i){
         if(usados[i] || !campo.pistas.some(function(p){ return normNome(h).indexOf(p) > -1; })) return false;
         palpite = i; return true;
       });
       if(palpite > -1) usados[palpite] = true;
+      palpites[campo.k] = palpite;
+    });
+    mapa.innerHTML = FORMS_CAMPOS.map(function(campo){
+      var palpite = palpites[campo.k];
       return '<label>' + esc(campo.rotulo) + '<select data-forms-campo="' + campo.k + '">' +
         '<option value="">— não usar —</option>' +
         cab.map(function(h, i){ return '<option value="' + i + '"' + (i === palpite ? ' selected' : '') + '>' + esc(h || "(sem título)") + '</option>'; }).join("") +
@@ -2764,13 +2774,15 @@
       var v = function(k){ return col[k] >= 0 ? String(linha[col[k]] || "").trim() : ""; };
       var nome = v("nome"), quem = nome || "linha " + (n + 2);
       if(!nome && !v("data") && !v("tipo")) return; // linha em branco
-      var tipo = tipoDoForms(v("tipo"));
+      // sem coluna de tipo (este formulário é de banco de horas), todas as linhas entram como banco
+      var tipo = col.tipo >= 0 ? tipoDoForms(v("tipo")) : "banco";
       if(!tipo){ res.tipo.push(quem); return; }
       var dados = {data:dataDoForms(v("data")), dataFim:dataDoForms(v("dataFim")), dataFolga:dataDoForms(v("dataFolga")), dataTrabalho:dataDoForms(v("dataTrabalho")), dias:parseInt(v("dias"), 10) || 0};
       if(tipo === "ferias" && !dados.dias && dados.data && dados.dataFim) dados.dias = diasEntre(dados.data, dados.dataFim);
       var completo = tipo === "troca" ? (dados.dataFolga && dados.dataTrabalho) : (tipo === "ferias" ? (dados.data && dados.dias > 0) : dados.data);
       if(!completo){ res.semData.push(quem); return; }
-      var key = timeDoForms(v("time")) || timeDoNomeForms(nome);
+      // time: coluna Time, depois o nome no cadastro (um único rep), depois o nome do time no líder (ex.: Time Vinicius)
+      var key = timeDoForms(v("time")) || timeDoNomeForms(nome) || timeDoForms(v("lider"));
       if(!key){ res.semTime.push(quem); return; }
       var recebido = v("carimbo");
       var chave = [recebido, normNome(nome), tipo, dados.data, dados.dataFim, dados.dataFolga, dados.dataTrabalho, dados.dias].join("|");
@@ -2778,14 +2790,15 @@
       jaTem[chave] = true;
       var time = timeComDados(key);
       if(!Array.isArray(time.solicitacoes)) time.solicitacoes = [];
-      time.solicitacoes.push({id:uid(), nome:nome, repId:repDoNomePedido(key, nome), tipo:tipo, data:dados.data, dataFim:dados.dataFim, dataFolga:dados.dataFolga, dataTrabalho:dados.dataTrabalho, dias:dados.dias, obs:v("obs"), status:"pendente", recebidoEm:recebido, origem:"forms", chave:chave});
+      time.solicitacoes.push({id:uid(), nome:nome, repId:repDoNomePedido(key, nome), tipo:tipo, data:dados.data, dataFim:dados.dataFim, dataFolga:dados.dataFolga, dataTrabalho:dados.dataTrabalho, dias:dados.dias, obs:v("obs"), saldo:v("saldo"), escala:v("escala"), lider:v("lider"), status:"pendente", recebidoEm:recebido, origem:"forms", chave:chave});
       res.criados++;
     });
     scheduleSave();
     renderAll();
     var partes = (prefixo ? [prefixo] : []).concat(["Importados: " + res.criados]);
+    if(!(col.tipo >= 0)) partes.push("sem coluna de tipo: entram como banco de horas");
     if(res.repetidos) partes.push("já estavam na lista: " + res.repetidos);
-    if(res.semTime.length) partes.push("sem time (inclua a coluna Time ou use o nome exato do cadastro): " + res.semTime.join(", "));
+    if(res.semTime.length) partes.push("sem time (nome fora do cadastro, e Time/Líder sem o nome do time): " + res.semTime.join(", "));
     if(res.tipo.length) partes.push("tipo não reconhecido: " + res.tipo.join(", "));
     if(res.semData.length) partes.push("faltam datas: " + res.semData.join(", "));
     status.textContent = partes.join(" · ");
