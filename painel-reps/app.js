@@ -2758,7 +2758,9 @@
         '<option value="">— não usar —</option>' +
         cab.map(function(h, i){ return '<option value="' + i + '"' + (i === palpite ? ' selected' : '') + '>' + esc(h || "(sem título)") + '</option>'; }).join("") +
         '</select></label>';
-    }).join("") + '<div class="forms-acao"><button type="button" class="btn btn-primary" data-act="forms-importar">Importar pedidos</button></div>';
+    }).join("") + '<div class="forms-acao"><label class="forms-time">Time das linhas sem time<select id="formsTimePadrao"><option value="">— escolher depois —</option>' +
+      TIMES.map(function(t){ return '<option value="' + t.key + '">' + esc(timeDef(t.key).nome) + '</option>'; }).join("") +
+      '</select></label><button type="button" class="btn btn-primary" data-act="forms-importar">Importar pedidos</button></div>';
     return formsLido.linhas.length;
   }
   // Importa as respostas lidas como pedidos pendentes. "prefixo" (opcional) abre a mensagem, ex.: de onde vieram as linhas.
@@ -2767,6 +2769,7 @@
     if(!formsLido){ status.textContent = "Leia as respostas antes de importar."; return; }
     var col = {};
     Array.prototype.forEach.call(document.querySelectorAll("[data-forms-campo]"), function(s){ col[s.dataset.formsCampo] = s.value === "" ? -1 : Number(s.value); });
+    var timePadrao = (document.getElementById("formsTimePadrao") || {}).value || "";
     var jaTem = {};
     TIMES.forEach(function(t){ pedidosDoTime(t.key).forEach(function(p){ if(p.chave) jaTem[p.chave] = true; }); });
     var res = {criados:0, repetidos:0, semTime:[], tipo:[], semData:[]};
@@ -2782,7 +2785,8 @@
       var completo = tipo === "troca" ? (dados.dataFolga && dados.dataTrabalho) : (tipo === "ferias" ? (dados.data && dados.dias > 0) : dados.data);
       if(!completo){ res.semData.push(quem); return; }
       // time: coluna Time, depois o nome no cadastro (um único rep), depois o nome do time no líder (ex.: Time Vinicius)
-      var key = timeDoForms(v("time")) || timeDoNomeForms(nome) || timeDoForms(v("lider"));
+      // sem time na coluna, no cadastro nem no líder: vai para o time escolhido na caixa acima, se houver
+      var key = timeDoForms(v("time")) || timeDoNomeForms(nome) || timeDoForms(v("lider")) || timePadrao;
       if(!key){ res.semTime.push(quem); return; }
       var recebido = v("carimbo");
       var chave = [recebido, normNome(nome), tipo, dados.data, dados.dataFim, dados.dataFolga, dados.dataTrabalho, dados.dias].join("|");
@@ -2798,7 +2802,7 @@
     var partes = (prefixo ? [prefixo] : []).concat(["Importados: " + res.criados]);
     if(!(col.tipo >= 0)) partes.push("sem coluna de tipo: entram como banco de horas");
     if(res.repetidos) partes.push("já estavam na lista: " + res.repetidos);
-    if(res.semTime.length) partes.push("sem time (nome fora do cadastro, e Time/Líder sem o nome do time): " + res.semTime.join(", "));
+    if(res.semTime.length) partes.push("sem time: escolha o time na caixa acima e importe de novo · " + res.semTime.join(", "));
     if(res.tipo.length) partes.push("tipo não reconhecido: " + res.tipo.join(", "));
     if(res.semData.length) partes.push("faltam datas: " + res.semData.join(", "));
     status.textContent = partes.join(" · ");
