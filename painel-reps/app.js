@@ -2580,8 +2580,15 @@
       '<div class="pedido-acoes"><button type="button" class="btn btn-primary" data-act="pedido-avisado" data-time="'+esc(key)+'" data-id="'+esc(p.id)+'">Já avisei</button></div>' +
     '</div>';
   }
+  // Carimbo da resposta ("07/11/2026 12:58:12", dia/mês/ano) vira aaaa-mm-dd hh:mm:ss, para ordenar por data e não por texto.
+  function chaveRecebido(s){
+    var m = String(s || "").trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+    if(!m) return String(s || "");
+    return m[3] + "-" + String(m[2]).padStart(2, "0") + "-" + String(m[1]).padStart(2, "0") + " " +
+      String(m[4] || 0).padStart(2, "0") + ":" + String(m[5] || 0).padStart(2, "0") + ":" + String(m[6] || 0).padStart(2, "0");
+  }
   function pedidosGrupoHTML(key, itens, linha, vazio){
-    var ordem = itens.slice().sort(function(a,b){ return String(a.recebidoEm||"").localeCompare(String(b.recebidoEm||"")); });
+    var ordem = itens.slice().sort(function(a,b){ return chaveRecebido(a.recebidoEm).localeCompare(chaveRecebido(b.recebidoEm)); });
     return '<div class="pedido-time" data-time="'+esc(key)+'">' +
       '<header class="pedido-time-head"><b>'+esc(timeDef(key).nome)+'</b><span class="num">'+ordem.length+'</span></header>' +
       (ordem.length ? ordem.map(function(p){ return linha(key, p); }).join("") : '<div class="hint pedido-vazio">'+esc(vazio)+'</div>') +
