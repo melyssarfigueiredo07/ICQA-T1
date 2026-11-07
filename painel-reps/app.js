@@ -2698,6 +2698,8 @@
   // Data do forms: 2026-11-09, 09/11/2026 (dia/mês, como no Brasil) ou 11/25/2026 (mês/dia, quando o segundo número passa de 12).
   function dataDoForms(txt){
     var s = String(txt || "").trim(), m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    // número de 5 dígitos é data como serial da planilha (dias desde 30/12/1899), quando o Grid devolve valores sem formatação
+    if(/^\d{5}$/.test(s)){ var dia = new Date((+s - 25569) * 86400000); return dataValida(dia.getUTCFullYear(), dia.getUTCMonth()+1, dia.getUTCDate()); }
     if(m) return dataValida(+m[1], +m[2], +m[3]);
     m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})/);
     if(!m) return "";
@@ -2720,15 +2722,19 @@
     var achados = TIMES.filter(function(t){ return repDoNomePedido(t.key, nome) !== ""; });
     return achados.length === 1 ? achados[0].key : "";
   }
+  // CSV colado ou enviado: mostra as colunas e espera o clique em Importar pedidos.
   function formsLer(texto){
-    var status = document.getElementById("formsStatus"), mapa = document.getElementById("formsMapa");
-    var linhas = csvLer(texto);
-    if(linhas.length < 2){
-      formsLido = null; mapa.innerHTML = "";
-      status.textContent = "Não achei linhas de respostas. Confira se o texto é o CSV das respostas.";
-      return;
-    }
-    var cab = linhas[0].map(function(h){ return String(h).trim(); });
+    var status = document.getElementById("formsStatus");
+    var n = formsLerLinhas(csvLer(texto));
+    status.textContent = n ? n + " resposta(s) lida(s). Confira as colunas e clique em Importar pedidos." : "Não achei linhas de respostas. Confira se o texto é o CSV das respostas.";
+  }
+  // Mostra as colunas (com o palpite de cada campo) e guarda as respostas. Devolve quantas são.
+  // Recebe matriz de linhas (CSV lido ou valores da planilha pelo Grid); a linha 1 é o cabeçalho.
+  function formsLerLinhas(linhas){
+    var mapa = document.getElementById("formsMapa");
+    linhas = (linhas || []).filter(function(l){ return Array.isArray(l) && l.some(function(c){ return String(c == null ? "" : c).trim() !== ""; }); });
+    if(linhas.length < 2){ formsLido = null; mapa.innerHTML = ""; return 0; }
+    var cab = linhas[0].map(function(h){ return String(h == null ? "" : h).trim(); });
     formsLido = {linhas: linhas.slice(1)};
     var usados = {};
     mapa.innerHTML = FORMS_CAMPOS.map(function(campo){
@@ -2743,9 +2749,10 @@
         cab.map(function(h, i){ return '<option value="' + i + '"' + (i === palpite ? ' selected' : '') + '>' + esc(h || "(sem título)") + '</option>'; }).join("") +
         '</select></label>';
     }).join("") + '<div class="forms-acao"><button type="button" class="btn btn-primary" data-act="forms-importar">Importar pedidos</button></div>';
-    status.textContent = formsLido.linhas.length + " resposta(s) lida(s). Confira as colunas e clique em Importar pedidos.";
+    return formsLido.linhas.length;
   }
-  function formsImportar(){
+  // Importa as respostas lidas como pedidos pendentes. "prefixo" (opcional) abre a mensagem, ex.: de onde vieram as linhas.
+  function formsImportar(prefixo){
     var status = document.getElementById("formsStatus");
     if(!formsLido){ status.textContent = "Leia as respostas antes de importar."; return; }
     var col = {};
@@ -2776,7 +2783,7 @@
     });
     scheduleSave();
     renderAll();
-    var partes = ["Importados: " + res.criados];
+    var partes = (prefixo ? [prefixo] : []).concat(["Importados: " + res.criados]);
     if(res.repetidos) partes.push("já estavam na lista: " + res.repetidos);
     if(res.semTime.length) partes.push("sem time (inclua a coluna Time ou use o nome exato do cadastro): " + res.semTime.join(", "));
     if(res.tipo.length) partes.push("tipo não reconhecido: " + res.tipo.join(", "));
@@ -2789,10 +2796,26 @@
   // Só funciona com o Painel aberto no Grid, com o Google do dono conectado e a planilha vinculada ao documento.
   // Fora do Grid o botão avisa, e o CSV continua funcionando.
   var FORMS_PLANILHA_ID = "1YfsjQmcCwMwtKyzoTksEtkDGdAZgdIwzZS7ppAsEkO0";
-  function csvCampo(v){
-    var s = v == null ? "" : String(v);
-    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  // Valor da resposta do Grid: vem direto ({values}) ou dentro de data ({data:{values}}).
+  function gridCampo(r, k){
+    if(!r) return null;
+    if(r[k] !== undefined) return r[k];
+    return r.data && r.data[k] !== undefined ? r.data[k] : null;
   }
+  // Erro do Grid como texto: {error, detail} (ex.: "Unable to parse range"), Error comum ou objeto vazio.
+  function erroGrid(e){
+    if(e == null || e === "") return "erro sem detalhe";
+    if(typeof e === "string"){
+      if(e.charAt(0) === "{"){ try { return erroGrid(JSON.parse(e)); } catch(_){} }
+      return e;
+    }
+    var msg = e.detail || e.message || e.error || "";
+    if(typeof msg === "object") msg = JSON.stringify(msg);
+    if(e.error && String(msg).indexOf(e.error) < 0) msg = e.error + ": " + msg;
+    if(e.status) msg = "HTTP " + e.status + (msg ? " · " + msg : "");
+    return msg || "erro sem detalhe";
+  }
+  // Lê a aba de respostas pelo Grid, mostra as colunas e já importa os pedidos (os que já estão na lista não se repetem).
   function formsAtualizarDaPlanilha(){
     var status = document.getElementById("formsStatus");
     if(!window.Grid || !Grid.sheets){
@@ -2800,16 +2823,22 @@
       return;
     }
     status.textContent = "Lendo a planilha do forms...";
+    var aba = "";
     Grid.sheets.info(FORMS_PLANILHA_ID).then(function(info){
-      var abas = (info && info.sheets) || [];
-      var aba = abas.filter(function(a){ return /respost/i.test(a.title); })[0] || abas[0];
-      if(!aba) throw new Error("a planilha não tem abas");
-      return Grid.sheets.get(FORMS_PLANILHA_ID, aba.title + "!A1:Z5000");
+      var abas = gridCampo(info, "sheets") || [];
+      var escolhida = abas.filter(function(a){ return /respost/i.test(a.title || ""); })[0] || abas[0];
+      if(!escolhida) throw new Error("a planilha não tem abas");
+      aba = escolhida.title;
+      return Grid.sheets.get(FORMS_PLANILHA_ID, aba + "!A1:Z5000");
     }).then(function(dados){
-      var linhas = (dados && dados.values) || [];
-      formsLer(linhas.map(function(l){ return l.map(csvCampo).join(","); }).join("\n"));
+      var n = formsLerLinhas(gridCampo(dados, "values") || []);
+      if(!n){
+        status.textContent = "A aba “" + aba + "” ainda não tem respostas (só o cabeçalho, ou vazia).";
+        return;
+      }
+      formsImportar("Lidas " + n + " resposta(s) da aba “" + aba + "”");
     }).catch(function(e){
-      status.textContent = "Não consegui ler a planilha pelo Grid (" + (e && e.message ? e.message : "erro") + "). Confira se o Google do dono está conectado e se a planilha está vinculada a este documento.";
+      status.textContent = "Não consegui ler a planilha pelo Grid: " + erroGrid(e) + ". Confira se o Google do dono está conectado e se a planilha está vinculada a este documento.";
     });
   }
   // Pedidos e Agendamentos podem ser ocultados: o cabeçalho fica, com o botão para mostrar de novo.
