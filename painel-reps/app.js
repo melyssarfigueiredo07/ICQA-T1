@@ -2904,6 +2904,33 @@
     toast("Importados " + res.criados + " pedido(s)");
   }
 
+  // ----- Planilha de respostas do forms, lida pelo Grid (Grid.sheets) -----
+  // Só funciona com o Painel aberto no Grid, com o Google do dono conectado e a planilha vinculada ao documento.
+  // Fora do Grid o botão avisa, e o CSV continua funcionando.
+  var FORMS_PLANILHA_ID = "1YfsjQmcCwMwtKyzoTksEtkDGdAZgdIwzZS7ppAsEkO0";
+  function csvCampo(v){
+    var s = v == null ? "" : String(v);
+    return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  function formsAtualizarDaPlanilha(){
+    var status = document.getElementById("formsStatus");
+    if(!window.Grid || !Grid.sheets){
+      status.textContent = "Abra o Painel pelo Grid para ler a planilha do forms. Por aqui, use o CSV.";
+      return;
+    }
+    status.textContent = "Lendo a planilha do forms...";
+    Grid.sheets.info(FORMS_PLANILHA_ID).then(function(info){
+      var abas = (info && info.sheets) || [];
+      var aba = abas.filter(function(a){ return /respost/i.test(a.title); })[0] || abas[0];
+      if(!aba) throw new Error("a planilha não tem abas");
+      return Grid.sheets.get(FORMS_PLANILHA_ID, aba.title + "!A1:Z5000");
+    }).then(function(dados){
+      var linhas = (dados && dados.values) || [];
+      formsLer(linhas.map(function(l){ return l.map(csvCampo).join(","); }).join("\n"));
+    }).catch(function(e){
+      status.textContent = "Não consegui ler a planilha pelo Grid (" + (e && e.message ? e.message : "erro") + "). Confira se o Google do dono está conectado e se a planilha está vinculada a este documento.";
+    });
+  }
   // ---------- render all ----------
   // ---------- Aniversários: um calendário só, com os reps de todos os times ----------
   // Lê direto de root.times (o time ativo já está lá), então o painel mostra os dois times ao mesmo tempo.
@@ -3140,6 +3167,7 @@
     else if(act==="pedido-avisado"){ marcarAvisado(btn.dataset.time, id); }
     else if(act==="forms-ler"){ formsLer(document.getElementById("formsTexto").value); }
     else if(act==="forms-importar"){ formsImportar(); }
+    else if(act==="forms-planilha"){ formsAtualizarDaPlanilha(); }
     else if(act==="goto-sec"){ irParaSecao(btn.dataset.sec); }
     else if(act==="mes-dia"){ setDimDate(Cal.addDays(dimDate, Number(btn.dataset.d)||0)); }
     else if(act==="edit-folga"){ startFolgaEdit((state.folgas||[]).find(function(f){return f.id===id;})); }
