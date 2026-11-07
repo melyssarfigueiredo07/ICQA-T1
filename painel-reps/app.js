@@ -690,6 +690,7 @@
       formPadrao();
       renderAll();
       startPolling();
+      startFormsAuto();
     }).catch(function(err){
       console.error("Falha ao carregar do Grid:", err);
       aviso("Não foi possível ler os dados do Grid. Nada será gravado até a conexão voltar; tentando de novo…");
@@ -2655,7 +2656,7 @@
   // ----- Importar respostas do forms (CSV baixado da aba Respostas) -----
   // Lê o CSV, mostra qual coluna é cada campo (o palpite vem do nome da coluna) e cria os pedidos pendentes.
   // Sem coluna de time, o time sai do nome (só vale quando bate com um único rep) ou do nome do time no líder.
-  var formsLido = null;
+  var formsLido = null, formsCabAtual = "", formsLendo = false;
   // Ordem = ordem na tela. Formulário de banco de horas: Nome, Data, Saldo de horas, Escala e Líder.
   var FORMS_CAMPOS = [
     {k:"carimbo", rotulo:"Carimbo (data e hora da resposta)", pistas:["carimbo"]},
@@ -2738,9 +2739,13 @@
   function formsLerLinhas(linhas){
     var mapa = document.getElementById("formsMapa");
     linhas = (linhas || []).filter(function(l){ return Array.isArray(l) && l.some(function(c){ return String(c == null ? "" : c).trim() !== ""; }); });
-    if(linhas.length < 2){ formsLido = null; mapa.innerHTML = ""; return 0; }
+    if(linhas.length < 2){ formsLido = null; formsCabAtual = ""; mapa.innerHTML = ""; return 0; }
     var cab = linhas[0].map(function(h){ return String(h == null ? "" : h).trim(); });
     formsLido = {linhas: linhas.slice(1)};
+    // mesmo cabeçalho: a caixa de colunas fica como está, com a escolha de quem já mexeu nela
+    var assinatura = cab.join("\u0001");
+    if(assinatura === formsCabAtual && mapa.children.length) return formsLido.linhas.length;
+    formsCabAtual = assinatura;
     var usados = {}, palpites = {};
     // a data entra por último: "Data final" ou "Dia de folga" não podem ocupar o campo Data
     FORMS_CAMPOS.slice().sort(function(a, b){ return (a.k === "data") - (b.k === "data"); }).forEach(function(campo){
@@ -2764,9 +2769,9 @@
     return formsLido.linhas.length;
   }
   // Importa as respostas lidas como pedidos pendentes. "prefixo" (opcional) abre a mensagem, ex.: de onde vieram as linhas.
-  function formsImportar(prefixo){
+  function formsImportar(prefixo, silencioso){
     var status = document.getElementById("formsStatus");
-    if(!formsLido){ status.textContent = "Leia as respostas antes de importar."; return; }
+    if(!formsLido){ if(!silencioso) status.textContent = "Leia as respostas antes de importar."; return; }
     var col = {};
     Array.prototype.forEach.call(document.querySelectorAll("[data-forms-campo]"), function(s){ col[s.dataset.formsCampo] = s.value === "" ? -1 : Number(s.value); });
     var timePadrao = (document.getElementById("formsTimePadrao") || {}).value || "";
@@ -2797,6 +2802,8 @@
       time.solicitacoes.push({id:uid(), nome:nome, repId:repDoNomePedido(key, nome), tipo:tipo, data:dados.data, dataFim:dados.dataFim, dataFolga:dados.dataFolga, dataTrabalho:dados.dataTrabalho, dias:dados.dias, obs:v("obs"), saldo:v("saldo"), escala:v("escala"), lider:v("lider"), status:"pendente", recebidoEm:recebido, origem:"forms", chave:chave});
       res.criados++;
     });
+    // leitura automática sem nada novo: não grava, não redesenha e não troca a mensagem da caixa
+    if(silencioso && !res.criados) return;
     scheduleSave();
     renderAll();
     var partes = (prefixo ? [prefixo] : []).concat(["Importados: " + res.criados]);
@@ -2833,30 +2840,43 @@
     return msg || "erro sem detalhe";
   }
   // Lê a aba de respostas pelo Grid, mostra as colunas e já importa os pedidos (os que já estão na lista não se repetem).
-  function formsAtualizarDaPlanilha(){
+  // "silencioso": leitura automática. Sem Grid ela não faz nada, e uma leitura por vez basta.
+  function formsAtualizarDaPlanilha(silencioso){
     var status = document.getElementById("formsStatus");
     if(!window.Grid || !Grid.sheets){
-      status.textContent = "Abra o Painel pelo Grid para ler a planilha do forms. Por aqui, use o CSV.";
+      if(!silencioso) status.textContent = "Abra o Painel pelo Grid para ler a planilha do forms. Por aqui, use o CSV.";
       return;
     }
-    status.textContent = "Lendo a planilha do forms...";
+    if(silencioso && formsLendo) return; // a leitura anterior ainda não terminou
+    formsLendo = true;
+    if(!silencioso) status.textContent = "Lendo a planilha do forms...";
     var aba = "";
-    Grid.sheets.info(FORMS_PLANILHA_ID).then(function(info){
+    Promise.resolve().then(function(){ return Grid.sheets.info(FORMS_PLANILHA_ID); }).then(function(info){
       var abas = gridCampo(info, "sheets") || [];
       var escolhida = abas.filter(function(a){ return /respost/i.test(a.title || ""); })[0] || abas[0];
       if(!escolhida) throw new Error("a planilha não tem abas");
       aba = escolhida.title;
       return Grid.sheets.get(FORMS_PLANILHA_ID, aba + "!A1:Z5000");
     }).then(function(dados){
+      // a leitura voltou: se a caixa dizia que a atualização automática parou, ela volta ao normal
+      if(silencioso && status.textContent.indexOf("Atualização automática parada") === 0) status.textContent = "";
       var n = formsLerLinhas(gridCampo(dados, "values") || []);
       if(!n){
-        status.textContent = "A aba “" + aba + "” ainda não tem respostas (só o cabeçalho, ou vazia).";
+        if(!silencioso) status.textContent = "A aba “" + aba + "” ainda não tem respostas (só o cabeçalho, ou vazia).";
         return;
       }
-      formsImportar("Lidas " + n + " resposta(s) da aba “" + aba + "”");
+      var lidas = "Lidas " + n + " resposta(s) da aba “" + aba + "”";
+      formsImportar(silencioso ? "Atualização automática · " + lidas : lidas, silencioso);
     }).catch(function(e){
-      status.textContent = "Não consegui ler a planilha pelo Grid: " + erroGrid(e) + ". Confira se o Google do dono está conectado e se a planilha está vinculada a este documento.";
-    });
+      var msg = "Não consegui ler a planilha pelo Grid: " + erroGrid(e) + ". Confira se o Google do dono está conectado e se a planilha está vinculada a este documento.";
+      status.textContent = silencioso ? "Atualização automática parada. " + msg : msg;
+    }).then(function(){ formsLendo = false; });
+  }
+  // Planilha ao vivo: com o Painel aberto no Grid, lê a aba a cada minuto e importa só o que é novo.
+  var FORMS_AUTO_MS = 60000, formsAutoTimer = null;
+  function startFormsAuto(){
+    if(formsAutoTimer) return;
+    formsAutoTimer = setInterval(function(){ formsAtualizarDaPlanilha(true); }, FORMS_AUTO_MS);
   }
   // Pedidos e Agendamentos podem ser ocultados: o cabeçalho fica, com o botão para mostrar de novo.
   var secOcultas = {};
