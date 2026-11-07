@@ -1135,3 +1135,8 @@ body.tela-calendario{background:#EFF1F4;}
 .sec-toggle{text-transform:none; letter-spacing:0; font-size:12px; font-weight:600; padding:4px 12px;}
 .panel.oculta > .sec-corpo{display:none;}
 .panel.oculta > .sec-cab{margin-bottom:0; padding-bottom:0; border-bottom:0;}
+
+/* ---------- Caixa de área clicável e detalhe da área no dia em foco ---------- */
+.area-block{cursor:pointer;}
+.area-block.aberta{box-shadow:0 0 0 2px var(--ac) inset;}
+.area-detalhe{margin:-10px 0 26px;}

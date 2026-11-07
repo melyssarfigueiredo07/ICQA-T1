@@ -2352,13 +2352,13 @@
         var a = cd.areas[k], ok = Math.min(a.total, a.base), perdeu = Math.max(0, a.base-a.total), ganhou = Math.max(0, a.total-a.base);
         if(a.total<min){ min = a.total; diaMin = cd.iso; } if(a.total>max){ max = a.total; diaMax = cd.iso; } if(a.total!==a.base) alterados++;
         var dica = diaSemana(cd.iso)+" "+diaMes(cd.iso)+": "+a.total+" de "+cad+(a.total!==a.base ? " (pela escala "+a.base+")" : "");
-        return '<button type="button" class="ab-bar'+(ehFimDeSemana(cd.iso)?' fds':'')+(cd.iso===hoje?' hoje':'')+(cd.iso===sel?' sel':'')+'" data-act="dim-dia" data-iso="'+cd.iso+'" title="'+esc(dica)+'" aria-label="'+esc(areaNome(k)+", "+dica)+'">' +
+        return '<button type="button" class="ab-bar'+(ehFimDeSemana(cd.iso)?' fds':'')+(cd.iso===hoje?' hoje':'')+(cd.iso===sel?' sel':'')+'" data-act="dim-dia" data-iso="'+cd.iso+'" data-total="'+a.total+'" title="'+esc(dica)+'" aria-label="'+esc(areaNome(k)+", "+dica)+'">' +
           '<span class="bs"><i class="b-ok" style="height:'+h(ok)+'"></i>'+(perdeu ? '<i class="b-lost" style="height:'+h(perdeu)+'"></i>' : '')+(ganhou ? '<i class="b-gain" style="height:'+h(ganhou)+'"></i>' : '')+'</span></button>';
       }).join("");
       var aRef = dias[Number(ref.slice(8))-1].areas[k], dlRef = aRef.total - aRef.base, subs = [];
       if(aRef.ps && !areaEhPS(k)) subs.push(aRef.ps+" PS");
       if(dlRef) subs.push('<span class="dn">'+(dlRef<0 ? "−" : "+")+Math.abs(dlRef)+" por folga extra/troca</span>");
-      return '<div class="area-block '+areaCls(k)+'" data-area="'+k+'">' +
+      return '<div class="area-block '+areaCls(k)+(areaAberta===k ? ' aberta' : '')+'" data-area="'+k+'">' +
         '<div class="ab-head"><span class="ab-dot"></span>'+esc(areaNome(k))+'<span class="ab-cad">'+plural(cad, "cadastrado", "cadastrados")+'</span></div>' +
         '<div class="ab-main"><b>'+aRef.total+'</b><span>de '+cad+' trabalhando em '+esc(diaSemana(ref)+" "+diaMes(ref))+'</span></div>' +
         (subs.length ? '<div class="ab-sub">'+subs.join(" · ")+'</div>' : '') +
@@ -2379,14 +2379,13 @@
     if(inpMes.value!==ym) inpMes.value = ym;
 
     var equipe = state.reps.length;
-    var wrap = document.getElementById("folgasDias"), strip = document.getElementById("folgasStrip");
+    var strip = document.getElementById("folgasStrip");
     var areasBox = document.getElementById("mesAreasBox");
     if(!equipe){
-      wrap.innerHTML = '<div class="hint" style="padding:10px 2px;">Cadastre reps na aba Equipe para ver quantas pessoas trabalham em cada dia.</div>';
-      wrap.style.display = "block"; areasBox.style.display = "none";
-      strip.innerHTML = ""; document.getElementById("mesAreas").innerHTML = "";
+      areasBox.style.display = "";
+      strip.innerHTML = ""; document.getElementById("mesAreas").innerHTML = '<div class="hint" style="padding:10px 2px;">Cadastre reps na aba Equipe para ver quantas pessoas trabalham em cada dia.</div>';
     }else{
-      wrap.style.display = ""; areasBox.style.display = "";
+      areasBox.style.display = "";
       var dias = [], nBanco = 0, nTF = 0, nTT = 0, menor = null, maior = null, feriasPessoas = {}, feriasPD = 0;
       for(var d=1; d<=nd; d++){
         var iso = ym+"-"+String(d).padStart(2,"0"), cd = contagemDia(iso);
@@ -2407,40 +2406,8 @@
       // ----- blocos por área e tabela dia a dia -----
       var sel = (dimDate && dimDate.slice(0,7)===ym) ? dimDate : "";
       document.getElementById("mesAreas").innerHTML = blocosAreaHTML(dias, sel, hoje);
-
-      // ----- tabela dia a dia -----
-      function chips(lista, rotulo){
-        return lista.map(function(x){
-          return '<span class="fd-chip" title="'+esc((x.f.obs ? x.f.obs+" · " : "")+rotulo)+'">'+esc(x.r.nome)+' <i>'+rotulo+'</i></span>';
-        }).join("");
-      }
-      function chipsAus(lista){
-        return lista.map(function(x){
-          return '<span class="fd-chip fer" title="'+esc(x.tipo==="licenca" ? "licença" : "férias")+'">'+esc(x.r.nome)+' <i>'+(x.tipo==="licenca" ? "licença" : "férias")+'</i></span>';
-        }).join("");
-      }
-      var linhas = dias.map(function(cd){
-        var dl = cd.total - cd.base, neg = cd.banco.length + cd.trocaFolga.length, pos = cd.trocaTrab.length, areasCd = areasDoDia(cd);
-        var pct = function(v){ return Math.max(0, Math.min(100, v/equipe*100)).toFixed(1)+"%"; };
-        // barra do dia: um trecho por área (cor da área) + trecho listrado de quem a escala previa e ficou de folga extra
-        var barra = '<div class="fd-bar" title="Total '+cd.total+' de '+equipe+'">' +
-          areasCd.filter(function(ar){ return ar.total>0; }).map(function(ar){ return '<i class="'+areaCls(ar.key)+'" style="width:'+pct(ar.total)+'" title="'+esc(areaNome(ar.key)+" "+ar.total)+'"></i>'; }).join("") +
-          (dl<0 ? '<i class="fd-lost" style="width:'+pct(cd.base-cd.total)+'"></i>' : '') + '</div>';
-        return '<tr class="fd-row'+(cd.iso===hoje?' fd-hoje':'')+(ehFimDeSemana(cd.iso)?' fd-fds':'')+'" data-key="dia:'+cd.iso+'">' +
-          '<td class="fd-dia"><b>'+cd.iso.slice(8)+'</b> <span>'+esc(diaSemana(cd.iso))+'</span>'+(cd.iso===hoje?' <em>hoje</em>':'')+'</td>' +
-          '<td class="num fd-n">'+cd.base+'</td>' +
-          '<td class="fd-neg">'+(neg ? '<b>−'+neg+'</b> '+chips(cd.banco,"banco")+chips(cd.trocaFolga,"troca") : '<span class="fd-nada">—</span>')+'</td>' +
-          '<td class="fd-pos">'+(pos ? '<b>+'+pos+'</b> '+chips(cd.trocaTrab,"troca") : '<span class="fd-nada">—</span>')+'</td>' +
-          '<td class="fd-fer">'+(cd.ausentes.length ? '<b>'+cd.ausentes.length+'</b> '+chipsAus(cd.ausentes) : '<span class="fd-nada">—</span>')+'</td>' +
-          '<td class="fd-total"><div class="fd-tot-n"><b>'+cd.total+'</b>'+(dl ? ' <small class="'+(dl<0?'neg':'pos')+'">'+(dl<0?'−':'+')+Math.abs(dl)+'</small>' : '')+'</div>'+barra+
-            '<div class="fd-areas" title="Presentes por área: '+esc(areasCd.map(function(ar){ return areaNome(ar.key)+" "+ar.total; }).join(" · "))+'">'+
-              areasCd.map(function(ar){ return '<span class="am '+areaCls(ar.key)+(ar.total ? '' : ' z0')+'">'+AREA_CURTA[ar.key]+' <b>'+ar.total+'</b></span>'; }).join("")+'</div></td>' +
-        '</tr>';
-      }).join("");
-      wrap.innerHTML = '<table class="fd-table"><thead><tr><th>Dia</th><th title="Pessoas com dia de trabalho pela escala (sem férias, licença e afastados)">Pela escala</th><th>Folgas extras</th><th>Trabalham em troca</th><th title="Pessoas em férias ou licença no dia (já fora da contagem pela escala)">Férias / licença</th><th>Pessoas trabalhando <span class="fd-th-sub">(por área)</span></th></tr></thead><tbody>'+linhas+'</tbody></table>';
     }
-    document.getElementById("folgasLegenda").innerHTML =
-      '<span class="hint"><b>'+esc(mesLabel(ym))+'</b> · Pela escala = reps com dia de trabalho (já sem férias/licença/afastados) · − folga extra (banco de horas ou troca) · + trabalha em dia de folga (troca) · férias agendadas saem da contagem pela escala · PS incluídos, separados por área (Inv, Qual, PS Op, PS ICQA, Insumos)</span>';
+    renderAreaDetalhe();
     var hint = document.getElementById("folgasHint");
     if(Cal.foraDosCalendarios(ym+"-01") || Cal.foraDosCalendarios(ym+"-"+String(nd).padStart(2,"0"))){
       hint.textContent = "Mês fora dos calendários enviados (set–dez/2026): a escala é projetada pelo ciclo de 52 semanas deduzido deles.";
@@ -2855,6 +2822,38 @@
     var b = el.querySelector(".sec-toggle");
     if(b){ b.textContent = secOcultas[id] ? "Mostrar" : "Ocultar"; b.setAttribute("aria-expanded", secOcultas[id] ? "false" : "true"); }
   }
+  // Caixa de área: ao clicar, abre quem está trabalhando e quem está fora dela no dia em foco.
+  var areaAberta = null;
+  function pessoasDoDia(iso){
+    var por = {};
+    sortReps(state.reps).forEach(function(r){
+      var k = areaDe(r), g = por[k] || (por[k] = {trab:[], fora:[]}), st = effStatus(r, iso);
+      (st==="ativo" ? g.trab : g.fora).push({r:r, st:st, ex:extraDe(r, iso), nota:statusNote(r, iso)});
+    });
+    return por;
+  }
+  function chipPessoa(x){
+    var cls = "who st-"+x.st+(x.ex ? (x.ex.tipo==="troca-trabalho" ? " ex-trab" : " ex-folga") : "");
+    var sub = x.st==="ativo" ? (x.ex ? x.nota : (x.r.escala ? "Escala "+x.r.escala : "")) : (x.nota || STATUS_LABEL[x.st]);
+    return '<span class="'+cls+'" title="'+esc(x.r.nome+(x.nota ? " · "+x.nota : ""))+'">'+esc(x.r.nome)+(sub ? ' <i>'+esc(sub)+'</i>' : '')+'</span>';
+  }
+  function areaDetalheHTML(k, iso){
+    var g = pessoasDoDia(iso)[k] || {trab:[], fora:[]}, cd = contagemDia(iso), a = cd.areas[k];
+    return '<div class="dd-area '+areaCls(k)+'" data-area="'+k+'">' +
+      '<div class="dda-head"><span class="ab-dot"></span>'+esc(areaNome(k))+' · '+esc(diaSemana(iso)+" "+diaMes(iso))+'<span class="dda-n"><b>'+(a ? a.total : 0)+'</b> de '+(a ? a.cad : 0)+'</span></div>' +
+      '<div class="dda-sec"><div class="dda-lbl">Trabalhando ('+g.trab.length+')</div><div class="dda-chips">'+(g.trab.length ? g.trab.map(chipPessoa).join("") : '<span class="hint">Ninguém nesta área</span>')+'</div></div>' +
+      (g.fora.length ? '<div class="dda-sec"><div class="dda-lbl">Fora ('+g.fora.length+')</div><div class="dda-chips">'+g.fora.map(chipPessoa).join("")+'</div></div>' : '') +
+    '</div>';
+  }
+  function renderAreaDetalhe(){
+    var box = document.getElementById("areaDetalhe");
+    if(!box) return;
+    var existe = !!areaAberta && !!document.querySelector('#mesAreas .area-block[data-area="'+areaAberta+'"]');
+    if(!existe) areaAberta = null;
+    box.innerHTML = areaAberta ? areaDetalheHTML(areaAberta, dimDate || todayISO()) : "";
+    box.style.display = areaAberta ? "" : "none";
+    Array.prototype.forEach.call(document.querySelectorAll("#mesAreas .area-block"), function(b){ b.classList.toggle("aberta", b.dataset.area===areaAberta); });
+  }
   // ---------- render all ----------
   // ---------- Aniversários: um calendário só, com os reps de todos os times ----------
   // Lê direto de root.times (o time ativo já está lá), então o painel mostra os dois times ao mesmo tempo.
@@ -3046,7 +3045,11 @@
 
   document.addEventListener("click", function(e){
     var btn = e.target.closest("[data-act]");
-    if(!btn) return;
+    if(!btn){
+      var caixa = e.target.closest("#mesAreas .area-block");
+      if(caixa){ areaAberta = areaAberta===caixa.dataset.area ? null : caixa.dataset.area; renderAreaDetalhe(); }
+      return;
+    }
     var act = btn.dataset.act, id = btn.dataset.id;
     if(act==="dim-dia"){
       setDimDate(btn.dataset.iso);
