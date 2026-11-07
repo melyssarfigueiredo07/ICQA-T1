@@ -1129,3 +1129,9 @@ body.tela-calendario{background:#EFF1F4;}
 .banco-efeito{display:flex; gap:4px; flex-wrap:wrap;}
 .banco-acoes{display:flex; gap:6px; margin-top:2px;}
 .agenda-vazio{padding:12px 14px;}
+
+/* ---------- Seções Pedidos e Agendamentos, que podem ser ocultadas ---------- */
+.sec-cab{display:flex; align-items:center; justify-content:space-between; gap:12px;}
+.sec-toggle{text-transform:none; letter-spacing:0; font-size:12px; font-weight:600; padding:4px 12px;}
+.panel.oculta > .sec-corpo{display:none;}
+.panel.oculta > .sec-cab{margin-bottom:0; padding-bottom:0; border-bottom:0;}

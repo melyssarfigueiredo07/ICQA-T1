@@ -2845,6 +2845,16 @@
       status.textContent = "Não consegui ler a planilha pelo Grid (" + (e && e.message ? e.message : "erro") + "). Confira se o Google do dono está conectado e se a planilha está vinculada a este documento.";
     });
   }
+  // Pedidos e Agendamentos podem ser ocultados: o cabeçalho fica, com o botão para mostrar de novo.
+  var secOcultas = {};
+  function secToggle(id){
+    secOcultas[id] = !secOcultas[id];
+    var el = document.getElementById(id);
+    if(!el) return;
+    el.classList.toggle("oculta", !!secOcultas[id]);
+    var b = el.querySelector(".sec-toggle");
+    if(b){ b.textContent = secOcultas[id] ? "Mostrar" : "Ocultar"; b.setAttribute("aria-expanded", secOcultas[id] ? "false" : "true"); }
+  }
   // ---------- render all ----------
   // ---------- Aniversários: um calendário só, com os reps de todos os times ----------
   // Lê direto de root.times (o time ativo já está lá), então o painel mostra os dois times ao mesmo tempo.
@@ -2945,7 +2955,7 @@
     renderNavBadges();
   }
 
-  var SEC_IDS = {"sec-dia":"sec-dia", "sec-agendar":"folgaFormPanel", "sec-pedidos":"sec-pedidos", "sec-lista":"sec-lista"};
+  var SEC_IDS = {"sec-dia":"sec-dia", "sec-pedidos":"sec-pedidos", "sec-agendar":"folgaFormPanel", "sec-lista":"sec-lista"};
   function secAtiva(key){
     Array.prototype.forEach.call(document.querySelectorAll("#calIndex .fchip"), function(c){ c.classList.toggle("on", c.dataset.sec===key); });
   }
@@ -3069,6 +3079,7 @@
     else if(act==="toggle-ponto"){ togglePonto(id); }
     else if(act==="folga-tipo"){ document.getElementById("folgaTipo").value = btn.dataset.v; folgaTocado = true; folgaFormMudou(); }
     else if(act==="folga-per"){ folgaFiltroPer = btn.dataset.v; renderFolgas(); }
+    else if(act==="sec-toggle"){ secToggle(btn.dataset.sec); }
     else if(act==="folga-oculta"){ if(btn.dataset.v==="banco") folgaOcultaBanco = !folgaOcultaBanco; else folgaOcultaPassados = !folgaOcultaPassados; renderFolgas(); }
     else if(act==="filtro-time"){ mudarFiltroTime(btn.dataset.tab, btn.dataset.v); }
     else if(act==="pedido-aprovar"){ aprovarPedido(btn.dataset.time, id); }

@@ -324,8 +324,8 @@
 
       <nav class="sec-index" id="calIndex" aria-label="Seções do Calendário">
         <button type="button" class="fchip on" data-act="goto-sec" data-sec="sec-dia">Painel do dia</button>
-        <button type="button" class="fchip" data-act="goto-sec" data-sec="sec-agendar">Agendar</button>
         <button type="button" class="fchip" data-act="goto-sec" data-sec="sec-pedidos">Pedidos <b id="calIdxPedidos"></b></button>
+        <button type="button" class="fchip" data-act="goto-sec" data-sec="sec-agendar">Agendar</button>
         <button type="button" class="fchip" data-act="goto-sec" data-sec="sec-lista">Agendamentos <b id="calIdxN"></b></button>
       </nav>
 
@@ -374,6 +374,28 @@
         <div class="fd-wrap" id="folgasDias"></div>
         <div class="dim-legend" id="folgasLegenda"></div>
         <div class="hint" id="folgasHint" style="display:none; margin-top:8px;"></div>
+      </div>
+
+      <div class="panel" id="sec-pedidos" data-sec>
+        <div class="panel-title sec-cab"><span>Pedidos</span><button type="button" class="btn-ghost sec-toggle" data-act="sec-toggle" data-sec="sec-pedidos" aria-expanded="true">Ocultar</button></div>
+        <div class="sec-corpo">
+        <div class="hint" style="margin:0 0 14px;">Respostas do forms aguardando aprovação, separadas por time. Aprovar agenda direto no calendário. Depois de aprovado, avise a pessoa.</div>
+        <div class="forms-importa">
+          <div class="sub-title">Importar respostas do forms <small>no forms, aba Respostas › ⋮ › Fazer o download das respostas (.csv)</small></div>
+          <div class="forms-linha">
+            <input type="file" id="formsArquivo" accept=".csv,.tsv,.txt,text/csv">
+            <button type="button" class="btn" data-act="forms-ler">Ler texto colado</button>
+            <button type="button" class="btn" data-act="forms-planilha" title="Lê a planilha de respostas pelo Grid. Só funciona com o Painel aberto no Grid.">Atualizar da planilha do forms</button>
+          </div>
+          <textarea id="formsTexto" rows="3" placeholder="ou cole aqui o conteúdo do CSV (ou as linhas copiadas da planilha)"></textarea>
+          <div class="forms-mapa" id="formsMapa"></div>
+          <div class="hint" id="formsStatus"></div>
+        </div>
+        <div class="sub-title">Aguardando aprovação <small id="pedidosPendN"></small></div>
+        <div class="pedidos-times" id="pedidosPend"></div>
+        <div class="sub-title">Avisar a pessoa <small id="pedidosAvisoN"></small></div>
+        <div class="pedidos-times" id="pedidosAvisos"></div>
+        </div>
       </div>
 
       <div class="form-panel fc collapsed" id="folgaFormPanel" data-form="folga" data-sec>
@@ -458,28 +480,9 @@
         </div></div></div>
       </div>
 
-      <div class="panel" id="sec-pedidos" data-sec>
-        <div class="panel-title">Pedidos</div>
-        <div class="hint" style="margin:0 0 14px;">Respostas do forms aguardando aprovação, separadas por time. Aprovar agenda direto no calendário. Depois de aprovado, avise a pessoa.</div>
-        <div class="forms-importa">
-          <div class="sub-title">Importar respostas do forms <small>no forms, aba Respostas › ⋮ › Fazer o download das respostas (.csv)</small></div>
-          <div class="forms-linha">
-            <input type="file" id="formsArquivo" accept=".csv,.tsv,.txt,text/csv">
-            <button type="button" class="btn" data-act="forms-ler">Ler texto colado</button>
-            <button type="button" class="btn" data-act="forms-planilha" title="Lê a planilha de respostas pelo Grid. Só funciona com o Painel aberto no Grid.">Atualizar da planilha do forms</button>
-          </div>
-          <textarea id="formsTexto" rows="3" placeholder="ou cole aqui o conteúdo do CSV (ou as linhas copiadas da planilha)"></textarea>
-          <div class="forms-mapa" id="formsMapa"></div>
-          <div class="hint" id="formsStatus"></div>
-        </div>
-        <div class="sub-title">Aguardando aprovação <small id="pedidosPendN"></small></div>
-        <div class="pedidos-times" id="pedidosPend"></div>
-        <div class="sub-title">Avisar a pessoa <small id="pedidosAvisoN"></small></div>
-        <div class="pedidos-times" id="pedidosAvisos"></div>
-      </div>
-
       <div class="panel" id="sec-lista" data-sec>
-        <div class="panel-title">Agendamentos</div>
+        <div class="panel-title sec-cab"><span>Agendamentos</span><button type="button" class="btn-ghost sec-toggle" data-act="sec-toggle" data-sec="sec-lista" aria-expanded="true">Ocultar</button></div>
+        <div class="sec-corpo">
         <div class="filter-row" style="justify-content:flex-start;">
           <div class="field">
             <label>Pessoa</label>
@@ -495,6 +498,7 @@
           </div>
         </div>
         <div id="folgasLista" class="agenda-quadros"></div>
+        </div>
       </div>
     </div>
 
