@@ -1961,7 +1961,7 @@
   // FOLGAS EXTRAS (banco de horas e troca de folga)
   // =====================================================================
   var folgasMes = "", folgaFiltroRep = "", folgaFiltroPer = "mes", folgaTocado = false;
-  var folgaOcultaBanco = true, folgaOcultaPassados = true; // a lista começa sem o banco de horas e sem as datas já passadas
+  var folgaOcultaBanco = false, folgaOcultaPassados = true; // a lista mostra o banco de horas e esconde as datas já passadas
   var ISO_RE = /^\d{4}-\d{2}-\d{2}$/;
   function isoOk(s){ return ISO_RE.test(String(s||"")); }
   function diasEntre(a, b){ return Cal.diasDesdeEpoch(b) - Cal.diasDesdeEpoch(a) + 1; } // inclusivo
@@ -1994,7 +1994,7 @@
     return (f.tipo==="troca" ? [f.dataFolga, f.dataTrabalho] : [f.data, f.dataFim||f.data]).filter(isoOk).sort();
   }
   var TIPO_ROTULO = {banco:"Banco de horas", troca:"Troca de folga", ferias:"Férias", treinamento:"Treinamento"};
-  var TIPO_TAG = {banco:"tag-teal", troca:"tag-amber", ferias:"tag-ferias", treinamento:"tag-treino"};
+  var TIPO_TAG = {banco:"tag-dark", troca:"tag-amber", ferias:"tag-ferias", treinamento:"tag-treino"};
   function folgaIni(f){ return folgaDatas(f)[0] || ""; }
   function folgaFim(f){ var d = folgaDatas(f); return d[d.length-1] || ""; }
 
@@ -2594,6 +2594,43 @@
       '<table><thead><tr><th>Pessoa</th><th>Datas</th><th>Efeito na contagem</th><th>Observação</th><th></th></tr></thead><tbody>'+corpo+'</tbody></table>' +
     '</section>';
   }
+  // Banco de horas em blocos por dia: cada dia do período vira um bloco com quem folga nele.
+  // Com "Datas passadas" oculto, os dias já passados saem dos blocos.
+  function agendaQuadroBancoHTML(lista, vazio, hoje){
+    var dias = {}, efeito = {};
+    lista.forEach(function(f){
+      var ds = folgaDatas(f);
+      if(!ds.length) return;
+      efeito[f.id] = folgaEfeito(f).tags;
+      var n = Math.min(31, diasEntre(ds[0], ds[ds.length-1]));
+      for(var i = 0; i < n; i++){
+        var iso = Cal.addDays(ds[0], i);
+        if(folgaOcultaPassados && iso < hoje) continue;
+        (dias[iso] = dias[iso] || []).push(f);
+      }
+    });
+    var isos = Object.keys(dias).sort();
+    var corpo = isos.length ? '<div class="banco-dias">' + isos.map(function(iso){
+      var itens = dias[iso].slice().sort(function(a, b){ return repName(a.repId).localeCompare(repName(b.repId), "pt-BR"); });
+      return '<div class="banco-dia' + (iso === hoje ? ' hoje' : '') + (iso < hoje ? ' fd-passado' : '') + '">' +
+        '<div class="banco-dia-head"><b>' + esc(diaSemana(iso)) + ' ' + esc(diaMes(iso)) + '</b><span>' + plural(itens.length, "pessoa", "pessoas") + '</span></div>' +
+        itens.map(function(f){
+          var r = repPorId(f.repId);
+          var nome = r ? r.nome + (modoUnificado ? " · " + timeDef(timeDoRep(r.id)).nome : "") : "";
+          // o efeito na contagem aparece só no primeiro dia do pedido, para não repetir
+          var tags = iso === folgaIni(f) ? efeito[f.id].map(function(t){ return '<span class="tag ' + t.cls + '">' + esc(t.txt) + '</span>'; }).join(" ") : "";
+          return '<div class="banco-pessoa" data-key="folga:' + esc(f.id) + '">' +
+            '<span class="agenda-pessoa" title="' + esc(nome) + '">' + esc(r ? nomeCurto(r.nome) : "(rep removido)") + '</span>' +
+            (f.obs ? '<span class="banco-obs">' + esc(f.obs) + '</span>' : '') +
+            (tags ? '<span class="banco-efeito">' + tags + '</span>' : '') +
+            '<span class="banco-acoes"><button class="btn-ghost" data-act="edit-folga" data-id="' + esc(f.id) + '">Editar</button><button class="btn-ghost" data-act="del-folga" data-id="' + esc(f.id) + '">Excluir</button></span>' +
+          '</div>';
+        }).join("") + '</div>';
+      }).join("") + '</div>' : '<div class="hint agenda-vazio">' + esc(vazio) + '</div>';
+    return '<section class="agenda-quadro" data-tipo="banco">' +
+      '<header class="agenda-quadro-head"><span class="tag ' + TIPO_TAG.banco + '">' + esc(TIPO_ROTULO.banco) + '</span><b class="num">' + lista.length + '</b><span class="hint">' + esc(AGENDA_DICA.banco) + '</span></header>' +
+      corpo + '</section>';
+  }
   function renderFolgas(){
     var hoje = todayISO();
     if(!/^\d{4}-\d{2}$/.test(folgasMes)) folgasMes = hoje.slice(0,7);
@@ -2633,17 +2670,17 @@
         return '<tr><td colspan="4"><span class="hint">Registro com dados inválidos.</span></td><td class="row-actions"><button class="btn-ghost" data-act="del-folga" data-id="'+esc(f && f.id)+'">Excluir</button></td></tr>';
        }
     };
-    // Banco de horas e datas já passadas começam ocultos: os chips "Ocultar" mostram ou escondem cada um.
+    // Banco de horas e datas passadas: os botões mostram ou escondem cada um, e o texto diz a ação.
     var passou = function(f){ try{ var fim = folgaFim(f); return !!fim && fim<hoje; }catch(e){ return false; } };
     var doTipo = function(tipo){ return todos.filter(function(f){ return tipoDoAgendamento(f)===tipo; }); };
-    var chipsOcultar = [["banco","Banco de horas",folgaOcultaBanco,doTipo("banco").length],["passados","Datas passadas",folgaOcultaPassados,todos.filter(passou).length]];
+    var chipsOcultar = [["banco", folgaOcultaBanco ? "Mostrar banco de horas" : "Ocultar banco de horas", doTipo("banco").length], ["passados", folgaOcultaPassados ? "Mostrar datas passadas" : "Ocultar datas passadas", todos.filter(passou).length]];
     document.getElementById("folgaOcultaChips").innerHTML = chipsOcultar.map(function(c){
-      return '<button type="button" class="fchip'+(c[2]?' on':'')+'" data-act="folga-oculta" data-v="'+c[0]+'" aria-pressed="'+(c[2]?'true':'false')+'">'+c[1]+' <b>'+c[3]+'</b></button>';
+      return '<button type="button" class="fchip" data-act="folga-oculta" data-v="'+c[0]+'">'+c[1]+' <b>'+c[2]+'</b></button>';
     }).join("");
     document.getElementById("folgasLista").innerHTML = AGENDA_TIPOS.filter(function(tipo){ return !(tipo==="banco" && folgaOcultaBanco); }).map(function(tipo){
       var lista = doTipo(tipo), mostrar = folgaOcultaPassados ? lista.filter(function(f){ return !passou(f); }) : lista;
       var vazio = !mostrar.length && folgaOcultaPassados && lista.some(function(f){ return passou(f); }) ? "Só há datas passadas neste filtro. Use “Datas passadas” para ver." : AGENDA_VAZIO[tipo];
-      return agendaQuadroHTML(tipo, mostrar, linha, vazio);
+      return tipo==="banco" ? agendaQuadroBancoHTML(mostrar, vazio, hoje) : agendaQuadroHTML(tipo, mostrar, linha, vazio);
     }).join("");
     folgaPreview();
   }
