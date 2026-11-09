@@ -1,17 +1,17 @@
 /**
  * Aviso no Chat assim que um preenchimento do forms entra na planilha de respostas.
  *
- * Como ativar (uma vez):
- *  1. Abra a planilha de respostas do forms e vá em Extensões → Apps Script.
- *  2. Apague o conteúdo de Código.gs e cole este arquivo inteiro.
- *  3. Engrenagem (Configurações do projeto) → Propriedades do script → Adicionar propriedade:
+ * Como ativar (uma vez), em script.google.com com a conta da MELI:
+ *  1. Novo projeto. Apague o conteúdo de Código.gs e cole este arquivo inteiro.
+ *  2. Engrenagem (Configurações do projeto) → Propriedades do script → Adicionar propriedade:
  *     nome CHAT_WEBHOOK, valor = o link do webhook do espaço. Salve.
- *  4. Escolha a função instalarGatilho e clique em Executar. Autorize a conta quando pedir.
- *  5. Para ver a mensagem sem enviar nada, execute verMensagemDaUltimaResposta e veja os registros.
+ *  3. Na barra de cima, escolha a função instalarGatilho → Executar. Autorize a conta quando pedir.
+ *  4. Para conferir sem enviar nada: escolha verMensagemDaUltimaResposta → Executar → Execuções.
  *
  * O webhook não fica neste código: só nas propriedades do script.
  */
 
+var PLANILHA_ID = '1YfsjQmcCwMwtKyzoTksEtkDGdAZgdIwzZS7ppAsEkO0';
 var NOME_ABA = 'Respostas ao formulário 1';
 var LINK_PAINEL = 'https://grid.adminml.com/d/01M32FJN749JESZP7A0YTSZKRT/view';
 
@@ -31,12 +31,12 @@ function instalarGatilho() {
   ScriptApp.getProjectTriggers().forEach(function (t) {
     if (t.getHandlerFunction() === 'onFormSubmit') ScriptApp.deleteTrigger(t);
   });
-  ScriptApp.newTrigger('onFormSubmit').forSpreadsheet(SpreadsheetApp.getActive()).onFormSubmit().create();
+  ScriptApp.newTrigger('onFormSubmit').forSpreadsheet(PLANILHA_ID).onFormSubmit().create();
 }
 
 // Mostra nos registros a mensagem da última resposta, sem enviar.
 function verMensagemDaUltimaResposta() {
-  var aba = SpreadsheetApp.getActive().getSheetByName(NOME_ABA);
+  var aba = SpreadsheetApp.openById(PLANILHA_ID).getSheetByName(NOME_ABA);
   Logger.log(montarTexto(lerResposta_(aba, aba.getLastRow())));
 }
 
