@@ -381,6 +381,15 @@
         <div class="hint" style="margin:0 0 14px;">Respostas do forms aguardando aprovação, separadas por time. Aprovar agenda direto no calendário. Depois de aprovado, avise a pessoa.</div>
         <div class="forms-importa">
           <div class="hint" id="formsStatus">A planilha de respostas do forms é lida sozinha a cada minuto, com o Painel aberto no Grid.</div>
+          <div class="forms-chat">
+            <div class="forms-acao">
+              <label class="hint" style="flex:1;">Aviso no Chat: link do webhook do espaço (fica só neste navegador)
+                <input type="password" id="chatWebhook" autocomplete="off" placeholder="Cole o link do webhook do espaço" style="width:100%;">
+              </label>
+              <button type="button" class="btn" data-act="chat-salvar">Salvar</button>
+            </div>
+            <div class="hint" id="chatStatus"></div>
+          </div>
         </div>
         <div class="sub-title">Aguardando aprovação <small id="pedidosPendN"></small></div>
         <div class="pedidos-times" id="pedidosPend"></div>

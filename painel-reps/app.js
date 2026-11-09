@@ -2718,6 +2718,68 @@
       if(res.updated_at !== lastUpdatedAt && leituraValida(res)){ aplicarLeitura(res); renderAll(); }
     }).catch(function(){});
   }
+  // Aviso no Chat: o link do webhook do espaço é colado no Painel e fica só neste navegador (localStorage).
+  // Nunca vai para o documento do Grid, que recusa chaves de API.
+  var CHAT_CHAVE = "painel-reps-chat-webhook", CHAT_LINK = "https://grid.adminml.com/d/01M32FJN749JESZP7A0YTSZKRT/view";
+  // Menção por time: ID do líder no Chat. Harley sem ID: o aviso sai sem marcar ninguém.
+  var CHAT_MENCOES = {vinicius: "users/115181501054816205248", harley: ""};
+  var chatWebhookMemoria = null, chatEnviando = false;
+  function chatWebhookLer(){
+    if(chatWebhookMemoria !== null) return chatWebhookMemoria;
+    try { return localStorage.getItem(CHAT_CHAVE) || ""; } catch(e){ return ""; }
+  }
+  function chatWebhookGuardar(valor){
+    chatWebhookMemoria = valor;
+    try { localStorage.setItem(CHAT_CHAVE, valor); return true; } catch(e){ return false; }
+  }
+  function chatConfigMostrar(){
+    var campo = document.getElementById("chatWebhook"), st = document.getElementById("chatStatus");
+    if(!campo || !st) return;
+    var tem = !!chatWebhookLer();
+    campo.placeholder = tem ? "Webhook salvo neste navegador (cole outro para trocar)" : "Cole o link do webhook do espaço";
+    st.textContent = tem ? "Avisos no Chat ligados neste navegador." : "Avisos no Chat desligados: cole o webhook e clique em Salvar.";
+  }
+  function chatConfigSalvar(){
+    var campo = document.getElementById("chatWebhook"), st = document.getElementById("chatStatus");
+    var valor = campo ? campo.value.trim() : "";
+    if(!valor){ if(st) st.textContent = "Cole o link do webhook antes de salvar."; return; }
+    if(valor.indexOf("https://chat.googleapis.com/") !== 0){ if(st) st.textContent = "O link precisa começar com https://chat.googleapis.com/"; return; }
+    var guardou = chatWebhookGuardar(valor);
+    if(campo) campo.value = "";
+    chatConfigMostrar();
+    if(st && !guardou) st.textContent = "Este navegador não guarda o webhook: os avisos saem só enquanto esta página estiver aberta.";
+    avisarChatPendentes();
+  }
+  function textoAvisoChat(p, mencao){
+    var dia = /^\d{4}-\d{2}-\d{2}$/.test(p.data || "") ? p.data.slice(8, 10) + "/" + p.data.slice(5, 7) + "/" + p.data.slice(0, 4) : (p.data || "");
+    return (mencao ? "<" + mencao + "> " : "") + "Nova solicitação de banco de horas: " + (p.nome || "") + ", dia " + dia +
+      ", saldo " + (p.saldo || "não informado") + ", escala " + (p.escala || "não informada") + ". Aprovar no <" + CHAT_LINK + "|Painel de Reps>.";
+  }
+  // Pedidos do forms ainda sem aviso (avisoChat === false). Pedidos antigos, sem o campo, não são avisados.
+  function avisosPendentes(){
+    var lista = [];
+    TIMES.forEach(function(t){ pedidosDoTime(t.key).forEach(function(p){ if(p.origem === "forms" && p.avisoChat === false && p.status === "pendente") lista.push({key:t.key, p:p}); }); });
+    return lista;
+  }
+  // Manda o aviso de cada solicitação pendente, uma vez. Se falhar, o pedido segue pendente e o próximo ciclo tenta de novo.
+  function avisarChatPendentes(){
+    var webhook = chatWebhookLer();
+    if(!webhook || chatEnviando) return;
+    var fila = avisosPendentes();
+    if(!fila.length) return;
+    chatEnviando = true;
+    var mudou = false;
+    fila.reduce(function(antes, item){
+      return antes.then(function(){
+        return fetch(webhook, {method: "POST", headers: {"Content-Type": "application/json; charset=UTF-8"}, body: JSON.stringify({text: textoAvisoChat(item.p, CHAT_MENCOES[item.key] || "")})})
+          .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); item.p.avisoChat = true; mudou = true; })
+          .catch(function(e){ console.warn("Aviso no Chat não enviado:", e); });
+      });
+    }, Promise.resolve()).then(function(){
+      chatEnviando = false;
+      if(mudou) scheduleSave();
+    });
+  }
   // Quais colunas da planilha são cada campo, pelo nome do cabeçalho (o campo Data entra por último). Coluna não achada: -1.
   function formsColunas(cab){
     var usados = {}, col = {};
@@ -2758,7 +2820,7 @@
       jaTem[chave] = true;
       var time = timeComDados(key);
       if(!Array.isArray(time.solicitacoes)) time.solicitacoes = [];
-      time.solicitacoes.push({id:uid(), nome:nome, repId:repDoNomePedido(key, nome), tipo:tipo, data:dados.data, dataFim:dados.dataFim, dataFolga:dados.dataFolga, dataTrabalho:dados.dataTrabalho, dias:dados.dias, obs:v("obs"), saldo:v("saldo"), escala:v("escala"), lider:v("lider"), status:"pendente", recebidoEm:recebido, origem:"forms", chave:chave});
+      time.solicitacoes.push({id:uid(), nome:nome, repId:repDoNomePedido(key, nome), tipo:tipo, data:dados.data, dataFim:dados.dataFim, dataFolga:dados.dataFolga, dataTrabalho:dados.dataTrabalho, dias:dados.dias, obs:v("obs"), saldo:v("saldo"), escala:v("escala"), lider:v("lider"), status:"pendente", recebidoEm:recebido, origem:"forms", avisoChat:false, chave:chave});
       res.criados++;
     });
     // leitura automática sem nada novo: não grava, não redesenha e não troca a mensagem da caixa
@@ -2823,6 +2885,7 @@
       var n = linhas.length > 1 ? linhas.length - 1 : 0;
       if(!n){
         if(!silencioso) status.textContent = "A aba “" + aba + "” ainda não tem respostas (só o cabeçalho, ou vazia).";
+        avisarChatPendentes(); // ainda tenta os avisos que ficaram para trás
         return;
       }
       var lidas = "Lidas " + n + " resposta(s) da aba “" + aba + "”";
@@ -2830,6 +2893,7 @@
       // antes de criar pedidos, pega o estado mais novo do Grid: duas janelas abertas não criam o mesmo pedido nem o mesmo aviso
       return sincronizarEstado().then(function(){
         formsImportar(linhas.slice(1), formsColunas(cab), silencioso ? "Atualização automática · " + lidas : lidas, silencioso);
+        avisarChatPendentes();
       });
     }).catch(function(e){
       var msg = "Não consegui ler a planilha pelo Grid: " + erroGrid(e) + ". Confira se o Google do dono está conectado e se a planilha está vinculada a este documento.";
@@ -2840,6 +2904,7 @@
   var FORMS_AUTO_MS = 60000, formsAutoTimer = null;
   function startFormsAuto(){
     if(formsAutoTimer) return;
+    chatConfigMostrar();
     formsAtualizarDaPlanilha(true);
     formsAutoTimer = setInterval(function(){ formsAtualizarDaPlanilha(true); }, FORMS_AUTO_MS);
   }
@@ -3113,6 +3178,7 @@
     else if(act==="toggle-ponto"){ togglePonto(id); }
     else if(act==="folga-tipo"){ document.getElementById("folgaTipo").value = btn.dataset.v; folgaTocado = true; folgaFormMudou(); }
     else if(act==="folga-per"){ folgaFiltroPer = btn.dataset.v; renderFolgas(); }
+    else if(act==="chat-salvar"){ chatConfigSalvar(); }
     else if(act==="sec-toggle"){ secToggle(btn.dataset.sec); }
     else if(act==="folga-oculta"){ if(btn.dataset.v==="banco") folgaOcultaBanco = !folgaOcultaBanco; else folgaOcultaPassados = !folgaOcultaPassados; renderFolgas(); }
     else if(act==="filtro-time"){ mudarFiltroTime(btn.dataset.tab, btn.dataset.v); }
