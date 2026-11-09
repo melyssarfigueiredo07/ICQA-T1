@@ -2721,8 +2721,8 @@
   // Aviso no Chat: o link do webhook do espaço é colado no Painel e fica só neste navegador (localStorage).
   // Nunca vai para o documento do Grid, que recusa chaves de API.
   var CHAT_CHAVE = "painel-reps-chat-webhook", CHAT_LINK = "https://grid.adminml.com/d/01M32FJN749JESZP7A0YTSZKRT/view";
-  // Menção por time: ID do líder no Chat. Harley sem ID: o aviso sai sem marcar ninguém.
-  var CHAT_MENCOES = {vinicius: "users/115181501054816205248", harley: ""};
+  // Menção por time: ID do líder no Chat (Vinicius e Harley).
+  var CHAT_MENCOES = {vinicius: "users/115181501054816205248", harley: "users/110599869128578133441"};
   var chatWebhookMemoria = null, chatEnviando = false;
   function chatWebhookLer(){
     if(chatWebhookMemoria !== null) return chatWebhookMemoria;

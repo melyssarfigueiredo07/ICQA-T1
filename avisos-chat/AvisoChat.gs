@@ -18,7 +18,7 @@ var LINK_PAINEL = 'https://grid.adminml.com/d/01M32FJN749JESZP7A0YTSZKRT/view';
 // Menção do líder no Chat (users/ID). Vazio = o aviso sai sem marcar ninguém.
 var MENCOES = {
   vinicius: 'users/115181501054816205248',
-  harley: ''
+  harley: 'users/110599869128578133441'
 };
 
 // Roda a cada resposta nova do formulário.
