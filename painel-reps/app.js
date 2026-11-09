@@ -2712,45 +2712,6 @@
     return achados.length === 1 ? achados[0].key : "";
   }
   // Importa as respostas lidas como pedidos pendentes. "prefixo" (opcional) abre a mensagem, ex.: de onde vieram as linhas.
-  // Aviso no Chat assim que a solicitação entra no Painel. O webhook vem de chat-config.js, que não vai para o repositório.
-  // A menção usa o ID do líder do time no Chat. Sem o ID, o aviso espera: não sai sem marcar o líder.
-  var CHAT_LINK = "https://grid.adminml.com/d/01M32FJN749JESZP7A0YTSZKRT/view";
-  var CHAT_LIDERES = {vinicius: "users/115181501054816205248", harley: ""};
-  function textoAvisoChat(p, mencao){
-    var dia = /^\d{4}-\d{2}-\d{2}$/.test(p.data || "") ? p.data.slice(8, 10) + "/" + p.data.slice(5, 7) + "/" + p.data.slice(0, 4) : (p.data || "");
-    return (mencao ? "<" + mencao + "> " : "") + "Nova solicitação de banco de horas: " + (p.nome || "") + ", dia " + dia +
-      ", saldo " + (p.saldo || "não informado") + ", escala " + (p.escala || "não informada") + ". Aprovar no <" + CHAT_LINK + "|Painel de Reps>.";
-  }
-  // Pedidos do forms que ainda não tiveram aviso (avisoChat === false). Pedidos antigos, sem o campo, não são avisados.
-  function avisosPendentes(){
-    var lista = [];
-    TIMES.forEach(function(t){ pedidosDoTime(t.key).forEach(function(p){ if(p.origem === "forms" && p.avisoChat === false && p.status === "pendente") lista.push({key:t.key, p:p}); }); });
-    return lista;
-  }
-  function avisosSemMencao(){
-    return avisosPendentes().filter(function(item){ return !CHAT_LIDERES[item.key]; }).length;
-  }
-  var chatEnviando = false;
-  // Manda o aviso de cada solicitação pendente para o líder do time, marcando o líder.
-  // Se o envio falhar, o pedido continua pendente e o próximo ciclo tenta de novo.
-  function avisarChatPendentes(){
-    var webhook = window.PAINEL_CHAT_WEBHOOK || "";
-    if(!webhook || chatEnviando) return;
-    var fila = avisosPendentes().filter(function(item){ return !!CHAT_LIDERES[item.key]; });
-    if(!fila.length) return;
-    chatEnviando = true;
-    var mudou = false;
-    fila.reduce(function(antes, item){
-      return antes.then(function(){
-        return fetch(webhook, {method: "POST", headers: {"Content-Type": "application/json; charset=UTF-8"}, body: JSON.stringify({text: textoAvisoChat(item.p, CHAT_LIDERES[item.key])})})
-          .then(function(r){ if(!r.ok) throw new Error("HTTP " + r.status); item.p.avisoChat = true; mudou = true; })
-          .catch(function(e){ console.warn("Aviso no Chat não enviado:", e); });
-      });
-    }, Promise.resolve()).then(function(){
-      chatEnviando = false;
-      if(mudou) scheduleSave();
-    });
-  }
   // Antes de criar pedidos, pega o estado mais novo do Grid (como o polling faz a cada 5 s).
   function sincronizarEstado(){
     return window.GRID.state.get().then(function(res){
@@ -2797,7 +2758,7 @@
       jaTem[chave] = true;
       var time = timeComDados(key);
       if(!Array.isArray(time.solicitacoes)) time.solicitacoes = [];
-      time.solicitacoes.push({id:uid(), nome:nome, repId:repDoNomePedido(key, nome), tipo:tipo, data:dados.data, dataFim:dados.dataFim, dataFolga:dados.dataFolga, dataTrabalho:dados.dataTrabalho, dias:dados.dias, obs:v("obs"), saldo:v("saldo"), escala:v("escala"), lider:v("lider"), status:"pendente", recebidoEm:recebido, origem:"forms", avisoChat:false, chave:chave});
+      time.solicitacoes.push({id:uid(), nome:nome, repId:repDoNomePedido(key, nome), tipo:tipo, data:dados.data, dataFim:dados.dataFim, dataFolga:dados.dataFolga, dataTrabalho:dados.dataTrabalho, dias:dados.dias, obs:v("obs"), saldo:v("saldo"), escala:v("escala"), lider:v("lider"), status:"pendente", recebidoEm:recebido, origem:"forms", chave:chave});
       res.criados++;
     });
     // leitura automática sem nada novo: não grava, não redesenha e não troca a mensagem da caixa
@@ -2806,8 +2767,6 @@
     renderAll();
     var partes = (prefixo ? [prefixo] : []).concat(["Importados: " + res.criados]);
     if(!(col.tipo >= 0)) partes.push("sem coluna de tipo: entram como banco de horas");
-    var espera = avisosSemMencao();
-    if(espera) partes.push("aviso no Chat aguardando a menção do líder: " + espera);
     if(res.repetidos) partes.push("já estavam na lista: " + res.repetidos);
     if(res.semTime.length) partes.push("sem time (o nome não está no cadastro e o Líder não traz o nome do time): " + res.semTime.join(", "));
     if(res.tipo.length) partes.push("tipo não reconhecido: " + res.tipo.join(", "));
@@ -2864,7 +2823,6 @@
       var n = linhas.length > 1 ? linhas.length - 1 : 0;
       if(!n){
         if(!silencioso) status.textContent = "A aba “" + aba + "” ainda não tem respostas (só o cabeçalho, ou vazia).";
-        avisarChatPendentes(); // ainda tenta os avisos que ficaram para trás
         return;
       }
       var lidas = "Lidas " + n + " resposta(s) da aba “" + aba + "”";
@@ -2872,7 +2830,6 @@
       // antes de criar pedidos, pega o estado mais novo do Grid: duas janelas abertas não criam o mesmo pedido nem o mesmo aviso
       return sincronizarEstado().then(function(){
         formsImportar(linhas.slice(1), formsColunas(cab), silencioso ? "Atualização automática · " + lidas : lidas, silencioso);
-        avisarChatPendentes();
       });
     }).catch(function(e){
       var msg = "Não consegui ler a planilha pelo Grid: " + erroGrid(e) + ". Confira se o Google do dono está conectado e se a planilha está vinculada a este documento.";
