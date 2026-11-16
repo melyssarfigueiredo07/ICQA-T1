@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Controle de RQ · Mercado Livre</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header>
+  <div class="logo">mercado<span>livre</span></div>
+  <h1>Controle de RQ</h1>
+  <div class="team-wrap"><span>Time</span><input id="teamName" placeholder="Nome do time" maxlength="60"></div>
+  <span id="sync" class="sync busy">Carregando…</span>
+</header>
+<div id="banner" class="banner" hidden></div>
+
+<nav class="tabs"><div>
+  <button class="tab active" data-tab="baixas" type="button">Baixas feitas</button>
+  <button class="tab" data-tab="resp" type="button">Cadastro de responsáveis</button>
+</div></nav>
+
+<main>
+
+  <!-- ===================== ABA: BAIXAS ===================== -->
+  <section id="tab-baixas">
+
+    <section class="card">
+      <h2>Nova solicitação de baixa</h2>
+      <form id="form" class="form-baixa" autocomplete="off">
+        <label>SKU
+          <input id="sku" name="sku" class="sku" placeholder="Ex.: MLB123" required autofocus>
+        </label>
+        <label>Quantidade
+          <input id="quantidade" name="quantidade" type="number" min="1" step="1" placeholder="0" required>
+        </label>
+        <label>Origem
+          <input id="origem" name="origem" list="dl-origem" placeholder="Ex.: Estoque A">
+        </label>
+        <label>SKU Reingresso
+          <input id="skuReingresso" name="skuReingresso" class="sku" placeholder="Opcional">
+        </label>
+        <label>Responsável
+          <select id="responsavel" name="responsavel" required></select>
+          <span id="turno-info" class="turno-info"></span>
+        </label>
+        <label>Data
+          <input id="data" name="data" type="date" required>
+        </label>
+        <button type="submit" class="btn-add">+ Adicionar</button>
+      </form>
+      <p class="hint">
+        Preencha e pressione <kbd>Enter</kbd> em qualquer campo para lançar. <kbd>Tab</kbd> avança entre campos.
+        Origem e Responsável continuam preenchidos após cada lançamento. O turno vem do cadastro do responsável.
+      </p>
+    </section>
+
+    <section class="card">
+      <h2>Filtros</h2>
+      <div class="filters">
+        <label>Data de <input id="f-de" type="date"></label>
+        <label>Data até <input id="f-ate" type="date"></label>
+        <label>Turno
+          <select id="f-turno">
+            <option value="">Todos</option>
+            <option>Manhã</option><option>Tarde</option><option>Noite</option>
+          </select>
+        </label>
+        <label>SKU <input id="f-sku" class="sku" placeholder="Contém…"></label>
+        <label>Origem <select id="f-origem"></select></label>
+        <label>Nome <select id="f-nome"></select></label>
+        <button class="btn-ghost" id="btn-limpar-filtros" type="button">Limpar filtros</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="toolbar">
+        <span class="pill y" id="st-linhas">0 baixas</span>
+        <span class="pill" id="st-qtd">0 unidades</span>
+        <div class="stats">
+          <button class="btn-ghost" id="btn-csv" type="button">Exportar CSV (filtrado)</button>
+          <button class="btn-ghost" id="btn-backup" type="button">Backup (JSON)</button>
+          <button class="btn-ghost" id="btn-importar" type="button">Importar JSON</button>
+          <button class="btn-ghost" id="btn-limpar" type="button">Limpar tudo</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="baixas">
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th style="text-align:right">Quantidade</th>
+              <th>Origem</th>
+              <th>SKU Reingresso</th>
+              <th>Responsável</th>
+              <th>Turno</th>
+              <th>Data</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <p class="hint">Clique em qualquer célula para editar. Os dados são compartilhados com todos que abrem este documento no Grid.</p>
+    </section>
+  </section>
+
+  <!-- ===================== ABA: RESPONSÁVEIS ===================== -->
+  <section id="tab-resp" hidden>
+
+    <section class="card">
+      <h2>Cadastrar responsável</h2>
+      <form id="formResp" class="form-resp" autocomplete="off">
+        <label>Nome
+          <input id="r-nome" placeholder="Nome completo" required>
+        </label>
+        <label>Turno
+          <select id="r-turno" required></select>
+        </label>
+        <label>Cargo
+          <input id="r-cargo" list="dl-cargo" placeholder="Ex.: Operador">
+        </label>
+        <button type="submit" class="btn-add">+ Cadastrar</button>
+      </form>
+      <p class="hint">Alterar o nome ou o turno aqui atualiza também as baixas já lançadas.</p>
+    </section>
+
+    <section class="card">
+      <div class="toolbar">
+        <span class="pill y" id="st-resp">0 responsáveis</span>
+      </div>
+      <div class="table-wrap">
+        <table class="resps">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Turno</th>
+              <th>Cargo</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="resp-rows"></tbody>
+        </table>
+      </div>
+      <p class="hint">Clique em qualquer campo para editar.</p>
+    </section>
+  </section>
+
+</main>
+
+<!-- diálogo próprio (confirm/alert são bloqueados dentro do Grid) -->
+<div id="modal" class="modal" hidden>
+  <div class="box" role="dialog" aria-modal="true">
+    <p id="modal-msg"></p>
+    <div class="acts">
+      <button id="modal-no" class="btn-ghost" type="button"></button>
+      <button id="modal-ok" class="btn-add" type="button"></button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="file-import" accept=".json,application/json" hidden>
+<datalist id="dl-origem"></datalist>
+<datalist id="dl-cargo"></datalist>
+
+<script src="app.js"></script>
+</body>
+</html>
