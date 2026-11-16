@@ -11,6 +11,7 @@
     --danger:#F23D4F;
   }
   *{box-sizing:border-box}
+  [hidden]{display:none!important}
   body{margin:0;font-family:"Proxima Nova",Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
 
   header{background:var(--yellow);padding:14px 24px;display:flex;align-items:center;gap:14px}
@@ -18,21 +19,25 @@
   .logo span{color:var(--blue)}
   header h1{margin:0;font-size:18px;font-weight:700;color:var(--navy);padding-left:14px;border-left:2px solid var(--navy)}
 
+  nav.tabs{background:#fff;border-bottom:1px solid var(--border)}
+  nav.tabs div{max-width:1200px;margin:0 auto;padding:0 16px;display:flex;gap:4px}
+  .tab{background:none;border:0;border-bottom:3px solid transparent;color:var(--muted);padding:14px 16px;font-weight:700;border-radius:0}
+  .tab:hover{color:var(--navy)}
+  .tab.active{color:var(--navy);border-bottom-color:var(--blue)}
+
   main{max-width:1200px;margin:24px auto;padding:0 16px}
   .card{background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:20px;margin-bottom:20px}
   .card h2{margin:0 0 14px;font-size:15px;color:var(--navy)}
 
-  /* formulário de entrada */
-  .form{display:grid;grid-template-columns:1.3fr .8fr 1.2fr 1.3fr 1.5fr 1fr auto;gap:10px;align-items:end}
   label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
-  input{font:inherit;font-size:14px;padding:9px 10px;border:1px solid #CCC;border-radius:6px;background:#fff;color:var(--text);font-weight:400;min-width:0;width:100%}
-  input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(52,131,250,.2)}
+  input,select{font:inherit;font-size:14px;padding:9px 10px;border:1px solid #CCC;border-radius:6px;background:#fff;color:var(--text);font-weight:400;min-width:0;width:100%}
+  input:focus,select:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(52,131,250,.2)}
   input.sku{text-transform:uppercase}
 
   button{font:inherit;font-weight:700;cursor:pointer;border:0;border-radius:6px;padding:10px 16px}
   .btn-add{background:var(--blue);color:#fff;height:38px;white-space:nowrap}
   .btn-add:hover{background:var(--blue-d)}
-  .btn-ghost{background:#fff;color:var(--navy);border:1px solid #CCC;padding:9px 14px}
+  .btn-ghost{background:#fff;color:var(--navy);border:1px solid #CCC;padding:9px 14px;white-space:nowrap}
   .btn-ghost:hover{border-color:var(--navy)}
   .btn-danger{background:#fff;color:var(--danger);border:1px solid #F5C0C5;padding:5px 9px;line-height:1}
   .btn-danger:hover{background:#FDECEE}
@@ -40,32 +45,47 @@
   .hint{margin-top:12px;color:var(--muted);font-size:12px}
   kbd{background:#F0F0F0;border:1px solid #CCC;border-radius:4px;padding:1px 5px;font-size:11px;font-family:inherit}
 
-  /* barra de ferramentas */
+  /* formulários */
+  .form-baixa{display:grid;grid-template-columns:1.3fr .8fr 1.2fr 1.3fr 1.5fr 1fr auto;gap:10px;align-items:end}
+  .form-resp{display:grid;grid-template-columns:2fr 1fr 2fr auto;gap:10px;align-items:end}
+  .turno-info{font-size:12px;color:var(--navy);font-weight:700;text-transform:none;letter-spacing:0;min-height:14px}
+
+  /* filtros */
+  .filters{display:grid;grid-template-columns:repeat(6,1fr) auto;gap:10px;align-items:end}
+  .filters .btn-ghost{height:38px}
+
+  /* barra da grid */
   .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
-  .toolbar input{flex:1;min-width:220px;max-width:380px}
   .stats{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
   .pill{background:var(--navy);color:#fff;border-radius:999px;padding:6px 12px;font-weight:700;font-size:12px}
   .pill.y{background:var(--yellow);color:var(--navy)}
 
   /* grid */
-  .table-wrap{overflow:auto;max-height:62vh;border:1px solid var(--border);border-radius:8px}
-  table{width:100%;border-collapse:collapse;min-width:900px}
+  .table-wrap{overflow:auto;max-height:60vh;border:1px solid var(--border);border-radius:8px}
+  table{width:100%;border-collapse:collapse}
+  table.baixas{min-width:1000px}
+  table.resps{min-width:600px}
   thead th{background:var(--navy);color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.3px;padding:11px 10px;position:sticky;top:0;z-index:1}
   tbody td{padding:5px;border-bottom:1px solid var(--border)}
   tbody tr:nth-child(even){background:#FAFAFA}
   tbody tr:hover{background:#FFF9CC}
-  tbody td input{border-color:transparent;background:transparent;padding:7px 8px}
-  tbody td input:hover{border-color:#DDD;background:#fff}
-  tbody td input:focus{background:#fff}
-  tbody td.num input{text-align:right}
+  tbody td input,tbody td select{border-color:transparent;background:transparent;padding:7px 8px}
+  tbody td input:hover,tbody td select:hover{border-color:#DDD;background:#fff}
+  tbody td input:focus,tbody td select:focus{background:#fff}
+  td.num input{text-align:right}
   td.actions{text-align:center;width:60px}
+  .turno{display:inline-block;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;margin-left:8px}
+  .t-manha{background:#FFF3B0;color:#7A5C00}
+  .t-tarde{background:#D6E8FF;color:#1B4F9C}
+  .t-noite{background:var(--navy);color:#fff}
+  .t-none{background:#EEE;color:var(--muted)}
   .empty{text-align:center;color:var(--muted);padding:40px 10px}
   .flash{animation:flash 1.4s ease-out}
   @keyframes flash{from{background:#FFF59D}to{background:transparent}}
 
   @media (max-width:900px){
-    .form{grid-template-columns:1fr 1fr}
-    .btn-add{grid-column:1/-1;height:44px}
+    .form-baixa,.form-resp,.filters{grid-template-columns:1fr 1fr}
+    .form-baixa .btn-add,.form-resp .btn-add,.filters .btn-ghost{grid-column:1/-1}
   }
 </style>
 </head>
@@ -76,147 +96,432 @@
   <h1>Controle de RQ</h1>
 </header>
 
+<nav class="tabs"><div>
+  <button class="tab active" data-tab="baixas" type="button">Baixas feitas</button>
+  <button class="tab" data-tab="resp" type="button">Cadastro de responsáveis</button>
+</div></nav>
+
 <main>
 
-  <!-- ENTRADA RÁPIDA -->
-  <section class="card">
-    <h2>Nova solicitação de baixa</h2>
-    <form id="form" class="form" autocomplete="off">
-      <label>SKU
-        <input id="sku" name="sku" class="sku" placeholder="Ex.: MLB123" required autofocus>
-      </label>
-      <label>Quantidade
-        <input id="quantidade" name="quantidade" type="number" min="1" step="1" placeholder="0" required>
-      </label>
-      <label>Origem
-        <input id="origem" name="origem" list="dl-origem" placeholder="Ex.: Estoque A">
-      </label>
-      <label>SKU Reingresso
-        <input id="skuReingresso" name="skuReingresso" class="sku" placeholder="Opcional">
-      </label>
-      <label>Responsável
-        <input id="responsavel" name="responsavel" list="dl-resp" placeholder="Nome">
-      </label>
-      <label>Data
-        <input id="data" name="data" type="date" required>
-      </label>
-      <button type="submit" class="btn-add">+ Adicionar</button>
-    </form>
-    <p class="hint">
-      Preencha e pressione <kbd>Enter</kbd> em qualquer campo para lançar. <kbd>Tab</kbd> avança entre campos.
-      Origem e Responsável são mantidos após cada lançamento.
-    </p>
-    <datalist id="dl-origem"></datalist>
-    <datalist id="dl-resp"></datalist>
-  </section>
+  <!-- ===================== ABA: BAIXAS ===================== -->
+  <section id="tab-baixas">
 
-  <!-- GRID -->
-  <section class="card">
-    <div class="toolbar">
-      <input id="search" type="search" placeholder="Buscar por SKU, origem, responsável…">
-      <div class="stats">
-        <span class="pill y" id="st-linhas">0 solicitações</span>
-        <span class="pill" id="st-qtd">0 unidades</span>
+    <section class="card">
+      <h2>Nova solicitação de baixa</h2>
+      <form id="form" class="form-baixa" autocomplete="off">
+        <label>SKU
+          <input id="sku" name="sku" class="sku" placeholder="Ex.: MLB123" required autofocus>
+        </label>
+        <label>Quantidade
+          <input id="quantidade" name="quantidade" type="number" min="1" step="1" placeholder="0" required>
+        </label>
+        <label>Origem
+          <input id="origem" name="origem" list="dl-origem" placeholder="Ex.: Estoque A">
+        </label>
+        <label>SKU Reingresso
+          <input id="skuReingresso" name="skuReingresso" class="sku" placeholder="Opcional">
+        </label>
+        <label>Responsável
+          <select id="responsavel" name="responsavel" required></select>
+          <span id="turno-info" class="turno-info"></span>
+        </label>
+        <label>Data
+          <input id="data" name="data" type="date" required>
+        </label>
+        <button type="submit" class="btn-add">+ Adicionar</button>
+      </form>
+      <p class="hint">
+        Preencha e pressione <kbd>Enter</kbd> em qualquer campo para lançar. <kbd>Tab</kbd> avança entre campos.
+        Origem e Responsável são mantidos após cada lançamento. O turno vem do cadastro do responsável.
+      </p>
+      <datalist id="dl-origem"></datalist>
+    </section>
+
+    <section class="card">
+      <h2>Filtros</h2>
+      <div class="filters">
+        <label>Data de <input id="f-de" type="date"></label>
+        <label>Data até <input id="f-ate" type="date"></label>
+        <label>Turno
+          <select id="f-turno">
+            <option value="">Todos</option>
+            <option>Manhã</option><option>Tarde</option><option>Noite</option>
+          </select>
+        </label>
+        <label>SKU <input id="f-sku" class="sku" placeholder="Contém…"></label>
+        <label>Origem <select id="f-origem"></select></label>
+        <label>Nome <select id="f-nome"></select></label>
+        <button class="btn-ghost" id="btn-limpar-filtros" type="button">Limpar filtros</button>
       </div>
-      <button class="btn-ghost" id="btn-csv" type="button">Exportar CSV</button>
-      <button class="btn-ghost" id="btn-limpar" type="button">Limpar tudo</button>
-    </div>
+    </section>
 
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>SKU</th>
-            <th style="text-align:right">Quantidade</th>
-            <th>Origem</th>
-            <th>SKU Reingresso</th>
-            <th>Responsável</th>
-            <th>Data</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
-    <p class="hint">Clique em qualquer célula para editar. Os dados ficam salvos neste navegador.</p>
+    <section class="card">
+      <div class="toolbar">
+        <span class="pill y" id="st-linhas">0 baixas</span>
+        <span class="pill" id="st-qtd">0 unidades</span>
+        <div class="stats">
+          <button class="btn-ghost" id="btn-csv" type="button">Exportar CSV (filtrado)</button>
+          <button class="btn-ghost" id="btn-limpar" type="button">Limpar tudo</button>
+        </div>
+      </div>
+
+      <div class="table-wrap">
+        <table class="baixas">
+          <thead>
+            <tr>
+              <th>SKU</th>
+              <th style="text-align:right">Quantidade</th>
+              <th>Origem</th>
+              <th>SKU Reingresso</th>
+              <th>Responsável</th>
+              <th>Turno</th>
+              <th>Data</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <p class="hint">Clique em qualquer célula para editar. Os dados ficam salvos neste navegador.</p>
+    </section>
   </section>
+
+  <!-- ===================== ABA: RESPONSÁVEIS ===================== -->
+  <section id="tab-resp" hidden>
+
+    <section class="card">
+      <h2>Cadastrar responsável</h2>
+      <form id="formResp" class="form-resp" autocomplete="off">
+        <label>Nome
+          <input id="r-nome" placeholder="Nome completo" required>
+        </label>
+        <label>Turno
+          <select id="r-turno" required></select>
+        </label>
+        <label>Cargo
+          <input id="r-cargo" list="dl-cargo" placeholder="Ex.: Operador">
+        </label>
+        <button type="submit" class="btn-add">+ Cadastrar</button>
+      </form>
+      <p class="hint">Os responsáveis cadastrados aparecem na lista do lançamento de baixas. Alterar o turno ou o nome aqui atualiza as baixas já lançadas.</p>
+      <datalist id="dl-cargo"></datalist>
+    </section>
+
+    <section class="card">
+      <div class="toolbar">
+        <span class="pill y" id="st-resp">0 responsáveis</span>
+      </div>
+      <div class="table-wrap">
+        <table class="resps">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Turno</th>
+              <th>Cargo</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="resp-rows"></tbody>
+        </table>
+      </div>
+      <p class="hint">Clique em qualquer campo para editar.</p>
+    </section>
+  </section>
+
 </main>
 
 <script>
 (function(){
-  const KEY = 'controle-rq-v1';
-  const KEY_STICKY = 'controle-rq-sticky-v1';
+  const K_BAIXAS = 'controle-rq-v1';
+  const K_RESP   = 'controle-rq-responsaveis-v1';
+  const K_STICKY = 'controle-rq-sticky-v1';
+  const TURNOS   = ['Manhã','Tarde','Noite'];
+  const CARGOS   = ['Operador','Conferente','Líder','Supervisor','Coordenador','Gerente'];
+  const TURNO_CLS = {'Manhã':'t-manha','Tarde':'t-tarde','Noite':'t-noite'};
 
   const $ = s => document.querySelector(s);
-  const form = $('#form'), tbody = $('#rows'), search = $('#search');
-  const FIELDS = ['sku','quantidade','origem','skuReingresso','responsavel','data'];
-
-  let items = load();
-  let sticky = loadSticky();
+  let baixas = load(K_BAIXAS, []);
+  let resp   = load(K_RESP, []);
+  let sticky = load(K_STICKY, {});
+  const F = {de:'', ate:'', turno:'', sku:'', origem:'', nome:''};
 
   // ---------- utilidades ----------
-  function todayISO(){
-    const d = new Date();
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().slice(0,10);
+  function load(k, d){ try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch(e){ return d; } }
+  function saveB(){ localStorage.setItem(K_BAIXAS, JSON.stringify(baixas)); }
+  function saveR(){ localStorage.setItem(K_RESP, JSON.stringify(resp)); }
+  function saveS(){ localStorage.setItem(K_STICKY, JSON.stringify(sticky)); }
+  const norm = s => String(s ?? '').trim().toLowerCase();
+  const uid  = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+  function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function todayISO(){ const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); }
+  function fmtBR(iso){ if(!iso) return ''; const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; }
+  function findResp(nome){ const n = norm(nome); return n ? resp.find(r => norm(r.nome) === n) : undefined; }
+  function turnoOf(b){ const r = findResp(b.responsavel); return r ? r.turno : (b.turno || ''); }
+  function uniq(arr){
+    return [...new Set(arr.map(v => String(v ?? '').trim()).filter(Boolean))]
+      .sort((a,b) => a.localeCompare(b,'pt-BR'));
   }
-  function fmtBR(iso){
-    if(!iso) return '';
-    const [y,m,d] = iso.split('-');
-    return `${d}/${m}/${y}`;
+  // preenche um <select> preservando o valor atual quando ele ainda existir
+  function fillSelect(sel, values, placeholder){
+    const cur = sel.value;
+    const head = placeholder !== undefined ? `<option value="">${esc(placeholder)}</option>` : '';
+    sel.innerHTML = head + values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    if([...sel.options].some(o => o.value === cur)) sel.value = cur;
   }
-  function esc(s){
-    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
-  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
-  function load(){ try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch(e){ return []; } }
-  function loadSticky(){ try { return JSON.parse(localStorage.getItem(KEY_STICKY)) || {}; } catch(e){ return {}; } }
-  function save(){ localStorage.setItem(KEY, JSON.stringify(items)); }
 
-  // ---------- formulário ----------
-  $('#data').value = todayISO();
-  $('#origem').value = sticky.origem || '';
-  $('#responsavel').value = sticky.responsavel || '';
+  // ---------- abas ----------
+  function showTab(t, focus = true){
+    document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
+    $('#tab-baixas').hidden = t !== 'baixas';
+    $('#tab-resp').hidden   = t !== 'resp';
+    if(focus) (t === 'baixas' ? $('#sku') : $('#r-nome')).focus();
+  }
+  document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
+
+  // ================= RESPONSÁVEIS =================
+  $('#r-turno').innerHTML = TURNOS.map(t => `<option>${t}</option>`).join('');
+  $('#r-turno').value = sticky.rTurno || 'Manhã';
+  $('#dl-cargo').innerHTML = CARGOS.map(c => `<option value="${esc(c)}">`).join('');
+
+  $('#formResp').addEventListener('submit', e => {
+    e.preventDefault();
+    const nome  = $('#r-nome').value.trim();
+    const turno = $('#r-turno').value;
+    const cargo = $('#r-cargo').value.trim();
+    if(!nome){ $('#r-nome').focus(); return; }
+    if(findResp(nome)){
+      alert(`Já existe um responsável cadastrado como "${nome}".`);
+      $('#r-nome').select();
+      return;
+    }
+    const r = {id: uid(), nome, turno, cargo};
+    resp.push(r);
+    resp.sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'));
+    saveR();
+    sticky.rTurno = turno; saveS();
+    $('#r-nome').value = '';
+    $('#r-cargo').value = '';
+    refreshSelects();
+    renderResp(r.id);
+    renderBaixas();
+    $('#r-nome').focus();
+  });
+
+  function renderResp(flashId){
+    const tb = $('#resp-rows');
+    if(!resp.length){
+      tb.innerHTML = '<tr><td colspan="4" class="empty">Nenhum responsável cadastrado ainda. Cadastre acima para liberar os lançamentos.</td></tr>';
+    } else {
+      tb.innerHTML = resp.map(r => `
+        <tr data-id="${r.id}" class="${r.id === flashId ? 'flash' : ''}">
+          <td><input data-rf="nome" value="${esc(r.nome)}"></td>
+          <td><select data-rf="turno">${TURNOS.map(t => `<option ${t===r.turno?'selected':''}>${t}</option>`).join('')}</select></td>
+          <td><input data-rf="cargo" list="dl-cargo" value="${esc(r.cargo)}"></td>
+          <td class="actions"><button class="btn-danger" data-rdel title="Remover">✕</button></td>
+        </tr>`).join('');
+    }
+    $('#st-resp').textContent = `${resp.length} ${resp.length === 1 ? 'responsável' : 'responsáveis'}`;
+  }
+
+  $('#resp-rows').addEventListener('change', e => {
+    const inp = e.target.closest('[data-rf]');
+    if(!inp) return;
+    const r = resp.find(x => x.id === inp.closest('tr').dataset.id);
+    if(!r) return;
+    const f = inp.dataset.rf;
+    const v = inp.value.trim();
+
+    if(f === 'nome'){
+      if(!v){ inp.value = r.nome; return; }
+      if(resp.some(x => x !== r && norm(x.nome) === norm(v))){
+        alert('Já existe um responsável com esse nome.');
+        inp.value = r.nome; return;
+      }
+      // mantém as baixas já lançadas apontando para o nome novo
+      const antigo = r.nome;
+      baixas.forEach(b => { if(norm(b.responsavel) === norm(antigo)) b.responsavel = v; });
+      saveB();
+    }
+    r[f] = v;
+    if(f === 'nome'){ resp.sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR')); }
+    saveR();
+    renderResp(r.id);
+    refreshSelects();
+    renderBaixas();
+  });
+
+  $('#resp-rows').addEventListener('click', e => {
+    const btn = e.target.closest('[data-rdel]');
+    if(!btn) return;
+    const r = resp.find(x => x.id === btn.closest('tr').dataset.id);
+    if(!r) return;
+    if(!confirm(`Remover ${r.nome} do cadastro? As baixas já lançadas com este nome são mantidas.`)) return;
+    resp = resp.filter(x => x !== r);
+    saveR();
+    renderResp();
+    refreshSelects();
+    renderBaixas();
+  });
+
+  // ================= BAIXAS =================
+  const form = $('#form');
+
+  function updateTurnoInfo(){
+    const r = findResp($('#responsavel').value);
+    $('#turno-info').textContent = r ? `Turno: ${r.turno}` : '';
+  }
+  $('#responsavel').addEventListener('change', updateTurnoInfo);
+
+  // atualiza listas de seleção (formulário e filtros) a partir do cadastro e das baixas
+  function refreshSelects(){
+    const nomes = resp.map(r => r.nome);
+    const sel = $('#responsavel');
+    const curForm = sel.value;
+    sel.innerHTML = (nomes.length
+        ? '<option value="">Selecione…</option>'
+        : '<option value="">Cadastre um responsável primeiro</option>')
+      + nomes.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
+    if(nomes.includes(curForm)) sel.value = curForm;
+
+    fillSelect($('#f-origem'), uniq(baixas.map(b => b.origem)), 'Todas');
+    fillSelect($('#f-nome'), uniq([...nomes, ...baixas.map(b => b.responsavel)]), 'Todos');
+    $('#dl-origem').innerHTML = uniq(baixas.map(b => b.origem)).map(v => `<option value="${esc(v)}">`).join('');
+    F.origem = $('#f-origem').value;
+    F.nome   = $('#f-nome').value;
+    updateTurnoInfo();
+  }
 
   form.addEventListener('submit', e => {
     e.preventDefault();
-    const v = Object.fromEntries(new FormData(form));
-    const sku = v.sku.trim().toUpperCase();
-    const qtd = parseInt(v.quantidade, 10);
+    const sku   = $('#sku').value.trim().toUpperCase();
+    const qtd   = parseInt($('#quantidade').value, 10);
+    const nome  = $('#responsavel').value;
 
     if(!sku){ $('#sku').focus(); return; }
     if(!(qtd > 0)){ $('#quantidade').focus(); return; }
+    if(!nome){
+      if(!resp.length){
+        alert('Cadastre os responsáveis na aba "Cadastro de responsáveis" antes de lançar baixas.');
+        showTab('resp');
+      } else {
+        $('#responsavel').focus();
+      }
+      return;
+    }
 
+    const r = findResp(nome);
     const item = {
       id: uid(),
       sku,
       quantidade: qtd,
-      origem: v.origem.trim(),
-      skuReingresso: v.skuReingresso.trim().toUpperCase(),
-      responsavel: v.responsavel.trim(),
-      data: v.data || todayISO()
+      origem: $('#origem').value.trim(),
+      skuReingresso: $('#skuReingresso').value.trim().toUpperCase(),
+      responsavel: r ? r.nome : nome,
+      turno: r ? r.turno : '',
+      data: $('#data').value || todayISO()
     };
-    items.unshift(item);
-    save();
+    baixas.unshift(item);
+    saveB();
 
-    sticky = { origem: item.origem, responsavel: item.responsavel };
-    localStorage.setItem(KEY_STICKY, JSON.stringify(sticky));
+    sticky.origem = item.origem;
+    sticky.responsavel = item.responsavel;
+    saveS();
 
-    // limpa só o que muda a cada lançamento; origem/responsável/data permanecem
     $('#sku').value = '';
     $('#quantidade').value = '';
     $('#skuReingresso').value = '';
     $('#sku').focus();
 
-    render(item.id);
+    refreshSelects();
+    renderBaixas(item.id);
   });
 
-  // ---------- grid ----------
-  tbody.addEventListener('change', e => {
-    const inp = e.target.closest('input[data-f]');
+  // ---------- filtros ----------
+  function readFilters(){
+    F.de     = $('#f-de').value;
+    F.ate    = $('#f-ate').value;
+    F.turno  = $('#f-turno').value;
+    F.sku    = $('#f-sku').value.trim().toLowerCase();
+    F.origem = $('#f-origem').value;
+    F.nome   = $('#f-nome').value;
+    renderBaixas();
+  }
+  ['#f-de','#f-ate','#f-turno','#f-sku','#f-origem','#f-nome'].forEach(id => {
+    $(id).addEventListener('input', readFilters);
+    $(id).addEventListener('change', readFilters);
+  });
+  $('#btn-limpar-filtros').addEventListener('click', () => {
+    ['#f-de','#f-ate','#f-sku'].forEach(id => $(id).value = '');
+    ['#f-turno','#f-origem','#f-nome'].forEach(id => $(id).value = '');
+    readFilters();
+  });
+
+  function matches(b){
+    if(F.de  && b.data < F.de) return false;
+    if(F.ate && b.data > F.ate) return false;
+    if(F.turno && turnoOf(b) !== F.turno) return false;
+    if(F.sku && !String(b.sku).toLowerCase().includes(F.sku)) return false;
+    if(F.origem && norm(b.origem) !== norm(F.origem)) return false;
+    if(F.nome   && norm(b.responsavel) !== norm(F.nome)) return false;
+    return true;
+  }
+
+  // ---------- grid de baixas ----------
+  function respOpts(sel){
+    const nomes = resp.map(r => r.nome);
+    if(sel && !nomes.some(n => norm(n) === norm(sel))) nomes.unshift(sel);
+    return nomes.map(n => `<option ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('');
+  }
+  function turnoHTML(t){
+    return t ? `<span class="turno ${TURNO_CLS[t] || 't-none'}">${esc(t)}</span>` : '<span class="turno t-none">—</span>';
+  }
+  function rowHTML(b){
+    return `
+      <td><input data-f="sku" class="sku" value="${esc(b.sku)}"></td>
+      <td class="num"><input data-f="quantidade" type="number" min="1" step="1" value="${esc(b.quantidade)}"></td>
+      <td><input data-f="origem" value="${esc(b.origem)}"></td>
+      <td><input data-f="skuReingresso" class="sku" value="${esc(b.skuReingresso)}"></td>
+      <td><select data-f="responsavel">${respOpts(b.responsavel)}</select></td>
+      <td data-turno>${turnoHTML(turnoOf(b))}</td>
+      <td><input data-f="data" type="date" value="${esc(b.data)}"></td>
+      <td class="actions"><button class="btn-danger" data-del title="Remover">✕</button></td>`;
+  }
+
+  function renderBaixas(flashId){
+    const list = baixas.filter(matches);
+    const tb = $('#rows');
+    if(!list.length){
+      tb.innerHTML = `<tr><td colspan="8" class="empty">${
+        baixas.length ? 'Nenhuma baixa corresponde aos filtros.'
+                      : 'Nenhuma baixa ainda. Preencha o formulário acima e pressione Enter.'}</td></tr>`;
+    } else {
+      tb.innerHTML = '';
+      const frag = document.createDocumentFragment();
+      list.forEach(b => {
+        const tr = document.createElement('tr');
+        tr.dataset.id = b.id;
+        if(b.id === flashId) tr.classList.add('flash');
+        tr.innerHTML = rowHTML(b);
+        frag.appendChild(tr);
+      });
+      tb.appendChild(frag);
+    }
+    updateStats();
+  }
+
+  function updateStats(){
+    const list = baixas.filter(matches);
+    const units = list.reduce((s,x) => s + (Number(x.quantidade) || 0), 0);
+    const filtrado = list.length !== baixas.length;
+    $('#st-linhas').textContent = `${list.length} ${list.length === 1 ? 'baixa' : 'baixas'}${filtrado ? ` de ${baixas.length}` : ''}`;
+    $('#st-qtd').textContent = `${units} ${units === 1 ? 'unidade' : 'unidades'}`;
+  }
+
+  $('#rows').addEventListener('change', e => {
+    const inp = e.target.closest('[data-f]');
     if(!inp) return;
     const tr = inp.closest('tr');
-    const it = items.find(x => x.id === tr.dataset.id);
+    const it = baixas.find(x => x.id === tr.dataset.id);
     if(!it) return;
     const f = inp.dataset.f;
     let val = inp.value;
@@ -233,89 +538,47 @@
     }
 
     it[f] = val;
-    save();
-    inp.value = val;
-    refreshStats();
-    refreshDatalists();
+    if(f === 'responsavel'){
+      const r = findResp(val);
+      it.turno = r ? r.turno : '';
+      tr.querySelector('[data-turno]').innerHTML = turnoHTML(turnoOf(it));
+      inp.value = val;
+    } else {
+      inp.value = val;
+    }
+    saveB();
+    refreshSelects();
+    updateStats(); // sem redesenhar a tabela, para não tirar o foco da edição
   });
 
-  tbody.addEventListener('click', e => {
+  $('#rows').addEventListener('click', e => {
     const btn = e.target.closest('[data-del]');
     if(!btn) return;
-    const tr = btn.closest('tr');
-    const it = items.find(x => x.id === tr.dataset.id);
+    const it = baixas.find(x => x.id === btn.closest('tr').dataset.id);
     if(!it) return;
-    if(!confirm(`Remover a solicitação de ${it.sku} (${it.quantidade} un.)?`)) return;
-    items = items.filter(x => x.id !== it.id);
-    save();
-    render();
+    if(!confirm(`Remover a baixa de ${it.sku} (${it.quantidade} un.)?`)) return;
+    baixas = baixas.filter(x => x !== it);
+    saveB();
+    refreshSelects();
+    renderBaixas();
   });
-
-  search.addEventListener('input', () => render());
-  search.addEventListener('keydown', e => { if(e.key === 'Escape'){ search.value=''; render(); } });
-
-  function rowHTML(it){
-    return `
-      <td><input data-f="sku" class="sku" value="${esc(it.sku)}"></td>
-      <td class="num"><input data-f="quantidade" type="number" min="1" step="1" value="${esc(it.quantidade)}"></td>
-      <td><input data-f="origem" value="${esc(it.origem)}"></td>
-      <td><input data-f="skuReingresso" class="sku" value="${esc(it.skuReingresso)}"></td>
-      <td><input data-f="responsavel" value="${esc(it.responsavel)}"></td>
-      <td><input data-f="data" type="date" value="${esc(it.data)}"></td>
-      <td class="actions"><button class="btn-danger" data-del title="Remover">✕</button></td>`;
-  }
-
-  function render(flashId){
-    const q = search.value.trim().toLowerCase();
-    const list = items.filter(it => !q || Object.values(it).join(' ').toLowerCase().includes(q));
-
-    if(!list.length){
-      tbody.innerHTML = `<tr><td colspan="7" class="empty">${
-        items.length ? 'Nenhum resultado para a busca.' : 'Nenhuma solicitação ainda. Preencha o formulário acima e pressione Enter.'
-      }</td></tr>`;
-    } else {
-      tbody.innerHTML = '';
-      const frag = document.createDocumentFragment();
-      list.forEach(it => {
-        const tr = document.createElement('tr');
-        tr.dataset.id = it.id;
-        if(it.id === flashId) tr.classList.add('flash');
-        tr.innerHTML = rowHTML(it);
-        frag.appendChild(tr);
-      });
-      tbody.appendChild(frag);
-    }
-    refreshStats(list.length);
-    refreshDatalists();
-  }
-
-  function refreshStats(visible){
-    const n = visible ?? items.length;
-    const units = items.reduce((s,x) => s + (Number(x.quantidade)||0), 0);
-    $('#st-linhas').textContent = `${n} solicita${n===1?'ção':'ções'}`;
-    $('#st-qtd').textContent = `${units} unidade${units===1?'':'s'}`;
-  }
-
-  function refreshDatalists(){
-    const uniq = k => [...new Set(items.map(x => x[k]).filter(Boolean))].sort();
-    $('#dl-origem').innerHTML = uniq('origem').map(v => `<option value="${esc(v)}">`).join('');
-    $('#dl-resp').innerHTML   = uniq('responsavel').map(v => `<option value="${esc(v)}">`).join('');
-  }
 
   // ---------- ações ----------
   $('#btn-limpar').addEventListener('click', () => {
-    if(!items.length) return;
-    if(!confirm('Apagar TODAS as solicitações deste controle?')) return;
-    items = [];
-    save();
-    render();
+    if(!baixas.length) return;
+    if(!confirm('Apagar TODAS as baixas deste controle? (O cadastro de responsáveis é mantido.)')) return;
+    baixas = [];
+    saveB();
+    refreshSelects();
+    renderBaixas();
   });
 
   $('#btn-csv').addEventListener('click', () => {
-    const head = ['SKU','QUANTIDADE','ORIGEM','SKU REINGRESSO','RESPONSÁVEL','DATA'];
+    const list = baixas.filter(matches);
+    const head = ['SKU','QUANTIDADE','ORIGEM','SKU REINGRESSO','RESPONSÁVEL','TURNO','DATA'];
     const cell = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
     const lines = [head.map(cell).join(';')].concat(
-      items.map(it => [it.sku, it.quantidade, it.origem, it.skuReingresso, it.responsavel, fmtBR(it.data)].map(cell).join(';'))
+      list.map(b => [b.sku, b.quantidade, b.origem, b.skuReingresso, b.responsavel, turnoOf(b), fmtBR(b.data)].map(cell).join(';'))
     );
     const blob = new Blob(['﻿' + lines.join('\r\n')], {type:'text/csv;charset=utf-8'});
     const a = document.createElement('a');
@@ -325,7 +588,15 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   });
 
-  render();
+  // ---------- início ----------
+  $('#data').value = todayISO();
+  $('#origem').value = sticky.origem || '';
+  refreshSelects();
+  if(sticky.responsavel && findResp(sticky.responsavel)) $('#responsavel').value = sticky.responsavel;
+  updateTurnoInfo();
+  renderResp();
+  renderBaixas();
+  showTab('baixas', false);
 })();
 </script>
 </body>
