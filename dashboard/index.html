@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ICQA · Dashboard de Links</title>
+  <style>
+    :root {
+      --ml-yellow: #FFE600;
+      --ml-yellow-dark: #E6CF00;
+      --ml-blue: #2D3277;
+      --ml-blue-dark: #1F2358;
+      --ml-blue-light: #E9EAF6;
+      --ml-gray: #EEEEEE;
+      --ml-text: #333333;
+      --ml-muted: #666666;
+      --ml-green: #00A650;
+      --ml-red: #F23D4F;
+      --card: #FFFFFF;
+      --radius: 10px;
+      --shadow: 0 1px 3px rgba(0,0,0,.12);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Proxima Nova", -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--ml-gray);
+      color: var(--ml-text);
+    }
+    header {
+      background: var(--ml-yellow);
+      padding: 18px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      border-bottom: 4px solid var(--ml-blue);
+    }
+    header h1 {
+      margin: 0;
+      font-size: 22px;
+      color: var(--ml-blue);
+      font-weight: 800;
+    }
+    header small { color: var(--ml-blue); opacity: .8; font-weight: 600; }
+    main { padding: 24px 28px; max-width: 1280px; margin: 0 auto; }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .stat {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      box-shadow: var(--shadow);
+      border-top: 4px solid var(--ml-blue);
+    }
+    .stat .label { font-size: 12px; color: var(--ml-muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
+    .stat .value { font-size: 26px; font-weight: 800; color: var(--ml-blue); margin-top: 4px; }
+
+    .toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 18px;
+    }
+    .tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tab {
+      border: 2px solid var(--ml-blue);
+      background: var(--card);
+      color: var(--ml-blue);
+      padding: 7px 14px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .tab.active { background: var(--ml-blue); color: #fff; }
+    .search {
+      padding: 9px 14px;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      min-width: 240px;
+      font-size: 14px;
+    }
+
+    .btn {
+      background: var(--ml-blue);
+      color: #fff;
+      border: none;
+      padding: 9px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .btn:hover { background: var(--ml-blue-dark); }
+    .btn.yellow { background: var(--ml-yellow); color: var(--ml-blue); }
+    .btn.yellow:hover { background: var(--ml-yellow-dark); }
+    .btn.ghost { background: transparent; color: var(--ml-blue); border: 2px solid var(--ml-blue); }
+    .btn.danger { background: var(--ml-red); }
+
+    details.add {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 14px 18px;
+      margin-bottom: 22px;
+    }
+    details.add summary {
+      cursor: pointer;
+      font-weight: 800;
+      color: var(--ml-blue);
+      font-size: 15px;
+    }
+    form.grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }
+    form.grid label { display: flex; flex-direction: column; font-size: 12px; font-weight: 700; color: var(--ml-muted); gap: 4px; }
+    form.grid input, form.grid select, form.grid textarea {
+      padding: 9px 10px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+    form.grid .full { grid-column: 1 / -1; }
+    form.grid .actions { grid-column: 1 / -1; display: flex; gap: 10px; flex-wrap: wrap; }
+
+    .turno-section { margin-bottom: 28px; }
+    .turno-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 0 0 12px;
+      font-size: 18px;
+      color: var(--ml-blue);
+    }
+    .badge {
+      display: inline-block;
+      background: var(--ml-yellow);
+      color: var(--ml-blue);
+      font-weight: 800;
+      border-radius: 6px;
+      padding: 3px 9px;
+      font-size: 13px;
+    }
+    .badge.geral { background: var(--ml-blue); color: #fff; }
+    .count { color: var(--ml-muted); font-size: 14px; font-weight: 600; }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+    }
+    .card {
+      background: var(--card);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border-left: 5px solid var(--ml-yellow);
+    }
+    .card h3 { margin: 0; font-size: 16px; color: var(--ml-blue); word-break: break-word; }
+    .card .cat { font-size: 12px; color: var(--ml-muted); font-weight: 700; text-transform: uppercase; }
+    .card .desc { font-size: 14px; color: var(--ml-text); line-height: 1.4; }
+    .card a {
+      color: var(--ml-blue);
+      font-size: 13px;
+      word-break: break-all;
+      text-decoration: underline;
+    }
+    .card .foot { display: flex; gap: 8px; margin-top: auto; flex-wrap: wrap; }
+    .card .foot button {
+      font-size: 12px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid var(--ml-blue);
+      background: #fff;
+      color: var(--ml-blue);
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .card .foot button:hover { background: var(--ml-blue-light); }
+    .card .foot button.del { border-color: var(--ml-red); color: var(--ml-red); }
+    .card .foot button.del:hover { background: #fdecee; }
+
+    .empty {
+      background: var(--card);
+      border-radius: var(--radius);
+      padding: 28px;
+      text-align: center;
+      color: var(--ml-muted);
+      box-shadow: var(--shadow);
+    }
+    .status {
+      font-size: 13px;
+      color: var(--ml-blue);
+      font-weight: 600;
+      margin-top: 6px;
+    }
+    .toast {
+      position: fixed;
+      bottom: 22px;
+      right: 22px;
+      background: var(--ml-blue);
+      color: #fff;
+      padding: 12px 18px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0,0,0,.25);
+      opacity: 0;
+      transform: translateY(10px);
+      transition: all .25s;
+      pointer-events: none;
+      font-weight: 600;
+    }
+    .toast.show { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>ICQA · Links por turno</h1>
+    <small>Central de links utilizados pelo ICQA</small>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;">
+    <button class="btn" id="btnExport">Exportar JSON</button>
+    <button class="btn ghost" id="btnImport">Importar JSON</button>
+    <input type="file" id="fileImport" accept="application/json" hidden />
+  </div>
+</header>
+
+<main>
+  <div class="stats" id="stats"></div>
+
+  <details class="add" id="addBox">
+    <summary>+ Adicionar link</summary>
+    <form class="grid" id="formLink">
+      <label>Nome
+        <input name="nome" required placeholder="Ex.: Planilha de escala" />
+      </label>
+      <label>URL
+        <input name="url" type="url" required placeholder="https://..." />
+      </label>
+      <label>Turno
+        <select name="turno">
+          <option value="T1">T1</option>
+          <option value="T2">T2</option>
+          <option value="T3">T3</option>
+          <option value="T4">T4</option>
+          <option value="Geral">Geral (todos os turnos)</option>
+        </select>
+      </label>
+      <label>Categoria
+        <input name="categoria" placeholder="Ex.: Planilha, Dashboard, Processo" />
+      </label>
+      <label class="full">Descrição
+        <textarea name="descricao" rows="2" placeholder="Para que serve este link"></textarea>
+      </label>
+      <div class="actions">
+        <button class="btn yellow" type="submit">Salvar link</button>
+        <button class="btn ghost" type="reset">Limpar</button>
+      </div>
+    </form>
+  </details>
+
+  <div class="toolbar">
+    <div class="tabs" id="tabs"></div>
+    <input class="search" id="search" type="search" placeholder="Buscar por nome, categoria ou descrição..." />
+  </div>
+
+  <div id="content"></div>
+  <div class="status" id="status"></div>
+</main>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const TURNOS = ["T1", "T2", "T3", "T4", "Geral"];
+  const STORAGE_KEY = "icqa-links-v1";
+  const DATA_URL = "icqa-links.json";
+
+  let links = [];
+  let activeTurno = "Todos";
+  let query = "";
+
+  const $ = (sel) => document.querySelector(sel);
+
+  function toast(msg) {
+    const t = $("#toast");
+    t.textContent = msg;
+    t.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => t.classList.remove("show"), 2200);
+  }
+
+  function uid() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  }
+
+  function escapeHtml(s) {
+    return String(s ?? "").replace(/[&<>"']/g, (c) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    }[c]));
+  }
+
+  function safeUrl(u) {
+    try {
+      const parsed = new URL(u);
+      return ["http:", "https:"].includes(parsed.protocol) ? parsed.href : "#";
+    } catch { return "#"; }
+  }
+
+  // Mescla links do arquivo versionado (icqa-links.json) com os cadastrados
+  // localmente no navegador (localStorage), sem duplicar pelo id.
+  async function loadData() {
+    let fromFile = [];
+    try {
+      const res = await fetch(DATA_URL, { cache: "no-store" });
+      if (res.ok) {
+        const json = await res.json();
+        fromFile = Array.isArray(json.links) ? json.links : [];
+        $("#status").textContent = `Arquivo ${DATA_URL}: ${fromFile.length} link(s) carregado(s).`;
+      } else {
+        $("#status").textContent = "Arquivo icqa-links.json não encontrado; usando apenas dados locais.";
+      }
+    } catch {
+      $("#status").textContent = "Não foi possível ler icqa-links.json (abra via servidor local, ex.: python -m http.server). Usando dados locais.";
+    }
+    let local = [];
+    try { local = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]"); } catch {}
+    const byId = new Map();
+    [...fromFile, ...local].forEach((l) => byId.set(l.id, l));
+    links = [...byId.values()];
+    saveLocal();
+  }
+
+  function saveLocal() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(links));
+  }
+
+  function renderStats() {
+    const count = (t) => links.filter((l) => l.turno === t).length;
+    const items = [
+      { label: "Total de links", value: links.length },
+      ...TURNOS.map((t) => ({ label: t === "Geral" ? "Geral" : `Turno ${t}`, value: count(t) })),
+    ];
+    $("#stats").innerHTML = items.map((i) =>
+      `<div class="stat"><div class="label">${escapeHtml(i.label)}</div><div class="value">${i.value}</div></div>`
+    ).join("");
+  }
+
+  function renderTabs() {
+    const tabs = ["Todos", ...TURNOS];
+    $("#tabs").innerHTML = tabs.map((t) =>
+      `<button class="tab ${t === activeTurno ? "active" : ""}" data-turno="${t}">${t === "Geral" ? "Geral" : t}</button>`
+    ).join("");
+  }
+
+  function matches(l) {
+    if (activeTurno !== "Todos" && l.turno !== activeTurno) return false;
+    if (!query) return true;
+    const q = query.toLowerCase();
+    return [l.nome, l.categoria, l.descricao, l.url].some((v) => (v || "").toLowerCase().includes(q));
+  }
+
+  function card(l) {
+    const url = safeUrl(l.url);
+    return `
+      <div class="card">
+        <div class="cat">${escapeHtml(l.categoria || "Sem categoria")}</div>
+        <h3>${escapeHtml(l.nome)}</h3>
+        ${l.descricao ? `<div class="desc">${escapeHtml(l.descricao)}</div>` : ""}
+        <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(l.url)}</a>
+        <div class="foot">
+          <button data-action="open" data-url="${escapeHtml(url)}">Abrir</button>
+          <button data-action="copy" data-url="${escapeHtml(l.url)}">Copiar</button>
+          <button class="del" data-action="delete" data-id="${escapeHtml(l.id)}">Excluir</button>
+        </div>
+      </div>`;
+  }
+
+  function renderContent() {
+    const visible = links.filter(matches);
+    if (!visible.length) {
+      $("#content").innerHTML = `<div class="empty">Nenhum link encontrado${query ? " para esta busca" : ""}. Use "+ Adicionar link" para cadastrar.</div>`;
+      return;
+    }
+    const groups = activeTurno === "Todos" ? TURNOS : [activeTurno];
+    $("#content").innerHTML = groups.map((t) => {
+      const items = visible.filter((l) => l.turno === t);
+      if (activeTurno === "Todos" && !items.length) return "";
+      const badgeClass = t === "Geral" ? "badge geral" : "badge";
+      return `
+        <section class="turno-section">
+          <h2 class="turno-title">
+            <span class="${badgeClass}">${t === "Geral" ? "Geral" : t}</span>
+            <span class="count">${items.length} link(s)</span>
+          </h2>
+          ${items.length
+            ? `<div class="cards">${items.map(card).join("")}</div>`
+            : `<div class="empty">Nenhum link cadastrado para ${t}.</div>`}
+        </section>`;
+    }).join("");
+  }
+
+  function renderAll() {
+    renderStats();
+    renderTabs();
+    renderContent();
+  }
+
+  // Eventos
+  $("#tabs").addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-turno]");
+    if (!btn) return;
+    activeTurno = btn.dataset.turno;
+    renderAll();
+  });
+
+  $("#search").addEventListener("input", (e) => {
+    query = e.target.value.trim();
+    renderContent();
+  });
+
+  $("#formLink").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const fd = new FormData(e.target);
+    const novo = {
+      id: uid(),
+      nome: fd.get("nome").trim(),
+      url: fd.get("url").trim(),
+      turno: fd.get("turno"),
+      categoria: (fd.get("categoria") || "").trim(),
+      descricao: (fd.get("descricao") || "").trim(),
+      criadoEm: new Date().toISOString(),
+    };
+    links.push(novo);
+    saveLocal();
+    e.target.reset();
+    $("#addBox").open = false;
+    renderAll();
+    toast("Link salvo");
+  });
+
+  $("#content").addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-action]");
+    if (!btn) return;
+    const action = btn.dataset.action;
+    if (action === "open") {
+      window.open(btn.dataset.url, "_blank", "noopener");
+    } else if (action === "copy") {
+      try {
+        await navigator.clipboard.writeText(btn.dataset.url);
+        toast("Link copiado");
+      } catch { toast("Não foi possível copiar"); }
+    } else if (action === "delete") {
+      const l = links.find((x) => x.id === btn.dataset.id);
+      if (!l) return;
+      if (!confirm(`Excluir "${l.nome}"?`)) return;
+      links = links.filter((x) => x.id !== btn.dataset.id);
+      saveLocal();
+      renderAll();
+      toast("Link excluído (exporte o JSON para atualizar o arquivo do repositório)");
+    }
+  });
+
+  $("#btnExport").addEventListener("click", () => {
+    const payload = JSON.stringify({ links }, null, 2);
+    const blob = new Blob([payload], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "icqa-links.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast("JSON exportado. Substitua dashboard/icqa-links.json e faça commit.");
+  });
+
+  $("#btnImport").addEventListener("click", () => $("#fileImport").click());
+
+  $("#fileImport").addEventListener("change", async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const json = JSON.parse(await file.text());
+      const incoming = Array.isArray(json.links) ? json.links : [];
+      const byId = new Map(links.map((l) => [l.id, l]));
+      incoming.forEach((l) => byId.set(l.id || uid(), { ...l, id: l.id || uid() }));
+      links = [...byId.values()];
+      saveLocal();
+      renderAll();
+      toast(`${incoming.length} link(s) importado(s)`);
+    } catch {
+      toast("Arquivo JSON inválido");
+    }
+    e.target.value = "";
+  });
+
+  loadData().then(renderAll);
+</script>
+</body>
+</html>
