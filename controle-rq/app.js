@@ -19,6 +19,11 @@
       label: 'Meli SKU invertida',
       nome: 'Meli SKU Invertida',
       reason: 'Meli SKU Invertida: Cada SKU tiene un EAN diferente. Problem ID #10637539'
+    },
+    cx: {
+      label: 'CX',
+      nome: 'CX',
+      reason: ''
     }
   };
 
@@ -253,6 +258,7 @@
   function showTab(t, focus = true) {
     document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
     $('#tab-baixas').hidden = t !== 'baixas';
+    $('#tab-turno').hidden = t !== 'turno';
     $('#tab-resp').hidden = t !== 'resp';
     if (focus) { const alvo = { baixas: '#massa-add', resp: '#r-nome' }[t]; $(alvo)?.focus(); }
   }
@@ -272,7 +278,7 @@
     renderResp();
     renderBaixas();
     renderMassa();
-    renderControle();
+    renderPainelTurno();
   }
 
   function setOptions(sel, html, value) {
@@ -312,7 +318,7 @@
     return nomes.map(n => `<option ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('');
   }
   function motivoSelect(atual, attrs) {
-    const opts = [['', '— motivo —'], ['saldo', MOTIVOS.saldo.label], ['sku', MOTIVOS.sku.label]];
+    const opts = [['', '— motivo —'], ...Object.keys(MOTIVOS).map(k => [k, MOTIVOS[k].label])];
     return `<select ${attrs}>${opts.map(([v, t]) => `<option value="${v}" ${v === (atual || '') ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
   }
   function rowHTML(b) {
@@ -394,47 +400,100 @@
     $('#massa-stats').textContent = `${linhas.length} ${linhas.length === 1 ? 'linha' : 'linhas'} · ${ok} completa${ok === 1 ? '' : 's'}`;
   }
 
-  // ---------- controle: quem solicitou qual baixa (segue os filtros da lista) ----------
-  const CURTO = { saldo: 'saldo', sku: 'SKU inv.' };
-  function renderControle() {
-    const lista = view.baixas.filter(matches);
-    const nomes = uniq([...view.responsaveis.map(r => r.nome), ...view.baixas.map(b => b.responsavel)]);
-    const linhas = nomes.map(nome => {
-      const mine = lista.filter(b => norm(b.responsavel) === norm(nome));
-      const r = findResp(nome);
+  // ---------- controle por turno: o painel completo de cada turno (período e turno escolhidos na própria aba) ----------
+  const P = { de: '', ate: '', turno: '' };
+  const CURTO = { saldo: 'saldo', sku: 'SKU inv.', cx: 'CX' };
+  const casaPainel = b => (!P.de || b.data >= P.de) && (!P.ate || b.data <= P.ate);
+  function renderPainelTurno() {
+    const lista = view.baixas.filter(casaPainel);
+    // quem entra: cadastrados (no turno deles, mesmo sem baixa) e quem aparece nas baixas sem cadastro (no turno da baixa)
+    const pessoas = new Map();
+    view.responsaveis.forEach(r => pessoas.set(norm(r.nome), { nome: r.nome, cargo: r.cargo || '', turno: TURNOS.includes(r.turno) ? r.turno : '' }));
+    lista.forEach(b => {
+      const k = norm(b.responsavel);
+      if (k && !pessoas.has(k)) pessoas.set(k, { nome: b.responsavel, cargo: '', turno: TURNOS.includes(b.turno) ? b.turno : '' });
+    });
+    if (!pessoas.size) {
+      $('#pt-turnos').innerHTML = '<p class="empty">Cadastre responsáveis e lance baixas para ver o painel por turno.</p>';
+      $('#pt-baixas').textContent = '0 baixas';
+      $('#pt-un').textContent = '0 unidades';
+      $('#pt-resp').textContent = '0 responsáveis com baixa';
+      return;
+    }
+    const dados = [...pessoas.values()].map(p => {
+      const mine = lista.filter(b => norm(b.responsavel) === norm(p.nome));
       const datas = mine.map(b => b.data).filter(Boolean).sort();
       return {
-        nome,
+        ...p,
         n: mine.length,
-        turno: r ? r.turno : (mine[0] ? turnoOf(mine[0]) : ''),
         un: mine.reduce((s, b) => s + (Number(b.quantidade) || 0), 0),
         saldo: mine.filter(b => b.motivo === 'saldo').length,
         sku: mine.filter(b => b.motivo === 'sku').length,
+        cx: mine.filter(b => b.motivo === 'cx').length,
         ultima: datas[datas.length - 1] || '',
         itens: mine.slice().sort((a, b) => String(b.data).localeCompare(String(a.data)) || String(a.sku).localeCompare(String(b.sku)))
       };
-    }).sort((a, b) => b.un - a.un || a.nome.localeCompare(b.nome, 'pt-BR'));
-    const com = linhas.filter(l => l.n > 0);
-    const maxUn = Math.max(1, ...com.map(l => l.un));
-    const marcado = F.nome ? norm(F.nome) : '';
-    $('#controle-rows').innerHTML = com.length ? com.map(l => `
-      <tr data-nome="${esc(l.nome)}"${marcado && marcado === norm(l.nome) ? ' class="sel"' : ''}>
-        <td><strong>${esc(l.nome)}</strong></td>
-        <td>${turnoHTML(l.turno)}</td>
-        <td class="num">${l.n}</td>
-        <td><div class="barra"><span class="bar-track"><i data-pct="${Math.round(l.un / maxUn * 100)}"></i></span><b>${l.un}</b></div></td>
-        <td class="motivos">${l.saldo} saldo · ${l.sku} SKU inv.</td>
-        <td class="itens">${l.itens.map(b => `<span class="chip" title="${esc(MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].label : 'sem motivo')} · ${esc(fmtBR(b.data))}">${esc(b.sku)} · ${esc(b.quantidade)}${CURTO[b.motivo] ? ' · ' + CURTO[b.motivo] : ''}</span>`).join('')}</td>
-        <td>${l.ultima ? esc(fmtBR(l.ultima)) : '—'}</td>
-      </tr>`).join('')
-      : '<tr><td colspan="7" class="empty">Nenhuma baixa com os filtros atuais.</td></tr>';
-    $('#controle-rows').querySelectorAll('[data-pct]').forEach(el => { el.style.width = el.dataset.pct + '%'; });
-    const semBaixa = linhas.filter(l => l.n === 0).map(l => l.nome);
-    $('#ctl-sem').textContent = semBaixa.length ? `Sem baixas com os filtros atuais: ${semBaixa.join(', ')}` : '';
-    const un = lista.reduce((s, b) => s + (Number(b.quantidade) || 0), 0);
-    $('#ctl-baixas').textContent = `${lista.length} ${lista.length === 1 ? 'baixa' : 'baixas'}`;
-    $('#ctl-un').textContent = `${un} ${un === 1 ? 'unidade' : 'unidades'}`;
-    $('#ctl-resp').textContent = `${com.length} ${com.length === 1 ? 'responsável' : 'responsáveis'}`;
+    });
+    const soma = (lst, campo) => lst.reduce((s, p) => s + p[campo], 0);
+    const grupos = (P.turno ? [P.turno] : [...TURNOS, ''])
+      .map(t => ({ t, linhas: dados.filter(p => p.turno === t).sort((a, b) => b.un - a.un || a.nome.localeCompare(b.nome, 'pt-BR')) }))
+      .filter(g => g.linhas.length || TURNOS.includes(g.t));
+    $('#pt-turnos').innerHTML = grupos.map(g => {
+      const tot = { n: soma(g.linhas, 'n'), un: soma(g.linhas, 'un'), saldo: soma(g.linhas, 'saldo'), sku: soma(g.linhas, 'sku'), cx: soma(g.linhas, 'cx') };
+      const com = g.linhas.filter(p => p.n > 0).length;
+      const maxUn = Math.max(1, ...g.linhas.map(p => p.un));
+      const corpo = g.linhas.length ? g.linhas.map(p => `
+        <tr class="${p.n ? '' : 'zero'}">
+          <td><strong>${esc(p.nome)}</strong></td>
+          <td>${esc(p.cargo || '—')}</td>
+          <td class="num">${p.n}</td>
+          <td><div class="barra"><span class="bar-track"><i data-pct="${Math.round(p.un / maxUn * 100)}"></i></span><b>${p.un}</b></div></td>
+          <td class="num">${p.saldo}</td>
+          <td class="num">${p.sku}</td>
+          <td class="num">${p.cx}</td>
+          <td class="itens">${p.itens.length ? p.itens.map(b => `<span class="chip" title="${esc(MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].label : 'sem motivo')} · ${esc(fmtBR(b.data))}">${esc(b.sku)} · ${esc(b.quantidade)} · ${esc(CURTO[b.motivo] || 'sem motivo')}</span>`).join('') : '<span class="hint-inline">nenhuma baixa</span>'}</td>
+          <td>${p.ultima ? esc(fmtBR(p.ultima)) : '—'}</td>
+        </tr>`).join('') + `
+        <tr class="total">
+          <td>Total ${esc(g.t || 'sem turno')}</td><td></td>
+          <td class="num">${tot.n}</td>
+          <td><b>${tot.un}</b> un.</td>
+          <td class="num">${tot.saldo}</td>
+          <td class="num">${tot.sku}</td>
+          <td class="num">${tot.cx}</td>
+          <td colspan="2">${com} de ${g.linhas.length} com baixa</td>
+        </tr>`
+        : '<tr><td colspan="9" class="empty">Nenhum responsável neste turno.</td></tr>';
+      return `
+        <section class="card">
+          <div class="card-head">
+            ${turnoHTML(g.t)}
+            <h2>${g.t ? 'Turno ' + esc(g.t) : 'Sem turno'}</h2>
+            <span class="pill">${tot.n} ${tot.n === 1 ? 'baixa' : 'baixas'}</span>
+            <span class="pill">${tot.un} ${tot.un === 1 ? 'unidade' : 'unidades'}</span>
+            <span class="pill y">${com} de ${g.linhas.length} com baixa</span>
+          </div>
+          <div class="table-wrap free">
+            <table class="controle">
+              <colgroup>
+                <col style="width:14%"><col style="width:9%"><col style="width:6%"><col style="width:13%"><col style="width:6%"><col style="width:7%"><col style="width:5%"><col style="width:31%"><col style="width:9%">
+              </colgroup>
+              <thead>
+                <tr><th>Responsável</th><th>Cargo</th><th>Baixas</th><th>Unidades</th><th>Saldo</th><th>SKU inv.</th><th>CX</th><th>Baixas solicitadas (SKU · qtd · motivo)</th><th>Última</th></tr>
+              </thead>
+              <tbody>${corpo}</tbody>
+            </table>
+          </div>
+        </section>`;
+    }).join('');
+    $('#pt-turnos').querySelectorAll('[data-pct]').forEach(el => { el.style.width = el.dataset.pct + '%'; });
+    const todas = grupos.flatMap(g => g.linhas);
+    const nTot = soma(todas, 'n');
+    const unTot = soma(todas, 'un');
+    const comTot = todas.filter(p => p.n > 0).length;
+    $('#pt-baixas').textContent = `${nTot} ${nTot === 1 ? 'baixa' : 'baixas'}`;
+    $('#pt-un').textContent = `${unTot} ${unTot === 1 ? 'unidade' : 'unidades'}`;
+    $('#pt-resp').textContent = `${comTot} ${comTot === 1 ? 'responsável' : 'responsáveis'} com baixa`;
   }
 
   // ---------- Salvar lote ----------
@@ -673,7 +732,6 @@
     F.origem = $('#f-origem').value;
     F.nome = $('#f-nome').value;
     renderBaixas();
-    renderControle();
   }
   ['#f-de', '#f-ate', '#f-turno', '#f-sku', '#f-origem', '#f-nome'].forEach(id => {
     $(id).addEventListener('input', readFilters);
@@ -728,13 +786,22 @@
     commit(view.baixas.map(b => ({ t: 'del', c: 'baixas', id: b.id })));
   });
 
-  // clique num responsável: filtra a lista de baixas por ele (clique de novo tira o filtro)
-  $('#controle-rows').addEventListener('click', e => {
-    const tr = e.target.closest('tr[data-nome]');
-    if (!tr) return;
-    const nome = tr.dataset.nome;
-    $('#f-nome').value = F.nome && norm(F.nome) === norm(nome) ? '' : nome;
-    readFilters();
+  // ---------- controle por turno: filtros próprios (período e turno), independentes da lista de baixas ----------
+  function lerPainel() {
+    P.de = $('#pt-de').value;
+    P.ate = $('#pt-ate').value;
+    P.turno = $('#pt-turno').value;
+    renderPainelTurno();
+  }
+  ['#pt-de', '#pt-ate', '#pt-turno'].forEach(id => {
+    $(id).addEventListener('input', lerPainel);
+    $(id).addEventListener('change', lerPainel);
+  });
+  $('#pt-limpar').addEventListener('click', () => {
+    $('#pt-de').value = '';
+    $('#pt-ate').value = '';
+    $('#pt-turno').value = '';
+    lerPainel();
   });
 
   // ---------- início ----------

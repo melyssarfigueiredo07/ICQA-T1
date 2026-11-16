@@ -15,11 +15,14 @@
 </header>
 <div id="banner" class="banner" hidden></div>
 
-<nav class="tabs"><div>
+<div class="layout">
+<aside class="side">
+<nav class="tabs">
   <button class="tab active" data-tab="baixas" type="button">Baixas</button>
+  <button class="tab" data-tab="turno" type="button">Controle por turno</button>
   <button class="tab" data-tab="resp" type="button">Cadastro de responsáveis</button>
-</div></nav>
-
+</nav>
+</aside>
 <main>
 
   <!-- ===================== ABA: BAIXAS ===================== -->
@@ -89,28 +92,33 @@
       </div>
     </section>
 
-    <!-- controle: quem solicitou qual baixa; segue os filtros da lista acima -->
-    <section class="card" id="controle-card">
+  </section>
+
+  <!-- ===================== ABA: CONTROLE POR TURNO ===================== -->
+  <section id="tab-turno" hidden>
+
+    <section class="card">
       <div class="card-head">
-        <h2>Controle por responsável</h2>
-        <span class="pill" id="ctl-baixas">0 baixas</span>
-        <span class="pill" id="ctl-un">0 unidades</span>
-        <span class="pill y" id="ctl-resp">0 responsáveis</span>
-        <span class="hint-inline">Quem solicitou quais baixas · segue os filtros · clique num responsável para filtrar a lista</span>
+        <h2>Controle por turno</h2>
+        <span class="pill" id="pt-baixas">0 baixas</span>
+        <span class="pill" id="pt-un">0 unidades</span>
+        <span class="pill y" id="pt-resp">0 responsáveis com baixa</span>
+        <span class="hint-inline">Quem solicitou o quê, em cada turno · estes filtros são independentes da lista de baixas</span>
       </div>
-      <div class="table-wrap">
-        <table class="controle">
-          <colgroup>
-            <col style="width:13%"><col style="width:6%"><col style="width:6%"><col style="width:16%"><col style="width:14%"><col style="width:35%"><col style="width:10%">
-          </colgroup>
-          <thead>
-            <tr><th>Responsável</th><th>Turno</th><th>Baixas</th><th>Unidades</th><th>Motivos</th><th>Baixas solicitadas (SKU · qtd · motivo)</th><th>Última</th></tr>
-          </thead>
-          <tbody id="controle-rows"></tbody>
-        </table>
+      <div class="filters pt">
+        <label><span>Data de</span><input id="pt-de" type="date"></label>
+        <label><span>Data até</span><input id="pt-ate" type="date"></label>
+        <label><span>Turno</span>
+          <select id="pt-turno">
+            <option value="">Todos</option>
+            <option>T1</option><option>T2</option><option>T3</option><option>T4</option>
+          </select>
+        </label>
+        <button class="btn-ghost" id="pt-limpar" type="button">Limpar filtros</button>
       </div>
-      <p class="hint" id="ctl-sem"></p>
     </section>
+
+    <div id="pt-turnos"></div>
   </section>
 
   <!-- ===================== ABA: RESPONSÁVEIS ===================== -->
@@ -153,6 +161,7 @@
   </section>
 
 </main>
+</div>
 
 <!-- diálogo próprio (as janelas nativas do navegador são bloqueadas dentro do Grid) -->
 <div id="modal" class="modal" hidden>
