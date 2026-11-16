@@ -15,6 +15,10 @@
   <span id="sync" class="sync busy">Carregando…</span>
 </header>
 <div id="banner" class="banner" hidden></div>
+<div id="lembrete" class="lembrete" hidden>
+  <span id="lembrete-txt"></span>
+  <button id="lembrete-ver" class="btn-ghost" type="button">Ver planilhas</button>
+</div>
 
 <nav class="tabs"><div>
   <button class="tab active" data-tab="baixas" type="button">Baixas feitas</button>
@@ -36,8 +40,11 @@
         <label>Quantidade
           <input id="quantidade" name="quantidade" type="number" min="1" step="1" placeholder="0" required>
         </label>
-        <label>Origem
-          <input id="origem" name="origem" list="dl-origem" placeholder="Ex.: Estoque A">
+        <label>Warehouse
+          <input id="warehouse" name="warehouse" class="sku" list="dl-warehouse" placeholder="Ex.: BRRJ02" required>
+        </label>
+        <label>Endereço RQ
+          <input id="origem" name="origem" class="sku" list="dl-origem" placeholder="Ex.: RQ-0-005-000-00-00" required>
         </label>
         <label>SKU Reingresso
           <input id="skuReingresso" name="skuReingresso" class="sku" placeholder="Opcional">
@@ -52,13 +59,13 @@
         <button type="submit" class="btn-add">+ Adicionar</button>
       </form>
       <fieldset class="motivos">
-        <legend>Motivo</legend>
-        <label class="ck-label"><input id="m-saldo" type="checkbox"> Saldo Sistêmico Incorreto <span class="dica">(entrada sistêmica maior que física)</span></label>
-        <label class="ck-label"><input id="m-sku" type="checkbox"> Meli SKU Invertida</label>
+        <legend>Motivo (obrigatório)</legend>
+        <label class="ck-label"><input id="m-saldo" name="motivo" value="saldo" type="radio" form="form" required> Saldo Sistêmico Incorreto <span class="dica">(entrada sistêmica maior que física)</span></label>
+        <label class="ck-label"><input id="m-sku" name="motivo" value="sku" type="radio" form="form" required> Meli SKU Invertida</label>
       </fieldset>
       <p class="hint">
-        Preencha e pressione <kbd>Enter</kbd> em qualquer campo para lançar. <kbd>Tab</kbd> avança entre campos.
-        Origem e Responsável continuam preenchidos após cada lançamento. O turno vem do cadastro do responsável.
+        Preencha e pressione <kbd>Enter</kbd> para lançar. Warehouse e Endereço RQ continuam preenchidos após cada lançamento.
+        Cada baixa tem um motivo: se o mesmo SKU tiver os dois motivos, lance duas baixas, cada uma com a sua quantidade.
       </p>
     </section>
 
@@ -74,7 +81,7 @@
           </select>
         </label>
         <label>SKU <input id="f-sku" class="sku" placeholder="Contém…"></label>
-        <label>Origem <select id="f-origem"></select></label>
+        <label>Endereço RQ <select id="f-origem"></select></label>
         <label>Nome <select id="f-nome"></select></label>
         <button class="btn-ghost" id="btn-limpar-filtros" type="button">Limpar filtros</button>
       </div>
@@ -85,7 +92,7 @@
         <span class="pill y" id="st-linhas">0 baixas</span>
         <span class="pill" id="st-qtd">0 unidades</span>
         <div class="stats">
-          <button class="btn-ghost" id="btn-export" type="button">Exportar planilha por responsável</button>
+          <button class="btn-ghost" id="btn-export" type="button">Gerar planilha por responsável</button>
           <button class="btn-ghost" id="btn-csv" type="button">Exportar CSV (filtrado)</button>
           <button class="btn-ghost" id="btn-backup" type="button">Backup (JSON)</button>
           <button class="btn-ghost" id="btn-importar" type="button">Importar JSON</button>
@@ -99,12 +106,12 @@
             <tr>
               <th>SKU</th>
               <th style="text-align:right">Quantidade</th>
-              <th>Origem</th>
-              <th>SKU Reingresso</th>
+              <th>Warehouse</th>
+              <th>Endereço RQ</th>
               <th>Responsável</th>
               <th>Turno</th>
-              <th class="ck">Saldo Sist. Incorreto</th>
-              <th class="ck">Meli SKU Invertida</th>
+              <th>Motivo</th>
+              <th>SKU Reingresso</th>
               <th>Data</th>
               <th></th>
             </tr>
@@ -125,7 +132,7 @@
         <button class="btn-ghost" id="massa-limpar" type="button">Limpar rascunho</button>
         <span class="pill" id="massa-stats">0 linhas</span>
         <div class="stats">
-          <button class="btn-add" id="massa-salvar" type="button">Salvar lote</button>
+          <button class="btn-add" id="massa-salvar" type="button">Salvar lote e gerar planilha</button>
         </div>
       </div>
       <div class="table-wrap">
@@ -135,10 +142,10 @@
               <th>#</th>
               <th>SKU</th>
               <th style="text-align:right">Quantidade</th>
-              <th>Origem</th>
+              <th>Warehouse</th>
+              <th>Endereço RQ</th>
+              <th>Motivo</th>
               <th>SKU Reingresso</th>
-              <th class="ck">Saldo Sist. Incorreto</th>
-              <th class="ck">Meli SKU Invertida</th>
               <th>Data</th>
               <th></th>
             </tr>
@@ -148,9 +155,15 @@
       </div>
       <p class="hint">
         Preencha linha a linha; <kbd>Enter</kbd> vai para a próxima linha e cria uma nova no fim.
-        O rascunho fica guardado enquanto você preenche. Ao clicar em <strong>Salvar lote</strong>, o sistema pede o responsável,
-        grava as baixas e gera a planilha.
+        O rascunho fica guardado enquanto você preenche. Ao clicar em <strong>Salvar lote e gerar planilha</strong>, o sistema pede o responsável,
+        grava as baixas e gera uma planilha nova, no formato do chamado (guia Template).
       </p>
+    </section>
+
+    <section class="card" id="planilhas-card">
+      <h2>Planilhas geradas</h2>
+      <p class="hint">Cada planilha precisa ser compartilhada com o TL responsável e com soporteME@mercadolibre.com. Marque como compartilhada somente depois de enviar.</p>
+      <div id="planilhas-list"></div>
     </section>
   </section>
 
@@ -197,7 +210,7 @@
 
 </main>
 
-<!-- diálogo próprio (confirm/alert são bloqueados dentro do Grid) -->
+<!-- diálogo próprio (as janelas nativas do navegador são bloqueadas dentro do Grid) -->
 <div id="modal" class="modal" hidden>
   <div class="box" role="dialog" aria-modal="true">
     <p id="modal-msg"></p>
@@ -211,6 +224,10 @@
 
 <input type="file" id="file-import" accept=".json,application/json" hidden>
 <datalist id="dl-origem"></datalist>
+<datalist id="dl-warehouse">
+  <option value="BRRJ02"></option>
+  <option value="BRSP01"></option>
+</datalist>
 <datalist id="dl-cargo"></datalist>
 
 <script src="app.js"></script>

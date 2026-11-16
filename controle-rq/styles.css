@@ -49,7 +49,7 @@ button{font:inherit;font-weight:700;cursor:pointer;border:0;border-radius:6px;pa
 .hint{margin-top:12px;color:var(--muted);font-size:12px}
 kbd{background:#F0F0F0;border:1px solid #CCC;border-radius:4px;padding:1px 5px;font-size:11px;font-family:inherit}
 
-.form-baixa{display:grid;grid-template-columns:1.3fr .8fr 1.2fr 1.3fr 1.5fr 1fr auto;gap:10px;align-items:end}
+.form-baixa{display:grid;grid-template-columns:1fr .8fr 1fr 1.3fr 1.1fr 1.3fr .9fr auto;gap:10px;align-items:end}
 .form-resp{display:grid;grid-template-columns:2fr 1fr 2fr auto;gap:10px;align-items:end}
 .turno-info{font-size:12px;color:var(--navy);font-weight:700;text-transform:none;letter-spacing:0;min-height:14px}
 
@@ -70,7 +70,7 @@ kbd{background:#F0F0F0;border:1px solid #CCC;border-radius:4px;padding:1px 5px;f
 table{width:100%;border-collapse:collapse}
 table.baixas{min-width:1200px}
 table.massa{min-width:1150px}
-table.resps{min-width:600px}
+table.resps{min-width:760px}
 thead th{background:var(--navy);color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.3px;padding:11px 10px;position:sticky;top:0;z-index:1}
 thead th.ck{text-align:center}
 tbody td{padding:5px;border-bottom:1px solid var(--border)}
@@ -96,9 +96,24 @@ td.idx{color:var(--muted);text-align:center;width:44px}
 
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
 .modal .box{background:#fff;border-radius:10px;padding:22px;max-width:460px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.25)}
-.modal p{margin:0 0 16px;font-size:15px;line-height:1.45}
+.modal p{margin:0 0 16px;font-size:15px;line-height:1.45;white-space:pre-line}
 .modal select{margin-bottom:16px}
 .modal .acts{display:flex;gap:10px;justify-content:flex-end}
+
+input[type=radio]{width:16px;height:16px;padding:0;margin:0;accent-color:var(--blue);cursor:pointer;flex:none}
+
+/* lembrete de compartilhamento das planilhas (aparece enquanto houver planilha pendente) */
+.lembrete{background:var(--yellow);color:var(--navy);padding:10px 24px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.lembrete[hidden]{display:none!important}
+.lembrete button{padding:7px 12px}
+
+.planilha{border:1px solid #F5C0C5;border-left:6px solid var(--danger);border-radius:6px;padding:12px 14px;margin-bottom:10px;background:#FFF9F9}
+.planilha.ok{border-color:#B7E4C7;border-left-color:#00733B;background:#F6FFF9}
+.planilha .pl-info{display:flex;flex-direction:column;gap:2px;margin-bottom:8px}
+.planilha .pl-info span{font-size:12px;color:var(--muted)}
+.planilha .pl-aviso{font-size:13px;margin-bottom:10px;white-space:pre-line}
+.planilha.pend .pl-aviso{color:#B00020;font-weight:700}
+.planilha.ok .pl-aviso{color:#00733B;font-weight:600}
 
 @media (max-width:900px){
   .form-baixa,.form-resp,.filters{grid-template-columns:1fr 1fr}

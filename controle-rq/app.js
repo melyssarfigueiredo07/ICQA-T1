@@ -3,18 +3,36 @@
 
   // ---------- configuração ----------
   const POLL_MS = 10000;   // leitura periódica do Grid (só com a aba visível): 6 req/min por aba
-  const SAVE_MS = 1500;    // alterações são agrupadas: no máximo ~40 gravações/min por aba (limite do Grid: 60/min)
+  const SAVE_MS = 1500;    // alterações agrupadas: no máximo ~40 gravações/min por aba (limite do Grid: 60/min)
   const TURNOS = ['T1', 'T2', 'T3', 'T4'];
   const CARGOS = ['Operador', 'Conferente', 'Líder', 'Supervisor', 'Coordenador', 'Gerente'];
   const TURNO_CLS = { T1: 't-t1', T2: 't-t2', T3: 't-t3', T4: 't-t4' };
   const TODOS = '__todos__';
+  const RQ_RE = /^RQ-/i;
+  const EMAIL_SUPORTE = 'soporteME@mercadolibre.com';
 
-  // Colunas da planilha exportada. Ajustar aqui se o formato de referência for diferente.
-  const COLUNAS = ['SKU', 'QUANTIDADE', 'ORIGEM', 'SKU REINGRESSO', 'RESPONSÁVEL', 'TURNO', 'DATA', 'SALDO SISTÊMICO INCORRETO', 'MELI SKU INVERTIDA'];
-  const LARGURAS = [16, 12, 22, 18, 24, 10, 14, 26, 24];
+  // Motivos. O modelo de chamado de baixa (Baja de RQ) aceita um motivo por linha, com este texto exato.
+  const MOTIVOS = {
+    saldo: {
+      label: 'Saldo Sistêmico Incorreto',
+      reason: 'Entrada sistémica mayor que física. Problem ID #13966888'
+    },
+    sku: {
+      label: 'Meli SKU Invertida',
+      reason: 'Meli SKU Invertida: Cada SKU tiene un EAN diferente. Problem ID #10637539'
+    }
+  };
+  // Modelo "Template" do chamado: uma linha por baixa
+  const TEMPLATE_HEAD = ['sku', 'quantity', 'warehouse_id', 'address_id', 'reason'];
+  const TEMPLATE_LARG = [16, 12, 16, 24, 80];
+  // Guia de painel (interna)
+  const PAINEL_NOME = 'Painel';
+  const PAINEL_HEAD = ['SKU', 'QUANTIDADE', 'WAREHOUSE', 'ENDEREÇO RQ', 'MOTIVO', 'SKU REINGRESSO', 'RESPONSÁVEL', 'TURNO', 'DATA'];
+  const PAINEL_LARG = [16, 12, 14, 24, 30, 18, 24, 10, 14];
+  // Guia de saldo por responsável (interna)
   const SALDO_NOME = 'Saldo por responsável';
   const SALDO_HEAD = ['RESPONSÁVEL', 'TURNO', 'CARGO', 'SOLICITAÇÕES', 'UNIDADES', 'SALDO SIST. INCORRETO (SOLIC.)', 'SALDO SIST. INCORRETO (UN.)', 'MELI SKU INVERTIDA (SOLIC.)', 'MELI SKU INVERTIDA (UN.)', 'PRIMEIRA DATA', 'ÚLTIMA DATA'];
-  const LARGURAS_SALDO = [26, 10, 14, 14, 12, 28, 26, 26, 24, 16, 16];
+  const SALDO_LARG = [26, 10, 14, 14, 12, 28, 26, 26, 24, 16, 16];
 
   // ---------- utilidades ----------
   const $ = s => document.querySelector(s);
@@ -29,7 +47,7 @@
   const byNome = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR');
   const slug = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'sem-nome';
   const hasData = s => !!s && ((Array.isArray(s.baixas) && s.baixas.length > 0) || (Array.isArray(s.responsaveis) && s.responsaveis.length > 0));
-  const completa = r => !!r.sku && Number(r.quantidade) > 0;
+  const dataCel = iso => iso ? { dt: iso } : '';
 
   // ---------- armazenamento: window.GRID.state (compartilhado e ao vivo) ----------
   // Fora do Grid (prévia local) não existe estado compartilhado: usa uma cópia só em memória.
@@ -41,19 +59,29 @@
   } : window.GRID.state;
 
   // ---------- modelo de dados ----------
-  // { teamName, responsaveis:[{id,nome,turno,cargo}], baixas:[{id,sku,quantidade,origem,skuReingresso,responsavel,turno,data,motivos}],
-  //   rascunhos:[{id,sku,quantidade,origem,skuReingresso,motivos,data}] }   motivos: ['saldo'] e/ou ['sku']
-  const emptyRoot = () => ({ teamName: '', responsaveis: [], baixas: [], rascunhos: [] });
+  // { teamName, responsaveis:[{id,nome,turno,cargo}],
+  //   baixas:[{id,sku,quantidade,warehouse,origem,skuReingresso,responsavel,turno,data,motivo}],
+  //   rascunhos:[{id,sku,quantidade,warehouse,origem,skuReingresso,motivo,data}] }
+  //   origem = endereço RQ (address_id);  motivo = '' | 'saldo' | 'sku'
+  const emptyRoot = () => ({ teamName: '', responsaveis: [], baixas: [], rascunhos: [], planilhas: [] });
   const qtdBaixa = v => Number(v) || 0;
   const qtdRascunho = v => (v === '' || v == null) ? '' : (Number(v) || 0);
+  // dados antigos guardavam uma lista de motivos (motivos: [...]); fica só o primeiro
+  const motivoDe = r => {
+    if (MOTIVOS[r.motivo]) return r.motivo;
+    if (Array.isArray(r.motivos) && MOTIVOS[r.motivos[0]]) return r.motivos[0];
+    return '';
+  };
+  const normBaixa = b => ({ ...b, quantidade: qtdBaixa(b.quantidade), warehouse: String(b.warehouse || ''), origem: String(b.origem || ''), motivo: motivoDe(b), motivos: undefined });
+  const normRasc = r => ({ ...r, quantidade: qtdRascunho(r.quantidade), warehouse: String(r.warehouse || ''), origem: String(r.origem || ''), motivo: motivoDe(r), motivos: undefined });
   function normRoot(s) {
     s = s || {};
-    const mot = m => Array.isArray(m) ? m.slice() : [];
     return {
       teamName: String(s.teamName || ''),
       responsaveis: Array.isArray(s.responsaveis) ? s.responsaveis.slice() : [],
-      baixas: (Array.isArray(s.baixas) ? s.baixas : []).map(b => ({ ...b, quantidade: qtdBaixa(b.quantidade), motivos: mot(b.motivos) })),
-      rascunhos: (Array.isArray(s.rascunhos) ? s.rascunhos : []).map(r => ({ ...r, quantidade: qtdRascunho(r.quantidade), motivos: mot(r.motivos) }))
+      baixas: (Array.isArray(s.baixas) ? s.baixas : []).map(normBaixa),
+      rascunhos: (Array.isArray(s.rascunhos) ? s.rascunhos : []).map(normRasc),
+      planilhas: Array.isArray(s.planilhas) ? s.planilhas.slice() : []
     };
   }
   // Cada alteração local é uma operação. Ao gravar, as operações são reaplicadas sobre o estado do Grid,
@@ -84,8 +112,23 @@
 
   const findResp = nome => { const n = norm(nome); return n ? view.responsaveis.find(r => norm(r.nome) === n) : undefined; };
   const turnoOf = b => { const r = findResp(b.responsavel); return r ? r.turno : (b.turno || ''); };
-  const hasMot = (b, k) => Array.isArray(b.motivos) && b.motivos.includes(k);
   const gridFocused = () => { const ae = document.activeElement; return !!(ae && ae.closest && ae.closest('#rows,#resp-rows,#massa-rows')); };
+
+  // campos que faltam para a linha virar uma linha do chamado
+  function faltas(r) {
+    const f = [];
+    if (!r.sku) f.push('SKU');
+    if (!(Number(r.quantidade) > 0)) f.push('quantidade');
+    if (!r.warehouse) f.push('warehouse');
+    if (!r.origem) f.push('endereço RQ');
+    else if (!RQ_RE.test(r.origem)) f.push('endereço RQ (deve começar com RQ-)');
+    if (!MOTIVOS[r.motivo]) f.push('motivo');
+    return f;
+  }
+  const completa = r => faltas(r).length === 0;
+  // linha sem nada digitado: warehouse, endereço e data podem vir copiados da linha anterior
+  const vazia = r => !r.sku && !(Number(r.quantidade) > 0) && !r.motivo && !r.skuReingresso;
+  const resumoFaltas = lista => lista.slice(0, 5).map(b => `${b.sku || 'sem SKU'} (${faltas(b).join(', ')})`).join('; ') + (lista.length > 5 ? '…' : '');
 
   // ---------- status, avisos e diálogos ----------
   function setStatus(txt, cls) { const el = $('#sync'); el.textContent = txt; el.className = 'sync ' + (cls || ''); }
@@ -248,6 +291,7 @@
     renderResp();
     renderBaixas();
     renderMassa();
+    renderPlanilhas();
     if (document.activeElement !== $('#teamName')) $('#teamName').value = view.teamName;
   }
 
@@ -258,13 +302,15 @@
   function refreshSelects() {
     const nomes = view.responsaveis.slice().sort(byNome).map(r => r.nome);
     const origens = uniq(view.baixas.map(b => b.origem));
+    const warehouses = uniq(view.baixas.map(b => b.warehouse));
     const pessoas = uniq([...nomes, ...view.baixas.map(b => b.responsavel)]);
     setOptions($('#responsavel'),
       (nomes.length ? '<option value="">Selecione…</option>' : '<option value="">Cadastre um responsável primeiro</option>') +
       nomes.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join(''), $('#responsavel').value);
-    setOptions($('#f-origem'), '<option value="">Todas</option>' + origens.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join(''), F.origem);
+    setOptions($('#f-origem'), '<option value="">Todos</option>' + origens.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join(''), F.origem);
     setOptions($('#f-nome'), '<option value="">Todos</option>' + pessoas.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join(''), F.nome);
     $('#dl-origem').innerHTML = origens.map(v => `<option value="${esc(v)}">`).join('');
+    $('#dl-warehouse').innerHTML = warehouses.map(v => `<option value="${esc(v)}">`).join('');
     F.origem = $('#f-origem').value;
     F.nome = $('#f-nome').value;
     updateTurnoInfo();
@@ -296,16 +342,20 @@
     if (sel && !nomes.some(n => norm(n) === norm(sel))) nomes.unshift(sel);
     return nomes.map(n => `<option ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('');
   }
+  function motivoSelect(atual, attrs) {
+    const opts = [['', '— sem motivo —'], ['saldo', MOTIVOS.saldo.label], ['sku', MOTIVOS.sku.label]];
+    return `<select ${attrs}>${opts.map(([v, t]) => `<option value="${v}" ${v === (atual || '') ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
+  }
   function rowHTML(b) {
     return `
       <td><input data-f="sku" class="sku" value="${esc(b.sku)}"></td>
       <td class="num"><input data-f="quantidade" type="number" min="1" step="1" value="${esc(b.quantidade)}"></td>
-      <td><input data-f="origem" value="${esc(b.origem)}"></td>
-      <td><input data-f="skuReingresso" class="sku" value="${esc(b.skuReingresso)}"></td>
+      <td><input data-f="warehouse" class="sku" value="${esc(b.warehouse)}"></td>
+      <td><input data-f="origem" class="sku" value="${esc(b.origem)}"></td>
       <td><select data-f="responsavel">${respOpts(b.responsavel)}</select></td>
       <td data-turno>${turnoHTML(turnoOf(b))}</td>
-      <td class="ck"><input type="checkbox" data-f="motivo" data-key="saldo" ${hasMot(b, 'saldo') ? 'checked' : ''}></td>
-      <td class="ck"><input type="checkbox" data-f="motivo" data-key="sku" ${hasMot(b, 'sku') ? 'checked' : ''}></td>
+      <td>${motivoSelect(b.motivo, 'data-f="motivo"')}</td>
+      <td><input data-f="skuReingresso" class="sku" value="${esc(b.skuReingresso)}"></td>
       <td><input data-f="data" type="date" value="${esc(b.data)}"></td>
       <td class="actions"><button class="btn-danger" data-del title="Remover">✕</button></td>`;
   }
@@ -347,7 +397,10 @@
 
   // ---------- baixa em massa (rascunho guardado no Grid) ----------
   function novaLinha(ref) {
-    return { id: uid(), sku: '', quantidade: '', origem: ref ? ref.origem : '', skuReingresso: '', motivos: [], data: (ref && ref.data) || todayISO() };
+    return {
+      id: uid(), sku: '', quantidade: '', warehouse: ref ? ref.warehouse : '', origem: ref ? ref.origem : '',
+      skuReingresso: '', motivo: '', data: (ref && ref.data) || todayISO()
+    };
   }
   function renderMassa(focusId) {
     const tb = $('#massa-rows');
@@ -357,10 +410,10 @@
         <td class="idx">${i + 1}</td>
         <td><input data-m="sku" class="sku" value="${esc(r.sku)}" autocomplete="off"></td>
         <td class="num"><input data-m="quantidade" type="number" min="1" step="1" value="${esc(r.quantidade)}"></td>
-        <td><input data-m="origem" list="dl-origem" value="${esc(r.origem)}" autocomplete="off"></td>
+        <td><input data-m="warehouse" class="sku" value="${esc(r.warehouse)}" autocomplete="off"></td>
+        <td><input data-m="origem" class="sku" value="${esc(r.origem)}" autocomplete="off"></td>
+        <td>${motivoSelect(r.motivo, 'data-m="motivo"')}</td>
         <td><input data-m="skuReingresso" class="sku" value="${esc(r.skuReingresso)}" autocomplete="off"></td>
-        <td class="ck"><input type="checkbox" data-m="motivo" data-key="saldo" ${hasMot(r, 'saldo') ? 'checked' : ''}></td>
-        <td class="ck"><input type="checkbox" data-m="motivo" data-key="sku" ${hasMot(r, 'sku') ? 'checked' : ''}></td>
         <td><input data-m="data" type="date" value="${esc(r.data)}"></td>
         <td class="actions"><button class="btn-danger" data-mdel title="Remover linha">✕</button></td>
       </tr>`).join('')
@@ -385,7 +438,6 @@
   const xesc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const colName = i => { let s = ''; i++; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
   const serialData = iso => { const [y, m, d] = iso.split('-').map(Number); return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(1899, 11, 30)) / 86400000); };
-  const dataCel = iso => iso ? { dt: iso } : '';
 
   const STYLES_XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
@@ -475,9 +527,10 @@
     return new Blob([...partes, ...central, new Uint8Array(eocd.buffer)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
   }
 
-  // linha da planilha de uma baixa
-  const motTxt = (b, k) => hasMot(b, k) ? 'Sim' : '';
-  const linhaBaixa = b => [b.sku, Number(b.quantidade) || 0, b.origem, b.skuReingresso, b.responsavel, turnoOf(b), dataCel(b.data), motTxt(b, 'saldo'), motTxt(b, 'sku')];
+  // linhas das guias
+  const templateLinha = b => [b.sku, Number(b.quantidade) || 0, b.warehouse, b.origem, MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].reason : ''];
+  const painelLinha = b => [b.sku, Number(b.quantidade) || 0, b.warehouse, b.origem, MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].label : '',
+    b.skuReingresso, b.responsavel, turnoOf(b), dataCel(b.data)];
 
   // guia de saldo: uma linha por responsável, com total no final (considera todas as baixas do documento)
   function saldoRows() {
@@ -486,8 +539,8 @@
     const linhas = nomes.map(nome => {
       const r = view.responsaveis.find(x => norm(x.nome) === norm(nome));
       const mine = view.baixas.filter(b => norm(b.responsavel) === norm(nome));
-      const sal = mine.filter(b => hasMot(b, 'saldo'));
-      const inv = mine.filter(b => hasMot(b, 'sku'));
+      const sal = mine.filter(b => b.motivo === 'saldo');
+      const inv = mine.filter(b => b.motivo === 'sku');
       const datas = mine.map(b => b.data).filter(Boolean).sort();
       return [nome, r ? r.turno : (mine[0] ? turnoOf(mine[0]) : ''), r ? r.cargo : '', mine.length, un(mine),
         sal.length, un(sal), inv.length, un(inv), dataCel(datas[0]), dataCel(datas[datas.length - 1])];
@@ -503,7 +556,58 @@
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'));
   }
 
-  // ---------- Salvar lote (baixa em massa) ----------
+  // ---------- planilhas geradas e lembrete obrigatório de compartilhamento ----------
+  const pad = n => String(n).padStart(2, '0');
+  const stamp = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}-${String(d.getMilliseconds()).padStart(3, '0')}`;
+  };
+  const fmtDataHora = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('pt-BR'); };
+  // destinatários obrigatórios: o TL de cada responsável da planilha + o suporte
+  function destinatarios(p) {
+    const tls = (p.responsaveis || []).map(nome => `TL responsável pela baixa (responsável: ${nome})`);
+    return [...tls, `Suporte: ${EMAIL_SUPORTE}`];
+  }
+  // gera SEMPRE uma planilha nova, com a mesma configuração, e registra o lembrete de compartilhamento
+  async function gerarPlanilha(tipo, lista, nomes, nomeBase) {
+    const sheets = tipo === 'lote'
+      ? [{ name: 'Template', header: TEMPLATE_HEAD, rows: lista.map(templateLinha), widths: TEMPLATE_LARG }]
+      : agrupar(lista).map(([nome, itens]) => ({ name: nome, header: TEMPLATE_HEAD, rows: itens.map(templateLinha), widths: TEMPLATE_LARG }))
+          .concat([{ name: PAINEL_NOME, header: PAINEL_HEAD, rows: lista.map(painelLinha), widths: PAINEL_LARG }]);
+    sheets.push({ name: SALDO_NOME, header: SALDO_HEAD, rows: saldoRows(), widths: SALDO_LARG });
+    const arquivo = `controle-rq-${tipo}-${nomeBase}-${stamp()}.xlsx`;
+    baixar(xlsxBlob(sheets), arquivo);
+    const p = {
+      id: uid(), arquivo, tipo, criadaEm: new Date().toISOString(), responsaveis: nomes,
+      baixas: lista.length, compartilhada: false, compartilhadaEm: ''
+    };
+    commit([{ t: 'add', c: 'planilhas', rec: p }]);
+    flushNow();
+    return p;
+  }
+  async function lembreteModal(p, resumo) {
+    await avisar(`${resumo}\nPlanilha gerada: ${p.arquivo}\n\nLEMBRETE OBRIGATÓRIO: compartilhe esta planilha com:\n- ${destinatarios(p).join('\n- ')}\n\nEla fica na lista de planilhas pendentes (aba Baixa em massa) até você marcar como compartilhada.`);
+  }
+  function renderPlanilhas() {
+    const lista = view.planilhas;
+    const pend = lista.filter(p => !p.compartilhada);
+    $('#planilhas-list').innerHTML = lista.length ? lista.map(p => `
+      <div class="planilha ${p.compartilhada ? 'ok' : 'pend'}" data-id="${esc(p.id)}">
+        <div class="pl-info">
+          <strong>${esc(p.arquivo)}</strong>
+          <span>Gerada em ${esc(fmtDataHora(p.criadaEm))} · ${p.baixas} baixa(s) · ${esc((p.responsaveis || []).join(', '))}</span>
+        </div>
+        <div class="pl-aviso">${p.compartilhada
+          ? esc(`Compartilhada em ${fmtDataHora(p.compartilhadaEm)}.`)
+          : 'OBRIGATÓRIO: compartilhar com\n- ' + destinatarios(p).map(esc).join('\n- ')}</div>
+        <button class="btn-ghost" data-pl-toggle>${p.compartilhada ? 'Desmarcar' : 'Marcar como compartilhada'}</button>
+      </div>`).join('')
+      : '<p class="hint">Nenhuma planilha gerada ainda.</p>';
+    $('#lembrete').hidden = pend.length === 0;
+    $('#lembrete-txt').textContent = `${pend.length} planilha(s) ainda não compartilhada(s). Compartilhe obrigatoriamente com o TL responsável e com ${EMAIL_SUPORTE}.`;
+  }
+
+  // ---------- baixa em massa: salvar o lote ----------
   $('#massa-add').addEventListener('click', () => {
     const last = view.rascunhos[view.rascunhos.length - 1];
     const linha = novaLinha(last);
@@ -518,12 +622,13 @@
   $('#massa-salvar').addEventListener('click', async () => {
     const linhas = view.rascunhos;
     const ok = linhas.filter(completa);
-    const incompletas = linhas.map((r, i) => ({ r, i })).filter(({ r }) => !completa(r) && (r.sku || r.quantidade || r.origem || r.skuReingresso));
+    const incompletas = linhas.map((r, i) => ({ r, i })).filter(({ r }) => !vazia(r) && !completa(r));
     if (incompletas.length) {
-      await avisar(`Há ${incompletas.length} linha(s) sem SKU ou sem quantidade (linha ${incompletas.map(x => x.i + 1).join(', ')}). Corrija ou apague antes de salvar.`);
+      await avisar('Há linhas incompletas. Preencha o que falta ou apague a linha:\n' +
+        incompletas.map(({ r, i }) => `linha ${i + 1}: falta ${faltas(r).join(', ')}`).join('\n'));
       return;
     }
-    if (!ok.length) { await avisar('Nenhuma linha completa. Preencha SKU e quantidade.'); return; }
+    if (!ok.length) { await avisar('Nenhuma linha preenchida. Preencha SKU, quantidade, warehouse, endereço RQ e motivo.'); return; }
     if (!view.responsaveis.length) { await avisar('Cadastre os responsáveis antes de salvar o lote.'); showTab('resp'); return; }
     const nomes = view.responsaveis.slice().sort(byNome).map(r => r.nome);
     const escolhido = await escolher(`Quem é o responsável por este lote (${ok.length} baixa(s))?`, nomes.map(n => ({ value: n, label: n })), 'Salvar lote');
@@ -532,50 +637,42 @@
     const nome = r ? r.nome : escolhido;
     const turno = r ? r.turno : '';
     const lote = ok.map(c => ({
-      id: uid(), sku: c.sku, quantidade: Number(c.quantidade), origem: c.origem, skuReingresso: c.skuReingresso,
-      responsavel: nome, turno, motivos: c.motivos.slice(), data: c.data || todayISO()
+      id: uid(), sku: c.sku, quantidade: Number(c.quantidade), warehouse: c.warehouse, origem: c.origem,
+      skuReingresso: c.skuReingresso, responsavel: nome, turno, motivo: c.motivo, data: c.data || todayISO()
     }));
+    const ultima = lote[lote.length - 1];
     commit([
       ...lote.map(rec => ({ t: 'add', c: 'baixas', rec })),
       ...linhas.map(l => ({ t: 'del', c: 'rascunhos', id: l.id })),
-      { t: 'add', c: 'rascunhos', rec: novaLinha(lote[lote.length - 1]) }
+      { t: 'add', c: 'rascunhos', rec: novaLinha(ultima) }
     ]);
-    flushNow();
-    const xlsx = xlsxBlob([
-      { name: nome, header: COLUNAS, rows: lote.map(linhaBaixa), widths: LARGURAS },
-      { name: SALDO_NOME, header: SALDO_HEAD, rows: saldoRows(), widths: LARGURAS_SALDO }
-    ]);
-    baixar(xlsx, `controle-rq-lote-${slug(nome)}-${todayISO()}.xlsx`);
-    await avisar(`${lote.length} baixa(s) salvas para ${nome}. A planilha foi gerada.`);
+    // cada salvamento gera uma planilha nova, com a mesma configuração
+    const p = await gerarPlanilha('lote', lote, [nome], slug(nome));
+    await lembreteModal(p, `${lote.length} baixa(s) salvas para ${nome}.`);
   });
   massaEventos();
   function massaEventos() {
     const tb = $('#massa-rows');
     tb.addEventListener('input', e => {
       const inp = e.target.closest('[data-m]');
-      if (!inp || inp.type === 'checkbox') return;
+      if (!inp || inp.tagName === 'SELECT') return;
       const id = inp.closest('tr').dataset.id;
       const f = inp.dataset.m;
       let v = inp.value;
       if (f === 'quantidade') v = v === '' ? '' : (parseInt(v, 10) || 0);
-      else if (f === 'sku' || f === 'skuReingresso') v = v.trim().toUpperCase();
-      else if (f === 'origem') v = v.trim();
+      else if (f === 'sku' || f === 'skuReingresso' || f === 'warehouse' || f === 'origem') v = v.trim().toUpperCase();
       commit([{ t: 'set', c: 'rascunhos', id, patch: { [f]: v } }]);
     });
     tb.addEventListener('change', e => {
-      const inp = e.target.closest('[data-m="motivo"]');
-      if (!inp) return;
-      const id = inp.closest('tr').dataset.id;
-      const row = view.rascunhos.find(x => x.id === id);
-      if (!row) return;
-      const set = new Set(row.motivos);
-      if (inp.checked) set.add(inp.dataset.key); else set.delete(inp.dataset.key);
-      commit([{ t: 'set', c: 'rascunhos', id, patch: { motivos: [...set] } }]);
+      const sel = e.target.closest('[data-m="motivo"]');
+      if (!sel) return;
+      const id = sel.closest('tr').dataset.id;
+      commit([{ t: 'set', c: 'rascunhos', id, patch: { motivo: sel.value } }]);
     });
     tb.addEventListener('keydown', e => {
       if (e.key !== 'Enter') return;
       const inp = e.target.closest('[data-m]');
-      if (!inp || inp.type === 'checkbox') return;
+      if (!inp) return;
       e.preventDefault();
       const id = inp.closest('tr').dataset.id;
       const idx = view.rascunhos.findIndex(x => x.id === id);
@@ -591,7 +688,7 @@
       const id = btn.closest('tr').dataset.id;
       const r = view.rascunhos.find(x => x.id === id);
       if (!r) return;
-      if ((r.sku || r.quantidade) && !await confirmar('Remover esta linha do lote?', 'Remover', true)) return;
+      if (!vazia(r) && !await confirmar('Remover esta linha do lote?', 'Remover', true)) return;
       commit([{ t: 'del', c: 'rascunhos', id }]);
     });
   }
@@ -660,7 +757,10 @@
     e.preventDefault();
     const sku = $('#sku').value.trim().toUpperCase();
     const qtd = parseInt($('#quantidade').value, 10);
+    const warehouse = $('#warehouse').value.trim().toUpperCase();
+    const origem = $('#origem').value.trim().toUpperCase();
     const nome = $('#responsavel').value;
+    const motivo = document.querySelector('input[name=motivo]:checked')?.value || '';
     if (!sku) { $('#sku').focus(); return; }
     if (!(qtd > 0)) { $('#quantidade').focus(); return; }
     if (!nome) {
@@ -671,27 +771,26 @@
       }
       return;
     }
+    const falta = faltas({ sku, quantidade: qtd, warehouse, origem, motivo });
+    if (falta.length) { avisar('Falta preencher: ' + falta.join(', ') + '.'); return; }
     const r = findResp(nome);
-    const motivos = [];
-    if ($('#m-saldo').checked) motivos.push('saldo');
-    if ($('#m-sku').checked) motivos.push('sku');
     commit([{ t: 'add', c: 'baixas', rec: {
       id: uid(),
       sku,
       quantidade: qtd,
-      origem: $('#origem').value.trim(),
+      warehouse,
+      origem,
       skuReingresso: $('#skuReingresso').value.trim().toUpperCase(),
       responsavel: r ? r.nome : nome,
       turno: r ? r.turno : '',
-      motivos,
+      motivo,
       data: $('#data').value || todayISO()
     } }]);
-    // origem e responsável continuam preenchidos; o que muda a cada lançamento é limpo
+    // warehouse, endereço e responsável continuam preenchidos; o que muda a cada lançamento é limpo
     $('#sku').value = '';
     $('#quantidade').value = '';
     $('#skuReingresso').value = '';
-    $('#m-saldo').checked = false;
-    $('#m-sku').checked = false;
+    document.querySelectorAll('input[name=motivo]').forEach(x => { x.checked = false; });
     $('#sku').focus();
   });
 
@@ -702,20 +801,16 @@
     const b = view.baixas.find(x => x.id === id);
     if (!b) return;
     const f = inp.dataset.f;
-    if (f === 'motivo') {
-      const set = new Set(b.motivos);
-      if (inp.checked) set.add(inp.dataset.key); else set.delete(inp.dataset.key);
-      commit([{ t: 'set', c: 'baixas', id, patch: { motivos: [...set] } }]);
-      return;
-    }
     let v = inp.value;
     if (f === 'quantidade') {
       v = parseInt(v, 10);
       if (!(v > 0)) { inp.value = b.quantidade; return; }
-    } else if (f === 'sku' || f === 'skuReingresso') {
+    } else if (f === 'sku' || f === 'skuReingresso' || f === 'warehouse' || f === 'origem') {
       v = v.trim().toUpperCase();
     } else if (f === 'data') {
       if (!v) { inp.value = b.data; return; }
+    } else if (f === 'motivo') {
+      v = inp.value;
     } else {
       v = v.trim();
     }
@@ -772,7 +867,7 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 3000);
   }
 
-  // planilha por responsável: uma guia por responsável (com as baixas que estão filtradas) + guia de saldo
+  // planilha por responsável: uma guia por responsável (no formato do chamado) + guia de painel + guia de saldo
   $('#btn-export').addEventListener('click', async () => {
     const nomes = uniq([...view.responsaveis.map(r => r.nome), ...view.baixas.map(b => b.responsavel)]);
     if (!nomes.length) { await avisar('Não há responsáveis nem baixas para exportar.'); return; }
@@ -780,24 +875,30 @@
     if (escolha === null) return;
     const lista = view.baixas.filter(matches).filter(b => escolha === TODOS || norm(b.responsavel) === norm(escolha));
     if (!lista.length) { await avisar('Nenhuma baixa corresponde aos filtros para esta escolha.'); return; }
-    const sheets = agrupar(lista).map(([nome, itens]) => ({ name: nome, header: COLUNAS, rows: itens.map(linhaBaixa), widths: LARGURAS }));
-    sheets.push({ name: SALDO_NOME, header: SALDO_HEAD, rows: saldoRows(), widths: LARGURAS_SALDO });
-    baixar(xlsxBlob(sheets), `controle-rq-por-responsavel-${todayISO()}.xlsx`);
+    const incompletas = lista.filter(b => !completa(b));
+    if (incompletas.length) {
+      const ok = await confirmar(`${incompletas.length} baixa(s) estão incompletas: ${resumoFaltas(incompletas)}. Gerar a planilha mesmo assim? As linhas incompletas saem com esses campos vazios.`, 'Gerar mesmo assim', true);
+      if (!ok) return;
+    }
+    const nomesLista = escolha === TODOS ? uniq(lista.map(b => b.responsavel)) : [escolha];
+    // cada exportação gera uma planilha nova, com a mesma configuração
+    const p = await gerarPlanilha('export', lista, nomesLista, escolha === TODOS ? 'todos' : slug(escolha));
+    await lembreteModal(p, `Exportação com ${lista.length} baixa(s).`);
   });
 
   $('#btn-csv').addEventListener('click', () => {
     const list = view.baixas.filter(matches);
-    const head = ['SKU', 'QUANTIDADE', 'ORIGEM', 'SKU REINGRESSO', 'RESPONSÁVEL', 'TURNO', 'DATA', 'SALDO SISTÊMICO INCORRETO', 'MELI SKU INVERTIDA'];
+    const head = ['SKU', 'QUANTIDADE', 'WAREHOUSE', 'ENDEREÇO RQ', 'MOTIVO', 'SKU REINGRESSO', 'RESPONSÁVEL', 'TURNO', 'DATA'];
     const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const lines = [head.map(cell).join(';')].concat(
-      list.map(b => [b.sku, b.quantidade, b.origem, b.skuReingresso, b.responsavel, turnoOf(b), fmtBR(b.data), motTxt(b, 'saldo'), motTxt(b, 'sku')].map(cell).join(';'))
+      list.map(b => [b.sku, b.quantidade, b.warehouse, b.origem, MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].label : '', b.skuReingresso, b.responsavel, turnoOf(b), fmtBR(b.data)].map(cell).join(';'))
     );
     baixar(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `controle-rq-${todayISO()}.csv`);
   });
 
   // backup no mesmo formato do JSON base (inclui os rascunhos)
   $('#btn-backup').addEventListener('click', () => {
-    const data = { teamName: view.teamName, responsaveis: view.responsaveis, baixas: view.baixas, rascunhos: view.rascunhos };
+    const data = { teamName: view.teamName, responsaveis: view.responsaveis, baixas: view.baixas, rascunhos: view.rascunhos, planilhas: view.planilhas };
     baixar(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `controle-rq-backup-${todayISO()}.json`);
   });
 
@@ -818,7 +919,8 @@
       teamName: String(data.teamName || ''),
       responsaveis: data.responsaveis,
       baixas: data.baixas,
-      rascunhos: Array.isArray(data.rascunhos) ? data.rascunhos : []
+      rascunhos: Array.isArray(data.rascunhos) ? data.rascunhos : [],
+      planilhas: Array.isArray(data.planilhas) ? data.planilhas : []
     } }]);
   });
 
@@ -826,6 +928,25 @@
     if (!view.baixas.length) return;
     if (!await confirmar(`Apagar TODAS as ${view.baixas.length} baixas deste controle? O cadastro de responsáveis é mantido.`, 'Apagar tudo', true)) return;
     commit(view.baixas.map(b => ({ t: 'del', c: 'baixas', id: b.id })));
+  });
+
+  $('#planilhas-list').addEventListener('click', async e => {
+    const btn = e.target.closest('[data-pl-toggle]');
+    if (!btn) return;
+    const id = btn.closest('[data-id]').dataset.id;
+    const p = view.planilhas.find(x => x.id === id);
+    if (!p) return;
+    if (!p.compartilhada) {
+      const ok = await confirmar(`Confirma que a planilha ${p.arquivo} foi compartilhada com: ${destinatarios(p).join(', ')}?`, 'Sim, compartilhei');
+      if (!ok) return;
+      commit([{ t: 'set', c: 'planilhas', id, patch: { compartilhada: true, compartilhadaEm: new Date().toISOString() } }]);
+    } else {
+      commit([{ t: 'set', c: 'planilhas', id, patch: { compartilhada: false, compartilhadaEm: '' } }]);
+    }
+  });
+  $('#lembrete-ver').addEventListener('click', () => {
+    showTab('massa', false);
+    $('#planilhas-card')?.scrollIntoView({ behavior: 'smooth' });
   });
 
   // ---------- início ----------
