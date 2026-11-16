@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Controle de RQ · Mercado Livre</title>
+<style>
+  :root{
+    --yellow:#FFE600; --blue:#3483FA; --blue-d:#2968C8; --navy:#2D3277;
+    --text:#333; --muted:#666; --bg:#EEEEEE; --border:#E6E6E6;
+    --danger:#F23D4F;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Proxima Nova",Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
+
+  header{background:var(--yellow);padding:14px 24px;display:flex;align-items:center;gap:14px}
+  .logo{font-weight:800;font-size:20px;color:var(--navy);letter-spacing:-.5px}
+  .logo span{color:var(--blue)}
+  header h1{margin:0;font-size:18px;font-weight:700;color:var(--navy);padding-left:14px;border-left:2px solid var(--navy)}
+
+  main{max-width:1200px;margin:24px auto;padding:0 16px}
+  .card{background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:20px;margin-bottom:20px}
+  .card h2{margin:0 0 14px;font-size:15px;color:var(--navy)}
+
+  /* formulário de entrada */
+  .form{display:grid;grid-template-columns:1.3fr .8fr 1.2fr 1.3fr 1.5fr 1fr auto;gap:10px;align-items:end}
+  label{display:flex;flex-direction:column;gap:4px;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+  input{font:inherit;font-size:14px;padding:9px 10px;border:1px solid #CCC;border-radius:6px;background:#fff;color:var(--text);font-weight:400;min-width:0;width:100%}
+  input:focus{outline:none;border-color:var(--blue);box-shadow:0 0 0 3px rgba(52,131,250,.2)}
+  input.sku{text-transform:uppercase}
+
+  button{font:inherit;font-weight:700;cursor:pointer;border:0;border-radius:6px;padding:10px 16px}
+  .btn-add{background:var(--blue);color:#fff;height:38px;white-space:nowrap}
+  .btn-add:hover{background:var(--blue-d)}
+  .btn-ghost{background:#fff;color:var(--navy);border:1px solid #CCC;padding:9px 14px}
+  .btn-ghost:hover{border-color:var(--navy)}
+  .btn-danger{background:#fff;color:var(--danger);border:1px solid #F5C0C5;padding:5px 9px;line-height:1}
+  .btn-danger:hover{background:#FDECEE}
+
+  .hint{margin-top:12px;color:var(--muted);font-size:12px}
+  kbd{background:#F0F0F0;border:1px solid #CCC;border-radius:4px;padding:1px 5px;font-size:11px;font-family:inherit}
+
+  /* barra de ferramentas */
+  .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .toolbar input{flex:1;min-width:220px;max-width:380px}
+  .stats{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+  .pill{background:var(--navy);color:#fff;border-radius:999px;padding:6px 12px;font-weight:700;font-size:12px}
+  .pill.y{background:var(--yellow);color:var(--navy)}
+
+  /* grid */
+  .table-wrap{overflow:auto;max-height:62vh;border:1px solid var(--border);border-radius:8px}
+  table{width:100%;border-collapse:collapse;min-width:900px}
+  thead th{background:var(--navy);color:#fff;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.3px;padding:11px 10px;position:sticky;top:0;z-index:1}
+  tbody td{padding:5px;border-bottom:1px solid var(--border)}
+  tbody tr:nth-child(even){background:#FAFAFA}
+  tbody tr:hover{background:#FFF9CC}
+  tbody td input{border-color:transparent;background:transparent;padding:7px 8px}
+  tbody td input:hover{border-color:#DDD;background:#fff}
+  tbody td input:focus{background:#fff}
+  tbody td.num input{text-align:right}
+  td.actions{text-align:center;width:60px}
+  .empty{text-align:center;color:var(--muted);padding:40px 10px}
+  .flash{animation:flash 1.4s ease-out}
+  @keyframes flash{from{background:#FFF59D}to{background:transparent}}
+
+  @media (max-width:900px){
+    .form{grid-template-columns:1fr 1fr}
+    .btn-add{grid-column:1/-1;height:44px}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">mercado<span>livre</span></div>
+  <h1>Controle de RQ</h1>
+</header>
+
+<main>
+
+  <!-- ENTRADA RÁPIDA -->
+  <section class="card">
+    <h2>Nova solicitação de baixa</h2>
+    <form id="form" class="form" autocomplete="off">
+      <label>SKU
+        <input id="sku" name="sku" class="sku" placeholder="Ex.: MLB123" required autofocus>
+      </label>
+      <label>Quantidade
+        <input id="quantidade" name="quantidade" type="number" min="1" step="1" placeholder="0" required>
+      </label>
+      <label>Origem
+        <input id="origem" name="origem" list="dl-origem" placeholder="Ex.: Estoque A">
+      </label>
+      <label>SKU Reingresso
+        <input id="skuReingresso" name="skuReingresso" class="sku" placeholder="Opcional">
+      </label>
+      <label>Responsável
+        <input id="responsavel" name="responsavel" list="dl-resp" placeholder="Nome">
+      </label>
+      <label>Data
+        <input id="data" name="data" type="date" required>
+      </label>
+      <button type="submit" class="btn-add">+ Adicionar</button>
+    </form>
+    <p class="hint">
+      Preencha e pressione <kbd>Enter</kbd> em qualquer campo para lançar. <kbd>Tab</kbd> avança entre campos.
+      Origem e Responsável são mantidos após cada lançamento.
+    </p>
+    <datalist id="dl-origem"></datalist>
+    <datalist id="dl-resp"></datalist>
+  </section>
+
+  <!-- GRID -->
+  <section class="card">
+    <div class="toolbar">
+      <input id="search" type="search" placeholder="Buscar por SKU, origem, responsável…">
+      <div class="stats">
+        <span class="pill y" id="st-linhas">0 solicitações</span>
+        <span class="pill" id="st-qtd">0 unidades</span>
+      </div>
+      <button class="btn-ghost" id="btn-csv" type="button">Exportar CSV</button>
+      <button class="btn-ghost" id="btn-limpar" type="button">Limpar tudo</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>SKU</th>
+            <th style="text-align:right">Quantidade</th>
+            <th>Origem</th>
+            <th>SKU Reingresso</th>
+            <th>Responsável</th>
+            <th>Data</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <p class="hint">Clique em qualquer célula para editar. Os dados ficam salvos neste navegador.</p>
+  </section>
+</main>
+
+<script>
+(function(){
+  const KEY = 'controle-rq-v1';
+  const KEY_STICKY = 'controle-rq-sticky-v1';
+
+  const $ = s => document.querySelector(s);
+  const form = $('#form'), tbody = $('#rows'), search = $('#search');
+  const FIELDS = ['sku','quantidade','origem','skuReingresso','responsavel','data'];
+
+  let items = load();
+  let sticky = loadSticky();
+
+  // ---------- utilidades ----------
+  function todayISO(){
+    const d = new Date();
+    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+    return d.toISOString().slice(0,10);
+  }
+  function fmtBR(iso){
+    if(!iso) return '';
+    const [y,m,d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+  function esc(s){
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+  function load(){ try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch(e){ return []; } }
+  function loadSticky(){ try { return JSON.parse(localStorage.getItem(KEY_STICKY)) || {}; } catch(e){ return {}; } }
+  function save(){ localStorage.setItem(KEY, JSON.stringify(items)); }
+
+  // ---------- formulário ----------
+  $('#data').value = todayISO();
+  $('#origem').value = sticky.origem || '';
+  $('#responsavel').value = sticky.responsavel || '';
+
+  form.addEventListener('submit', e => {
+    e.preventDefault();
+    const v = Object.fromEntries(new FormData(form));
+    const sku = v.sku.trim().toUpperCase();
+    const qtd = parseInt(v.quantidade, 10);
+
+    if(!sku){ $('#sku').focus(); return; }
+    if(!(qtd > 0)){ $('#quantidade').focus(); return; }
+
+    const item = {
+      id: uid(),
+      sku,
+      quantidade: qtd,
+      origem: v.origem.trim(),
+      skuReingresso: v.skuReingresso.trim().toUpperCase(),
+      responsavel: v.responsavel.trim(),
+      data: v.data || todayISO()
+    };
+    items.unshift(item);
+    save();
+
+    sticky = { origem: item.origem, responsavel: item.responsavel };
+    localStorage.setItem(KEY_STICKY, JSON.stringify(sticky));
+
+    // limpa só o que muda a cada lançamento; origem/responsável/data permanecem
+    $('#sku').value = '';
+    $('#quantidade').value = '';
+    $('#skuReingresso').value = '';
+    $('#sku').focus();
+
+    render(item.id);
+  });
+
+  // ---------- grid ----------
+  tbody.addEventListener('change', e => {
+    const inp = e.target.closest('input[data-f]');
+    if(!inp) return;
+    const tr = inp.closest('tr');
+    const it = items.find(x => x.id === tr.dataset.id);
+    if(!it) return;
+    const f = inp.dataset.f;
+    let val = inp.value;
+
+    if(f === 'quantidade'){
+      val = parseInt(val, 10);
+      if(!(val > 0)){ inp.value = it.quantidade; return; }
+    } else if(f === 'sku' || f === 'skuReingresso'){
+      val = val.trim().toUpperCase();
+    } else if(f === 'data'){
+      if(!val){ inp.value = it.data; return; }
+    } else {
+      val = val.trim();
+    }
+
+    it[f] = val;
+    save();
+    inp.value = val;
+    refreshStats();
+    refreshDatalists();
+  });
+
+  tbody.addEventListener('click', e => {
+    const btn = e.target.closest('[data-del]');
+    if(!btn) return;
+    const tr = btn.closest('tr');
+    const it = items.find(x => x.id === tr.dataset.id);
+    if(!it) return;
+    if(!confirm(`Remover a solicitação de ${it.sku} (${it.quantidade} un.)?`)) return;
+    items = items.filter(x => x.id !== it.id);
+    save();
+    render();
+  });
+
+  search.addEventListener('input', () => render());
+  search.addEventListener('keydown', e => { if(e.key === 'Escape'){ search.value=''; render(); } });
+
+  function rowHTML(it){
+    return `
+      <td><input data-f="sku" class="sku" value="${esc(it.sku)}"></td>
+      <td class="num"><input data-f="quantidade" type="number" min="1" step="1" value="${esc(it.quantidade)}"></td>
+      <td><input data-f="origem" value="${esc(it.origem)}"></td>
+      <td><input data-f="skuReingresso" class="sku" value="${esc(it.skuReingresso)}"></td>
+      <td><input data-f="responsavel" value="${esc(it.responsavel)}"></td>
+      <td><input data-f="data" type="date" value="${esc(it.data)}"></td>
+      <td class="actions"><button class="btn-danger" data-del title="Remover">✕</button></td>`;
+  }
+
+  function render(flashId){
+    const q = search.value.trim().toLowerCase();
+    const list = items.filter(it => !q || Object.values(it).join(' ').toLowerCase().includes(q));
+
+    if(!list.length){
+      tbody.innerHTML = `<tr><td colspan="7" class="empty">${
+        items.length ? 'Nenhum resultado para a busca.' : 'Nenhuma solicitação ainda. Preencha o formulário acima e pressione Enter.'
+      }</td></tr>`;
+    } else {
+      tbody.innerHTML = '';
+      const frag = document.createDocumentFragment();
+      list.forEach(it => {
+        const tr = document.createElement('tr');
+        tr.dataset.id = it.id;
+        if(it.id === flashId) tr.classList.add('flash');
+        tr.innerHTML = rowHTML(it);
+        frag.appendChild(tr);
+      });
+      tbody.appendChild(frag);
+    }
+    refreshStats(list.length);
+    refreshDatalists();
+  }
+
+  function refreshStats(visible){
+    const n = visible ?? items.length;
+    const units = items.reduce((s,x) => s + (Number(x.quantidade)||0), 0);
+    $('#st-linhas').textContent = `${n} solicita${n===1?'ção':'ções'}`;
+    $('#st-qtd').textContent = `${units} unidade${units===1?'':'s'}`;
+  }
+
+  function refreshDatalists(){
+    const uniq = k => [...new Set(items.map(x => x[k]).filter(Boolean))].sort();
+    $('#dl-origem').innerHTML = uniq('origem').map(v => `<option value="${esc(v)}">`).join('');
+    $('#dl-resp').innerHTML   = uniq('responsavel').map(v => `<option value="${esc(v)}">`).join('');
+  }
+
+  // ---------- ações ----------
+  $('#btn-limpar').addEventListener('click', () => {
+    if(!items.length) return;
+    if(!confirm('Apagar TODAS as solicitações deste controle?')) return;
+    items = [];
+    save();
+    render();
+  });
+
+  $('#btn-csv').addEventListener('click', () => {
+    const head = ['SKU','QUANTIDADE','ORIGEM','SKU REINGRESSO','RESPONSÁVEL','DATA'];
+    const cell = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
+    const lines = [head.map(cell).join(';')].concat(
+      items.map(it => [it.sku, it.quantidade, it.origem, it.skuReingresso, it.responsavel, fmtBR(it.data)].map(cell).join(';'))
+    );
+    const blob = new Blob(['﻿' + lines.join('\r\n')], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `controle-rq-${todayISO()}.csv`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
