@@ -17,12 +17,11 @@
 <div id="banner" class="banner" hidden></div>
 <div id="lembrete" class="lembrete" hidden>
   <span id="lembrete-txt"></span>
-  <button id="lembrete-ver" class="btn-ghost" type="button">Ver planilhas</button>
+  <button id="lembrete-ver" class="btn-ghost small" type="button">Ver planilhas</button>
 </div>
 
 <nav class="tabs"><div>
-  <button class="tab active" data-tab="baixas" type="button">Baixas feitas</button>
-  <button class="tab" data-tab="massa" type="button">Baixa em massa</button>
+  <button class="tab active" data-tab="baixas" type="button">Baixas</button>
   <button class="tab" data-tab="resp" type="button">Cadastro de responsáveis</button>
 </div></nav>
 
@@ -31,138 +30,89 @@
   <!-- ===================== ABA: BAIXAS ===================== -->
   <section id="tab-baixas">
 
+    <!-- lançamento em grade: cada linha é uma baixa; o rascunho fica guardado enquanto você digita -->
     <section class="card">
-      <h2>Nova solicitação de baixa</h2>
-      <form id="form" class="form-baixa" autocomplete="off">
-        <label><span class="lbl">SKU</span>
-          <input id="sku" name="sku" class="sku" placeholder="Ex.: MLB123" required autofocus>
-        </label>
-        <label><span class="lbl">Quantidade</span>
-          <input id="quantidade" name="quantidade" type="number" min="1" step="1" placeholder="0" required>
-        </label>
-        <label><span class="lbl">Warehouse</span>
-          <input id="warehouse" name="warehouse" class="sku" list="dl-warehouse" placeholder="Ex.: BRRJ02" required>
-        </label>
-        <label><span class="lbl">Endereço RQ</span>
-          <input id="origem" name="origem" class="sku" list="dl-origem" placeholder="Ex.: RQ-0-005-000-00-00" required>
-        </label>
-        <label><span class="lbl">SKU Reingresso</span>
-          <input id="skuReingresso" name="skuReingresso" class="sku" placeholder="Opcional">
-        </label>
-        <label><span class="lbl">Responsável<span id="turno-info" class="turno-info"></span></span>
-          <select id="responsavel" name="responsavel" required></select>
-        </label>
-        <label><span class="lbl">Data</span>
-          <input id="data" name="data" type="date" required>
-        </label>
-        <button type="submit" class="btn-add">+ Adicionar</button>
-      </form>
-      <fieldset class="motivos">
-        <legend>Motivo (obrigatório)</legend>
-        <label class="ck-label"><input id="m-saldo" name="motivo" value="saldo" type="radio" form="form" required> Saldo Sistêmico Incorreto <span class="dica">(entrada sistêmica maior que física)</span></label>
-        <label class="ck-label"><input id="m-sku" name="motivo" value="sku" type="radio" form="form" required> Meli SKU Invertida</label>
-      </fieldset>
-      <p class="hint">
-        Preencha e pressione <kbd>Enter</kbd> para lançar. Warehouse e Endereço RQ continuam preenchidos após cada lançamento.
-        Cada baixa tem um motivo: se o mesmo SKU tiver os dois motivos, lance duas baixas, cada uma com a sua quantidade.
-      </p>
+      <div class="card-head">
+        <h2>Lançar baixas</h2>
+        <span class="hint-inline">Enter = próxima linha · rascunho salvo enquanto você digita · o responsável é pedido ao salvar</span>
+        <div class="card-actions">
+          <button class="btn-ghost" id="massa-add" type="button">+ Linha</button>
+          <button class="btn-ghost" id="massa-limpar" type="button">Limpar</button>
+          <span class="pill" id="massa-stats">0 linhas</span>
+          <button class="btn-add" id="massa-salvar" type="button">Salvar lote e gerar planilha</button>
+        </div>
+      </div>
+      <div class="table-wrap small">
+        <table class="rasc">
+          <colgroup>
+            <col style="width:3.5%"><col style="width:13%"><col style="width:7%"><col style="width:9%"><col style="width:18.5%"><col style="width:18%"><col style="width:12.5%"><col style="width:14.5%"><col style="width:4%">
+          </colgroup>
+          <thead>
+            <tr><th>#</th><th>SKU</th><th>Qtd</th><th>Warehouse</th><th>Endereço RQ</th><th>Motivo</th><th>SKU reingr.</th><th>Data</th><th></th></tr>
+          </thead>
+          <tbody id="massa-rows"></tbody>
+        </table>
+      </div>
     </section>
 
+    <!-- baixas já salvas: filtros, edição direta e exportações -->
     <section class="card">
-      <h2>Filtros</h2>
+      <div class="card-head">
+        <h2>Baixas salvas</h2>
+        <span class="pill y" id="st-linhas">0 baixas</span>
+        <span class="pill" id="st-qtd">0 unidades</span>
+        <div class="card-actions">
+          <button class="btn-ghost" id="btn-export" type="button">Planilha por responsável</button>
+          <button class="btn-ghost" id="btn-csv" type="button">CSV (filtrado)</button>
+          <button class="btn-ghost" id="btn-backup" type="button">Backup</button>
+          <button class="btn-ghost" id="btn-importar" type="button">Importar</button>
+          <button class="btn-ghost" id="btn-limpar" type="button">Limpar tudo</button>
+        </div>
+      </div>
       <div class="filters">
-        <label>Data de <input id="f-de" type="date"></label>
-        <label>Data até <input id="f-ate" type="date"></label>
-        <label>Turno
+        <label><span>Data de</span><input id="f-de" type="date"></label>
+        <label><span>Data até</span><input id="f-ate" type="date"></label>
+        <label><span>Turno</span>
           <select id="f-turno">
             <option value="">Todos</option>
             <option>T1</option><option>T2</option><option>T3</option><option>T4</option>
           </select>
         </label>
-        <label>SKU <input id="f-sku" class="sku" placeholder="Contém…"></label>
-        <label>Endereço RQ <select id="f-origem"></select></label>
-        <label>Nome <select id="f-nome"></select></label>
+        <label><span>SKU</span><input id="f-sku" class="sku" placeholder="Contém…"></label>
+        <label><span>Endereço RQ</span><select id="f-origem"></select></label>
+        <label><span>Responsável</span><select id="f-nome"></select></label>
         <button class="btn-ghost" id="btn-limpar-filtros" type="button">Limpar filtros</button>
       </div>
-    </section>
-
-    <section class="card">
-      <div class="toolbar">
-        <span class="pill y" id="st-linhas">0 baixas</span>
-        <span class="pill" id="st-qtd">0 unidades</span>
-        <div class="stats">
-          <button class="btn-ghost" id="btn-export" type="button">Gerar planilha por responsável</button>
-          <button class="btn-ghost" id="btn-csv" type="button">Exportar CSV (filtrado)</button>
-          <button class="btn-ghost" id="btn-backup" type="button">Backup (JSON)</button>
-          <button class="btn-ghost" id="btn-importar" type="button">Importar JSON</button>
-          <button class="btn-ghost" id="btn-limpar" type="button">Limpar tudo</button>
-        </div>
-      </div>
-
       <div class="table-wrap">
         <table class="baixas">
+          <colgroup>
+            <col style="width:11%"><col style="width:6%"><col style="width:8.5%"><col style="width:16%"><col style="width:13%"><col style="width:5.5%"><col style="width:15%"><col style="width:10.5%"><col style="width:11.5%"><col style="width:3%">
+          </colgroup>
           <thead>
-            <tr>
-              <th>SKU</th>
-              <th style="text-align:right">Quantidade</th>
-              <th>Warehouse</th>
-              <th>Endereço RQ</th>
-              <th>Responsável</th>
-              <th>Turno</th>
-              <th>Motivo</th>
-              <th>SKU Reingresso</th>
-              <th>Data</th>
-              <th></th>
-            </tr>
+            <tr><th>SKU</th><th>Qtd</th><th>Warehouse</th><th>Endereço RQ</th><th>Responsável</th><th>Turno</th><th>Motivo</th><th>SKU reingr.</th><th>Data</th><th></th></tr>
           </thead>
           <tbody id="rows"></tbody>
         </table>
       </div>
-      <p class="hint">Clique em qualquer célula para editar. Os dados são compartilhados com todos que abrem este documento no Grid.</p>
     </section>
-  </section>
 
-  <!-- ===================== ABA: BAIXA EM MASSA ===================== -->
-  <section id="tab-massa" hidden>
-    <section class="card">
-      <h2>Baixa em massa</h2>
-      <div class="toolbar">
-        <button class="btn-ghost" id="massa-add" type="button">+ Linha</button>
-        <button class="btn-ghost" id="massa-limpar" type="button">Limpar rascunho</button>
-        <span class="pill" id="massa-stats">0 linhas</span>
-        <div class="stats">
-          <button class="btn-add" id="massa-salvar" type="button">Salvar lote e gerar planilha</button>
-        </div>
+    <!-- planilhas geradas: cada geração é um arquivo novo; marque como compartilhada depois de enviar -->
+    <section class="card" id="planilhas-card">
+      <div class="card-head">
+        <h2>Planilhas geradas</h2>
+        <span class="hint-inline">Compartilhe cada planilha com o TL responsável pela baixa e com soporteME@mercadolibre.com</span>
       </div>
-      <div class="table-wrap">
-        <table class="massa">
+      <div class="table-wrap small">
+        <table class="planilhas">
+          <colgroup>
+            <col style="width:34%"><col style="width:16%"><col style="width:7%"><col style="width:15%"><col style="width:28%">
+          </colgroup>
           <thead>
-            <tr>
-              <th>#</th>
-              <th>SKU</th>
-              <th style="text-align:right">Quantidade</th>
-              <th>Warehouse</th>
-              <th>Endereço RQ</th>
-              <th>Motivo</th>
-              <th>SKU Reingresso</th>
-              <th>Data</th>
-              <th></th>
-            </tr>
+            <tr><th>Arquivo</th><th>Gerada em</th><th>Baixas</th><th>Responsável</th><th>Compartilhamento</th></tr>
           </thead>
-          <tbody id="massa-rows"></tbody>
+          <tbody id="planilhas-list"></tbody>
         </table>
       </div>
-      <p class="hint">
-        Preencha linha a linha; <kbd>Enter</kbd> vai para a próxima linha e cria uma nova no fim.
-        O rascunho fica guardado enquanto você preenche. Ao clicar em <strong>Salvar lote e gerar planilha</strong>, o sistema pede o responsável,
-        grava as baixas e gera uma planilha nova, no formato do chamado (guia Template).
-      </p>
-    </section>
-
-    <section class="card" id="planilhas-card">
-      <h2>Planilhas geradas</h2>
-      <p class="hint">Cada planilha precisa ser compartilhada com o TL responsável e com soporteME@mercadolibre.com. Marque como compartilhada somente depois de enviar.</p>
-      <div id="planilhas-list"></div>
     </section>
   </section>
 
@@ -172,33 +122,31 @@
     <section class="card">
       <h2>Cadastrar responsável</h2>
       <form id="formResp" class="form-resp" autocomplete="off">
-        <label><span class="lbl">Nome</span>
+        <label><span>Nome</span>
           <input id="r-nome" placeholder="Nome completo" required>
         </label>
-        <label><span class="lbl">Turno</span>
+        <label><span>Turno</span>
           <select id="r-turno" required></select>
         </label>
-        <label><span class="lbl">Cargo</span>
+        <label><span>Cargo</span>
           <input id="r-cargo" list="dl-cargo" placeholder="Ex.: Operador">
         </label>
         <button type="submit" class="btn-add">+ Cadastrar</button>
       </form>
-      <p class="hint">Alterar o nome ou o turno aqui atualiza também as baixas já lançadas.</p>
+      <p class="hint">Alterar o nome ou o turno aqui atualiza também as baixas já salvas.</p>
     </section>
 
     <section class="card">
-      <div class="toolbar">
+      <div class="card-head">
         <span class="pill y" id="st-resp">0 responsáveis</span>
       </div>
       <div class="table-wrap">
         <table class="resps">
+          <colgroup>
+            <col style="width:40%"><col style="width:20%"><col style="width:30%"><col style="width:10%">
+          </colgroup>
           <thead>
-            <tr>
-              <th>Nome</th>
-              <th>Turno</th>
-              <th>Cargo</th>
-              <th></th>
-            </tr>
+            <tr><th>Nome</th><th>Turno</th><th>Cargo</th><th></th></tr>
           </thead>
           <tbody id="resp-rows"></tbody>
         </table>

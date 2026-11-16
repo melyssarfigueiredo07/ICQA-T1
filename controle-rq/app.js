@@ -11,25 +11,26 @@
   const RQ_RE = /^RQ-/i;
   const EMAIL_SUPORTE = 'soporteME@mercadolibre.com';
 
-  // Motivos. O modelo de chamado de baixa (Baja de RQ) aceita um motivo por linha, com este texto exato.
+  // Motivos: label = nome curto na tela; nome = texto completo; reason = texto exato do modelo de chamado (Baja de RQ)
   const MOTIVOS = {
     saldo: {
-      label: 'Saldo Sistêmico Incorreto',
+      label: 'Saldo sistêmico',
+      nome: 'Saldo Sistêmico Incorreto',
       reason: 'Entrada sistémica mayor que física. Problem ID #13966888'
     },
     sku: {
-      label: 'Meli SKU Invertida',
+      label: 'Meli SKU invertida',
+      nome: 'Meli SKU Invertida',
       reason: 'Meli SKU Invertida: Cada SKU tiene un EAN diferente. Problem ID #10637539'
     }
   };
   // Modelo "Template" do chamado: uma linha por baixa
   const TEMPLATE_HEAD = ['sku', 'quantity', 'warehouse_id', 'address_id', 'reason'];
   const TEMPLATE_LARG = [16, 12, 16, 24, 80];
-  // Guia de painel (interna)
+  // Guia de painel e guia de saldo (internas)
   const PAINEL_NOME = 'Painel';
   const PAINEL_HEAD = ['SKU', 'QUANTIDADE', 'WAREHOUSE', 'ENDEREÇO RQ', 'MOTIVO', 'SKU REINGRESSO', 'RESPONSÁVEL', 'TURNO', 'DATA'];
   const PAINEL_LARG = [16, 12, 14, 24, 30, 18, 24, 10, 14];
-  // Guia de saldo por responsável (interna)
   const SALDO_NOME = 'Saldo por responsável';
   const SALDO_HEAD = ['RESPONSÁVEL', 'TURNO', 'CARGO', 'SOLICITAÇÕES', 'UNIDADES', 'SALDO SIST. INCORRETO (SOLIC.)', 'SALDO SIST. INCORRETO (UN.)', 'MELI SKU INVERTIDA (SOLIC.)', 'MELI SKU INVERTIDA (UN.)', 'PRIMEIRA DATA', 'ÚLTIMA DATA'];
   const SALDO_LARG = [26, 10, 14, 14, 12, 28, 26, 26, 24, 16, 16];
@@ -40,14 +41,20 @@
   const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const sleep = ms => new Promise(r => setTimeout(r, ms));
+  const pad = n => String(n).padStart(2, '0');
   const hhmm = () => new Date().toTimeString().slice(0, 5);
   const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); };
   const fmtBR = iso => { if (!iso) return ''; const [y, m, d] = iso.split('-'); return `${d}/${m}/${y}`; };
+  const fmtDataHora = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('pt-BR'); };
   const uniq = arr => [...new Set(arr.map(v => String(v ?? '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   const byNome = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR');
   const slug = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'sem-nome';
   const hasData = s => !!s && ((Array.isArray(s.baixas) && s.baixas.length > 0) || (Array.isArray(s.responsaveis) && s.responsaveis.length > 0));
   const dataCel = iso => iso ? { dt: iso } : '';
+  const stamp = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}-${String(d.getMilliseconds()).padStart(3, '0')}`;
+  };
 
   // ---------- armazenamento: window.GRID.state (compartilhado e ao vivo) ----------
   // Fora do Grid (prévia local) não existe estado compartilhado: usa uma cópia só em memória.
@@ -61,7 +68,8 @@
   // ---------- modelo de dados ----------
   // { teamName, responsaveis:[{id,nome,turno,cargo}],
   //   baixas:[{id,sku,quantidade,warehouse,origem,skuReingresso,responsavel,turno,data,motivo}],
-  //   rascunhos:[{id,sku,quantidade,warehouse,origem,skuReingresso,motivo,data}] }
+  //   rascunhos:[{id,sku,quantidade,warehouse,origem,skuReingresso,motivo,data}],
+  //   planilhas:[{id,arquivo,tipo,criadaEm,responsaveis,baixas,compartilhada,compartilhadaEm}] }
   //   origem = endereço RQ (address_id);  motivo = '' | 'saldo' | 'sku'
   const emptyRoot = () => ({ teamName: '', responsaveis: [], baixas: [], rascunhos: [], planilhas: [] });
   const qtdBaixa = v => Number(v) || 0;
@@ -114,7 +122,7 @@
   const turnoOf = b => { const r = findResp(b.responsavel); return r ? r.turno : (b.turno || ''); };
   const gridFocused = () => { const ae = document.activeElement; return !!(ae && ae.closest && ae.closest('#rows,#resp-rows,#massa-rows')); };
 
-  // campos que faltam para a linha virar uma linha do chamado
+  // campos que faltam para a linha virar uma baixa do chamado
   function faltas(r) {
     const f = [];
     if (!r.sku) f.push('SKU');
@@ -271,9 +279,8 @@
   function showTab(t, focus = true) {
     document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
     $('#tab-baixas').hidden = t !== 'baixas';
-    $('#tab-massa').hidden = t !== 'massa';
     $('#tab-resp').hidden = t !== 'resp';
-    if (focus) { const alvo = { baixas: '#sku', massa: '#massa-add', resp: '#r-nome' }[t]; $(alvo)?.focus(); }
+    if (focus) { const alvo = { baixas: '#massa-add', resp: '#r-nome' }[t]; $(alvo)?.focus(); }
   }
   document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
@@ -300,24 +307,15 @@
     if (value !== undefined && [...sel.options].some(o => o.value === value)) sel.value = value;
   }
   function refreshSelects() {
-    const nomes = view.responsaveis.slice().sort(byNome).map(r => r.nome);
     const origens = uniq(view.baixas.map(b => b.origem));
     const warehouses = uniq(view.baixas.map(b => b.warehouse));
-    const pessoas = uniq([...nomes, ...view.baixas.map(b => b.responsavel)]);
-    setOptions($('#responsavel'),
-      (nomes.length ? '<option value="">Selecione…</option>' : '<option value="">Cadastre responsáveis</option>') +
-      nomes.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join(''), $('#responsavel').value);
+    const nomes = uniq([...view.responsaveis.map(r => r.nome), ...view.baixas.map(b => b.responsavel)]);
     setOptions($('#f-origem'), '<option value="">Todos</option>' + origens.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join(''), F.origem);
-    setOptions($('#f-nome'), '<option value="">Todos</option>' + pessoas.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join(''), F.nome);
+    setOptions($('#f-nome'), '<option value="">Todos</option>' + nomes.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join(''), F.nome);
     $('#dl-origem').innerHTML = origens.map(v => `<option value="${esc(v)}">`).join('');
     $('#dl-warehouse').innerHTML = warehouses.map(v => `<option value="${esc(v)}">`).join('');
     F.origem = $('#f-origem').value;
     F.nome = $('#f-nome').value;
-    updateTurnoInfo();
-  }
-  function updateTurnoInfo() {
-    const r = findResp($('#responsavel').value);
-    $('#turno-info').textContent = r ? `Turno: ${r.turno}` : '';
   }
 
   function renderResp() {
@@ -332,7 +330,7 @@
           <td class="actions"><button class="btn-danger" data-rdel title="Remover">✕</button></td>
         </tr>`;
     }).join('')
-      : '<tr><td colspan="4" class="empty">Nenhum responsável cadastrado ainda. Cadastre acima para liberar os lançamentos.</td></tr>';
+      : '<tr><td colspan="4" class="empty">Nenhum responsável cadastrado ainda.</td></tr>';
     $('#st-resp').textContent = `${list.length} ${list.length === 1 ? 'responsável' : 'responsáveis'}`;
   }
 
@@ -343,13 +341,13 @@
     return nomes.map(n => `<option ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('');
   }
   function motivoSelect(atual, attrs) {
-    const opts = [['', '— sem motivo —'], ['saldo', MOTIVOS.saldo.label], ['sku', MOTIVOS.sku.label]];
+    const opts = [['', '— motivo —'], ['saldo', MOTIVOS.saldo.label], ['sku', MOTIVOS.sku.label]];
     return `<select ${attrs}>${opts.map(([v, t]) => `<option value="${v}" ${v === (atual || '') ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>`;
   }
   function rowHTML(b) {
     return `
       <td><input data-f="sku" class="sku" value="${esc(b.sku)}"></td>
-      <td class="num"><input data-f="quantidade" type="number" min="1" step="1" value="${esc(b.quantidade)}"></td>
+      <td><input data-f="quantidade" type="number" min="1" step="1" value="${esc(b.quantidade)}"></td>
       <td><input data-f="warehouse" class="sku" value="${esc(b.warehouse)}"></td>
       <td><input data-f="origem" class="sku" value="${esc(b.origem)}"></td>
       <td><select data-f="responsavel">${respOpts(b.responsavel)}</select></td>
@@ -373,7 +371,7 @@
     const tb = $('#rows');
     if (!list.length) {
       tb.innerHTML = `<tr><td colspan="10" class="empty">${view.baixas.length ? 'Nenhuma baixa corresponde aos filtros.'
-        : 'Nenhuma baixa ainda. Preencha o formulário acima e pressione Enter.'}</td></tr>`;
+        : 'Nenhuma baixa salva ainda. Lance as baixas no bloco de cima e clique em Salvar.'}</td></tr>`;
     } else {
       const frag = document.createDocumentFragment();
       list.forEach(b => {
@@ -395,7 +393,7 @@
     $('#st-qtd').textContent = `${units} ${units === 1 ? 'unidade' : 'unidades'}`;
   }
 
-  // ---------- baixa em massa (rascunho guardado no Grid) ----------
+  // ---------- lançamento em grade (rascunho guardado no Grid) ----------
   function novaLinha(ref) {
     return {
       id: uid(), sku: '', quantidade: '', warehouse: ref ? ref.warehouse : '', origem: ref ? ref.origem : '',
@@ -409,7 +407,7 @@
       <tr data-id="${esc(r.id)}">
         <td class="idx">${i + 1}</td>
         <td><input data-m="sku" class="sku" value="${esc(r.sku)}" autocomplete="off"></td>
-        <td class="num"><input data-m="quantidade" type="number" min="1" step="1" value="${esc(r.quantidade)}"></td>
+        <td><input data-m="quantidade" type="number" min="1" step="1" value="${esc(r.quantidade)}"></td>
         <td><input data-m="warehouse" class="sku" value="${esc(r.warehouse)}" autocomplete="off"></td>
         <td><input data-m="origem" class="sku" value="${esc(r.origem)}" autocomplete="off"></td>
         <td>${motivoSelect(r.motivo, 'data-m="motivo"')}</td>
@@ -425,6 +423,33 @@
     const linhas = view.rascunhos;
     const ok = linhas.filter(completa).length;
     $('#massa-stats').textContent = `${linhas.length} ${linhas.length === 1 ? 'linha' : 'linhas'} · ${ok} completa${ok === 1 ? '' : 's'}`;
+  }
+
+  // ---------- planilhas geradas e lembrete obrigatório de compartilhamento ----------
+  // destinatários obrigatórios: o TL responsável pela baixa de cada responsável da planilha + o suporte
+  function destinatarios(p) {
+    const tls = (p.responsaveis || []).map(nome => `TL responsável pela baixa (responsável: ${nome})`);
+    return [...tls, `Suporte: ${EMAIL_SUPORTE}`];
+  }
+  function renderPlanilhas() {
+    const lista = view.planilhas;
+    const pend = lista.filter(p => !p.compartilhada);
+    $('#planilhas-list').innerHTML = lista.length ? lista.map(p => `
+      <tr class="${p.compartilhada ? 'ok' : 'pend'}" data-id="${esc(p.id)}">
+        <td class="arq" title="${esc(p.arquivo)}">${esc(p.arquivo)}</td>
+        <td>${esc(fmtDataHora(p.criadaEm))}</td>
+        <td class="num">${p.baixas}</td>
+        <td>${esc((p.responsaveis || []).join(', '))}</td>
+        <td class="status">
+          ${p.compartilhada
+            ? `<span class="ok-txt">Compartilhada em ${esc(fmtDataHora(p.compartilhadaEm))}</span>`
+            : `<span class="pend-txt">OBRIGATÓRIO: ${esc(destinatarios(p).join(' + '))}</span>`}
+          <button class="btn-ghost small" data-pl-toggle>${p.compartilhada ? 'Desfazer' : 'Marcar compartilhada'}</button>
+        </td>
+      </tr>`).join('')
+      : '<tr><td colspan="5" class="empty">Nenhuma planilha gerada ainda.</td></tr>';
+    $('#lembrete').hidden = pend.length === 0;
+    $('#lembrete-txt').textContent = `${pend.length} planilha(s) ainda não compartilhada(s). Compartilhe obrigatoriamente com o TL responsável e com ${EMAIL_SUPORTE}.`;
   }
 
   // ---------- planilha .xlsx (gerada aqui, sem bibliotecas externas) ----------
@@ -529,7 +554,7 @@
 
   // linhas das guias
   const templateLinha = b => [b.sku, Number(b.quantidade) || 0, b.warehouse, b.origem, MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].reason : ''];
-  const painelLinha = b => [b.sku, Number(b.quantidade) || 0, b.warehouse, b.origem, MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].label : '',
+  const painelLinha = b => [b.sku, Number(b.quantidade) || 0, b.warehouse, b.origem, MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].nome : '',
     b.skuReingresso, b.responsavel, turnoOf(b), dataCel(b.data)];
 
   // guia de saldo: uma linha por responsável, com total no final (considera todas as baixas do documento)
@@ -556,18 +581,6 @@
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR'));
   }
 
-  // ---------- planilhas geradas e lembrete obrigatório de compartilhamento ----------
-  const pad = n => String(n).padStart(2, '0');
-  const stamp = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}-${String(d.getMilliseconds()).padStart(3, '0')}`;
-  };
-  const fmtDataHora = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('pt-BR'); };
-  // destinatários obrigatórios: o TL de cada responsável da planilha + o suporte
-  function destinatarios(p) {
-    const tls = (p.responsaveis || []).map(nome => `TL responsável pela baixa (responsável: ${nome})`);
-    return [...tls, `Suporte: ${EMAIL_SUPORTE}`];
-  }
   // gera SEMPRE uma planilha nova, com a mesma configuração, e registra o lembrete de compartilhamento
   async function gerarPlanilha(tipo, lista, nomes, nomeBase) {
     const sheets = tipo === 'lote'
@@ -586,28 +599,58 @@
     return p;
   }
   async function lembreteModal(p, resumo) {
-    await avisar(`${resumo}\nPlanilha gerada: ${p.arquivo}\n\nLEMBRETE OBRIGATÓRIO: compartilhe esta planilha com:\n- ${destinatarios(p).join('\n- ')}\n\nEla fica na lista de planilhas pendentes (aba Baixa em massa) até você marcar como compartilhada.`);
-  }
-  function renderPlanilhas() {
-    const lista = view.planilhas;
-    const pend = lista.filter(p => !p.compartilhada);
-    $('#planilhas-list').innerHTML = lista.length ? lista.map(p => `
-      <div class="planilha ${p.compartilhada ? 'ok' : 'pend'}" data-id="${esc(p.id)}">
-        <div class="pl-info">
-          <strong>${esc(p.arquivo)}</strong>
-          <span>Gerada em ${esc(fmtDataHora(p.criadaEm))} · ${p.baixas} baixa(s) · ${esc((p.responsaveis || []).join(', '))}</span>
-        </div>
-        <div class="pl-aviso">${p.compartilhada
-          ? esc(`Compartilhada em ${fmtDataHora(p.compartilhadaEm)}.`)
-          : 'OBRIGATÓRIO: compartilhar com\n- ' + destinatarios(p).map(esc).join('\n- ')}</div>
-        <button class="btn-ghost" data-pl-toggle>${p.compartilhada ? 'Desmarcar' : 'Marcar como compartilhada'}</button>
-      </div>`).join('')
-      : '<p class="hint">Nenhuma planilha gerada ainda.</p>';
-    $('#lembrete').hidden = pend.length === 0;
-    $('#lembrete-txt').textContent = `${pend.length} planilha(s) ainda não compartilhada(s). Compartilhe obrigatoriamente com o TL responsável e com ${EMAIL_SUPORTE}.`;
+    await avisar(`${resumo}\nPlanilha gerada: ${p.arquivo}\n\nLEMBRETE OBRIGATÓRIO: compartilhe esta planilha com:\n- ${destinatarios(p).join('\n- ')}\n\nEla fica na lista de planilhas geradas (nesta tela) até você marcar como compartilhada.`);
   }
 
-  // ---------- baixa em massa: salvar o lote ----------
+  // ---------- Salvar lote ----------
+  // grava tudo que está pendente antes de uma operação atômica
+  async function gravarPendencias() {
+    for (let i = 0; i < 6 && (pending.length || inFlight); i++) {
+      if (inFlight) { await sleep(150); continue; }
+      await flush();
+    }
+    return pending.length === 0;
+  }
+  // Salvar lote: grava as linhas escolhidas numa única alteração do Grid, condicionada à versão lida.
+  // Se outra pessoa gravou antes, relê o estado e recalcula o lote: linhas já salvas por ela não entram de novo.
+  async function salvarLote(ids, nome, turno) {
+    if (!(await gravarPendencias())) return { erro: 'pendente' };
+    for (let tentativa = 0; tentativa < 4; tentativa++) {
+      let lido;
+      try { lido = await store.get(); }
+      catch (err) { return { erro: 'rede' }; }
+      takeServer(lido);
+      const ok = view.rascunhos.filter(r => ids.includes(r.id) && completa(r));
+      const ignoradas = ids.length - ok.length;
+      if (!ok.length) return { lote: [], ignoradas };
+      const lote = ok.map(c => ({
+        id: uid(), sku: c.sku, quantidade: Number(c.quantidade), warehouse: c.warehouse, origem: c.origem,
+        skuReingresso: c.skuReingresso, responsavel: nome, turno, motivo: c.motivo, data: c.data || todayISO()
+      }));
+      const limpar = view.rascunhos.filter(r => ids.includes(r.id) || vazia(r));
+      const ops = [
+        ...lote.map(rec => ({ t: 'add', c: 'baixas', rec })),
+        ...limpar.map(l => ({ t: 'del', c: 'rascunhos', id: l.id })),
+        { t: 'add', c: 'rascunhos', rec: novaLinha(lote[lote.length - 1]) }
+      ];
+      const next = applyOps(serverRoot, ops);
+      try {
+        const res = serverAt ? await store.set(next, serverAt) : await store.set(next);
+        serverRoot = next;
+        serverAt = res.updated_at || serverAt;
+        view = applyOps(serverRoot, pending);
+        renderSoon();
+        return { lote, ignoradas };
+      } catch (err) {
+        // conflito: outra pessoa gravou antes; relê o estado e recalcula o lote
+        if (err && err.error === 'state_conflict') continue;
+        // outra falha (rede): não dá para saber se gravou. Não tenta de novo aqui; quem clicar de novo relê o Grid antes
+        return { erro: 'rede' };
+      }
+    }
+    return { erro: 'conflito' };
+  }
+
   $('#massa-add').addEventListener('click', () => {
     const last = view.rascunhos[view.rascunhos.length - 1];
     const linha = novaLinha(last);
@@ -616,7 +659,7 @@
   });
   $('#massa-limpar').addEventListener('click', async () => {
     if (!view.rascunhos.length) return;
-    if (!await confirmar(`Apagar as ${view.rascunhos.length} linha(s) do rascunho?`, 'Apagar', true)) return;
+    if (!await confirmar(`Apagar as ${view.rascunhos.length} linha(s) do lançamento?`, 'Apagar', true)) return;
     commit(view.rascunhos.map(r => ({ t: 'del', c: 'rascunhos', id: r.id })));
   });
   $('#massa-salvar').addEventListener('click', async () => {
@@ -629,26 +672,28 @@
       return;
     }
     if (!ok.length) { await avisar('Nenhuma linha preenchida. Preencha SKU, quantidade, warehouse, endereço RQ e motivo.'); return; }
-    if (!view.responsaveis.length) { await avisar('Cadastre os responsáveis antes de salvar o lote.'); showTab('resp'); return; }
+    if (!view.responsaveis.length) { await avisar('Cadastre os responsáveis antes de salvar.'); showTab('resp'); return; }
     const nomes = view.responsaveis.slice().sort(byNome).map(r => r.nome);
     const escolhido = await escolher(`Quem é o responsável por este lote (${ok.length} baixa(s))?`, nomes.map(n => ({ value: n, label: n })), 'Salvar lote');
     if (!escolhido) return;
     const r = findResp(escolhido);
     const nome = r ? r.nome : escolhido;
     const turno = r ? r.turno : '';
-    const lote = ok.map(c => ({
-      id: uid(), sku: c.sku, quantidade: Number(c.quantidade), warehouse: c.warehouse, origem: c.origem,
-      skuReingresso: c.skuReingresso, responsavel: nome, turno, motivo: c.motivo, data: c.data || todayISO()
-    }));
-    const ultima = lote[lote.length - 1];
-    commit([
-      ...lote.map(rec => ({ t: 'add', c: 'baixas', rec })),
-      ...linhas.map(l => ({ t: 'del', c: 'rascunhos', id: l.id })),
-      { t: 'add', c: 'rascunhos', rec: novaLinha(ultima) }
-    ]);
+    const res = await salvarLote(ok.map(c => c.id), nome, turno);
+    if (res.erro) {
+      const msgs = {
+        pendente: 'Não foi possível gravar as alterações pendentes. Tente de novo em instantes.',
+        conflito: 'Outra pessoa está salvando ao mesmo tempo. Tente de novo.',
+        rede: 'Não foi possível confirmar o salvamento no Grid. Confira "Baixas salvas" antes de tentar de novo, para não lançar a mesma baixa duas vezes.'
+      };
+      await avisar(msgs[res.erro]);
+      return;
+    }
+    if (!res.lote.length) { await avisar('Essas linhas já foram salvas por outra pessoa ou deixaram de estar completas. A tela foi atualizada.'); return; }
     // cada salvamento gera uma planilha nova, com a mesma configuração
-    const p = await gerarPlanilha('lote', lote, [nome], slug(nome));
-    await lembreteModal(p, `${lote.length} baixa(s) salvas para ${nome}.`);
+    const p = await gerarPlanilha('lote', res.lote, [nome], slug(nome));
+    const extra = res.ignoradas ? ` ${res.ignoradas} linha(s) não entraram (já salvas por outra pessoa ou deixaram de estar completas).` : '';
+    await lembreteModal(p, `${res.lote.length} baixa(s) salvas para ${nome}.${extra}`);
   });
   massaEventos();
   function massaEventos() {
@@ -688,7 +733,7 @@
       const id = btn.closest('tr').dataset.id;
       const r = view.rascunhos.find(x => x.id === id);
       if (!r) return;
-      if (!vazia(r) && !await confirmar('Remover esta linha do lote?', 'Remover', true)) return;
+      if (!vazia(r) && !await confirmar('Remover esta linha do lançamento?', 'Remover', true)) return;
       commit([{ t: 'del', c: 'rascunhos', id }]);
     });
   }
@@ -729,7 +774,7 @@
         avisar('Já existe um responsável com esse nome.');
         return;
       }
-      // renomear também atualiza as baixas já lançadas com o nome antigo
+      // renomear também atualiza as baixas já salvas com o nome antigo
       const ops = [{ t: 'set', c: 'responsaveis', id, patch: { nome: v } }];
       view.baixas.filter(b => norm(b.responsavel) === norm(r.nome))
         .forEach(b => ops.push({ t: 'set', c: 'baixas', id: b.id, patch: { responsavel: v } }));
@@ -745,55 +790,11 @@
     const id = btn.closest('tr').dataset.id;
     const r = view.responsaveis.find(x => x.id === id);
     if (!r) return;
-    if (!await confirmar(`Remover ${r.nome} do cadastro? As baixas já lançadas com este nome são mantidas.`, 'Remover', true)) return;
+    if (!await confirmar(`Remover ${r.nome} do cadastro? As baixas já salvas com este nome são mantidas.`, 'Remover', true)) return;
     commit([{ t: 'del', c: 'responsaveis', id }]);
   });
 
-  // ---------- Baixas (lançamento único) ----------
-  const form = $('#form');
-  $('#responsavel').addEventListener('change', updateTurnoInfo);
-
-  form.addEventListener('submit', e => {
-    e.preventDefault();
-    const sku = $('#sku').value.trim().toUpperCase();
-    const qtd = parseInt($('#quantidade').value, 10);
-    const warehouse = $('#warehouse').value.trim().toUpperCase();
-    const origem = $('#origem').value.trim().toUpperCase();
-    const nome = $('#responsavel').value;
-    const motivo = document.querySelector('input[name=motivo]:checked')?.value || '';
-    if (!sku) { $('#sku').focus(); return; }
-    if (!(qtd > 0)) { $('#quantidade').focus(); return; }
-    if (!nome) {
-      if (!view.responsaveis.length) {
-        avisar('Cadastre os responsáveis na aba "Cadastro de responsáveis" antes de lançar baixas.').then(() => showTab('resp'));
-      } else {
-        $('#responsavel').focus();
-      }
-      return;
-    }
-    const falta = faltas({ sku, quantidade: qtd, warehouse, origem, motivo });
-    if (falta.length) { avisar('Falta preencher: ' + falta.join(', ') + '.'); return; }
-    const r = findResp(nome);
-    commit([{ t: 'add', c: 'baixas', rec: {
-      id: uid(),
-      sku,
-      quantidade: qtd,
-      warehouse,
-      origem,
-      skuReingresso: $('#skuReingresso').value.trim().toUpperCase(),
-      responsavel: r ? r.nome : nome,
-      turno: r ? r.turno : '',
-      motivo,
-      data: $('#data').value || todayISO()
-    } }]);
-    // warehouse, endereço e responsável continuam preenchidos; o que muda a cada lançamento é limpo
-    $('#sku').value = '';
-    $('#quantidade').value = '';
-    $('#skuReingresso').value = '';
-    document.querySelectorAll('input[name=motivo]').forEach(x => { x.checked = false; });
-    $('#sku').focus();
-  });
-
+  // ---------- Baixas salvas (edição direta na tabela) ----------
   $('#rows').addEventListener('change', e => {
     const inp = e.target.closest('[data-f]');
     if (!inp) return;
@@ -871,7 +872,7 @@
   $('#btn-export').addEventListener('click', async () => {
     const nomes = uniq([...view.responsaveis.map(r => r.nome), ...view.baixas.map(b => b.responsavel)]);
     if (!nomes.length) { await avisar('Não há responsáveis nem baixas para exportar.'); return; }
-    const escolha = await escolher('Exportar a planilha de:', [{ value: TODOS, label: 'Todos os responsáveis' }, ...nomes.map(n => ({ value: n, label: n }))], 'Exportar');
+    const escolha = await escolher('Gerar a planilha de:', [{ value: TODOS, label: 'Todos os responsáveis' }, ...nomes.map(n => ({ value: n, label: n }))], 'Gerar planilha');
     if (escolha === null) return;
     const lista = view.baixas.filter(matches).filter(b => escolha === TODOS || norm(b.responsavel) === norm(escolha));
     if (!lista.length) { await avisar('Nenhuma baixa corresponde aos filtros para esta escolha.'); return; }
@@ -881,9 +882,9 @@
       if (!ok) return;
     }
     const nomesLista = escolha === TODOS ? uniq(lista.map(b => b.responsavel)) : [escolha];
-    // cada exportação gera uma planilha nova, com a mesma configuração
+    // cada geração cria uma planilha nova, com a mesma configuração
     const p = await gerarPlanilha('export', lista, nomesLista, escolha === TODOS ? 'todos' : slug(escolha));
-    await lembreteModal(p, `Exportação com ${lista.length} baixa(s).`);
+    await lembreteModal(p, `Planilha com ${lista.length} baixa(s).`);
   });
 
   $('#btn-csv').addEventListener('click', () => {
@@ -891,12 +892,12 @@
     const head = ['SKU', 'QUANTIDADE', 'WAREHOUSE', 'ENDEREÇO RQ', 'MOTIVO', 'SKU REINGRESSO', 'RESPONSÁVEL', 'TURNO', 'DATA'];
     const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const lines = [head.map(cell).join(';')].concat(
-      list.map(b => [b.sku, b.quantidade, b.warehouse, b.origem, MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].label : '', b.skuReingresso, b.responsavel, turnoOf(b), fmtBR(b.data)].map(cell).join(';'))
+      list.map(b => [b.sku, b.quantidade, b.warehouse, b.origem, MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].nome : '', b.skuReingresso, b.responsavel, turnoOf(b), fmtBR(b.data)].map(cell).join(';'))
     );
     baixar(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `controle-rq-${todayISO()}.csv`);
   });
 
-  // backup no mesmo formato do JSON base (inclui os rascunhos)
+  // backup no mesmo formato do JSON base (inclui rascunho e planilhas)
   $('#btn-backup').addEventListener('click', () => {
     const data = { teamName: view.teamName, responsaveis: view.responsaveis, baixas: view.baixas, rascunhos: view.rascunhos, planilhas: view.planilhas };
     baixar(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `controle-rq-backup-${todayISO()}.json`);
@@ -926,10 +927,11 @@
 
   $('#btn-limpar').addEventListener('click', async () => {
     if (!view.baixas.length) return;
-    if (!await confirmar(`Apagar TODAS as ${view.baixas.length} baixas deste controle? O cadastro de responsáveis é mantido.`, 'Apagar tudo', true)) return;
+    if (!await confirmar(`Apagar TODAS as ${view.baixas.length} baixas salvas? O cadastro de responsáveis é mantido.`, 'Apagar tudo', true)) return;
     commit(view.baixas.map(b => ({ t: 'del', c: 'baixas', id: b.id })));
   });
 
+  // ---------- planilhas geradas: marcar como compartilhada ----------
   $('#planilhas-list').addEventListener('click', async e => {
     const btn = e.target.closest('[data-pl-toggle]');
     if (!btn) return;
@@ -945,12 +947,10 @@
     }
   });
   $('#lembrete-ver').addEventListener('click', () => {
-    showTab('massa', false);
     $('#planilhas-card')?.scrollIntoView({ behavior: 'smooth' });
   });
 
   // ---------- início ----------
-  $('#data').value = todayISO();
   setInterval(poll, POLL_MS);
   document.addEventListener('visibilitychange', () => { if (document.hidden) flushNow(); else poll(); });
   window.addEventListener('pagehide', flushNow);
