@@ -258,7 +258,7 @@
   function showTab(t, focus = true) {
     document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
     $('#tab-baixas').hidden = t !== 'baixas';
-    $('#tab-turno').hidden = t !== 'turno';
+    $('#tab-relatorio').hidden = t !== 'relatorio';
     $('#tab-resp').hidden = t !== 'resp';
     if (focus) { const alvo = { baixas: '#massa-add', resp: '#r-nome' }[t]; $(alvo)?.focus(); }
   }
@@ -278,7 +278,7 @@
     renderResp();
     renderBaixas();
     renderMassa();
-    renderPainelTurno();
+    renderRelatorio();
   }
 
   function setOptions(sel, html, value) {
@@ -400,12 +400,37 @@
     $('#massa-stats').textContent = `${linhas.length} ${linhas.length === 1 ? 'linha' : 'linhas'} · ${ok} completa${ok === 1 ? '' : 's'}`;
   }
 
-  // ---------- controle por turno: o painel completo de cada turno (período e turno escolhidos na própria aba) ----------
-  const P = { de: '', ate: '', turno: '' };
-  const CURTO = { saldo: 'saldo', sku: 'SKU inv.', cx: 'CX' };
-  const casaPainel = b => (!P.de || b.data >= P.de) && (!P.ate || b.data <= P.ate);
-  function renderPainelTurno() {
-    const lista = view.baixas.filter(casaPainel);
+  // ---------- relatório: quanto cada responsável fez, origem com mais reingressos e resumo por turno ----------
+  const R = { de: '', ate: '', turno: '' };
+  const ABERTOS = new Set();   // responsáveis com o detalhe aberto (mantido entre os redesenhos)
+  const ORIGEM_VAZIA = '(sem origem)';
+  const casaRelatorio = b => (!R.de || b.data >= R.de) && (!R.ate || b.data <= R.ate) && (!R.turno || turnoOf(b) === R.turno);
+  const ordemTurno = t => (TURNOS.indexOf(t) >= 0 ? TURNOS.indexOf(t) : TURNOS.length);
+  const numPt = (v, casas) => Number(v).toLocaleString('pt-BR', { minimumFractionDigits: casas, maximumFractionDigits: casas });
+  const pctDe = (parte, total) => (total ? Math.round(parte / total * 100) : 0);
+  // origens de reingresso: reingressos (baixas), unidades, responsáveis e SKUs distintos; a de mais unidades vem primeiro
+  function rankingOrigens(lista) {
+    const m = new Map();
+    lista.forEach(b => {
+      const txt = String(b.origemReingresso || '').trim();
+      const k = norm(txt);
+      if (!m.has(k)) m.set(k, { origem: txt || ORIGEM_VAZIA, vazia: !txt, n: 0, un: 0, resp: new Set(), skus: new Set() });
+      const g = m.get(k);
+      g.n += 1;
+      g.un += Number(b.quantidade) || 0;
+      g.resp.add(norm(b.responsavel));
+      g.skus.add(norm(b.sku));
+    });
+    return [...m.values()]
+      .map(g => ({ origem: g.origem, vazia: g.vazia, n: g.n, un: g.un, resp: g.resp.size, skus: g.skus.size }))
+      .sort((a, b) => (a.vazia - b.vazia) || (b.un - a.un) || (b.n - a.n) || a.origem.localeCompare(b.origem, 'pt-BR'));
+  }
+  function renderRelatorio() {
+    const lista = view.baixas.filter(casaRelatorio);
+    const soma = (arr, f) => arr.reduce((s, x) => s + f(x), 0);
+    const unidades = b => Number(b.quantidade) || 0;
+    const totN = lista.length;
+    const totUn = soma(lista, unidades);
     // quem entra: cadastrados (no turno deles, mesmo sem baixa) e quem aparece nas baixas sem cadastro (no turno da baixa)
     const pessoas = new Map();
     view.responsaveis.forEach(r => pessoas.set(norm(r.nome), { nome: r.nome, cargo: r.cargo || '', turno: TURNOS.includes(r.turno) ? r.turno : '' }));
@@ -413,87 +438,97 @@
       const k = norm(b.responsavel);
       if (k && !pessoas.has(k)) pessoas.set(k, { nome: b.responsavel, cargo: '', turno: TURNOS.includes(b.turno) ? b.turno : '' });
     });
-    if (!pessoas.size) {
-      $('#pt-turnos').innerHTML = '<p class="empty">Cadastre responsáveis e lance baixas para ver o painel por turno.</p>';
-      $('#pt-baixas').textContent = '0 baixas';
-      $('#pt-un').textContent = '0 unidades';
-      $('#pt-resp').textContent = '0 responsáveis com baixa';
-      return;
-    }
-    const dados = [...pessoas.values()].map(p => {
-      const mine = lista.filter(b => norm(b.responsavel) === norm(p.nome));
-      const datas = mine.map(b => b.data).filter(Boolean).sort();
-      return {
-        ...p,
-        n: mine.length,
-        un: mine.reduce((s, b) => s + (Number(b.quantidade) || 0), 0),
-        saldo: mine.filter(b => b.motivo === 'saldo').length,
-        sku: mine.filter(b => b.motivo === 'sku').length,
-        cx: mine.filter(b => b.motivo === 'cx').length,
-        ultima: datas[datas.length - 1] || '',
-        itens: mine.slice().sort((a, b) => String(b.data).localeCompare(String(a.data)) || String(a.sku).localeCompare(String(b.sku)))
-      };
-    });
-    const soma = (lst, campo) => lst.reduce((s, p) => s + p[campo], 0);
-    const grupos = (P.turno ? [P.turno] : [...TURNOS, ''])
-      .map(t => ({ t, linhas: dados.filter(p => p.turno === t).sort((a, b) => b.un - a.un || a.nome.localeCompare(b.nome, 'pt-BR')) }))
-      .filter(g => g.linhas.length || TURNOS.includes(g.t));
-    $('#pt-turnos').innerHTML = grupos.map(g => {
-      const tot = { n: soma(g.linhas, 'n'), un: soma(g.linhas, 'un'), saldo: soma(g.linhas, 'saldo'), sku: soma(g.linhas, 'sku'), cx: soma(g.linhas, 'cx') };
-      const com = g.linhas.filter(p => p.n > 0).length;
-      const maxUn = Math.max(1, ...g.linhas.map(p => p.un));
-      const corpo = g.linhas.length ? g.linhas.map(p => `
-        <tr class="${p.n ? '' : 'zero'}">
+    const pes = [...pessoas.values()]
+      .filter(p => !R.turno || p.turno === R.turno)
+      .map(p => {
+        const mine = lista.filter(b => norm(b.responsavel) === norm(p.nome));
+        const datas = mine.map(b => b.data).filter(Boolean).sort();
+        return {
+          ...p,
+          n: mine.length,
+          un: soma(mine, unidades),
+          saldo: mine.filter(b => b.motivo === 'saldo').length,
+          sku: mine.filter(b => b.motivo === 'sku').length,
+          cx: mine.filter(b => b.motivo === 'cx').length,
+          ultima: datas[datas.length - 1] || '',
+          itens: mine.slice().sort((a, b) => String(b.data).localeCompare(String(a.data)) || String(a.sku).localeCompare(String(b.sku)))
+        };
+      })
+      .sort((a, b) => b.un - a.un || ordemTurno(a.turno) - ordemTurno(b.turno) || a.nome.localeCompare(b.nome, 'pt-BR'));
+    let pos = 0;
+    pes.forEach(p => { p.pos = p.n ? ++pos : null; });
+    const detalhe = p => p.itens.map(b => `<div>${esc(b.sku)} · ${esc(b.quantidade)} un. · ${esc(MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].label : 'sem motivo')} · origem: ${esc(String(b.origemReingresso || '').trim() || '—')} · SKU reingresso: ${esc(b.skuReingresso || '—')} · ${esc(b.data ? fmtBR(b.data) : '—')}</div>`).join('');
+    const linhaResp = p => {
+      const pct = pctDe(p.un, totUn);
+      const aberto = p.n > 0 && ABERTOS.has(norm(p.nome));
+      return `
+        <tr class="resumo${p.n ? '' : ' zero'}${aberto ? ' aberto' : ''}" data-nome="${esc(p.nome)}">
+          <td class="idx">${p.pos || '—'}</td>
           <td><strong>${esc(p.nome)}</strong></td>
+          <td>${turnoHTML(p.turno)}</td>
           <td>${esc(p.cargo || '—')}</td>
           <td class="num">${p.n}</td>
-          <td><div class="barra"><span class="bar-track"><i data-pct="${Math.round(p.un / maxUn * 100)}"></i></span><b>${p.un}</b></div></td>
+          <td><div class="barra"><span class="bar-track"><i data-pct="${pct}"></i></span><b>${p.un}</b></div></td>
+          <td class="num">${p.n ? pct + '%' : '—'}</td>
+          <td class="num">${p.n ? numPt(p.un / p.n, 1) : '—'}</td>
           <td class="num">${p.saldo}</td>
           <td class="num">${p.sku}</td>
           <td class="num">${p.cx}</td>
-          <td class="itens">${p.itens.length ? p.itens.map(b => `<span class="chip" title="${esc(MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].label : 'sem motivo')} · ${esc(fmtBR(b.data))}">${esc(b.sku)} · ${esc(b.quantidade)} · ${esc(CURTO[b.motivo] || 'sem motivo')}</span>`).join('') : '<span class="hint-inline">nenhuma baixa</span>'}</td>
           <td>${p.ultima ? esc(fmtBR(p.ultima)) : '—'}</td>
-        </tr>`).join('') + `
+        </tr>${p.n ? `
+        <tr class="det"${aberto ? '' : ' hidden'}><td colspan="12">${detalhe(p)}</td></tr>` : ''}`;
+    };
+    $('#rel-resp-rows').innerHTML = pes.length ? pes.map(linhaResp).join('') + `
         <tr class="total">
-          <td>Total ${esc(g.t || 'sem turno')}</td><td></td>
-          <td class="num">${tot.n}</td>
-          <td><b>${tot.un}</b> un.</td>
-          <td class="num">${tot.saldo}</td>
-          <td class="num">${tot.sku}</td>
-          <td class="num">${tot.cx}</td>
-          <td colspan="2">${com} de ${g.linhas.length} com baixa</td>
-        </tr>`
-        : '<tr><td colspan="9" class="empty">Nenhum responsável neste turno.</td></tr>';
+          <td></td><td>Total</td><td></td><td></td>
+          <td class="num">${totN}</td>
+          <td><b>${totUn}</b> un.</td>
+          <td class="num">${totUn ? '100%' : '—'}</td>
+          <td class="num">${totN ? numPt(totUn / totN, 1) : '—'}</td>
+          <td class="num">${lista.filter(b => b.motivo === 'saldo').length}</td>
+          <td class="num">${lista.filter(b => b.motivo === 'sku').length}</td>
+          <td class="num">${lista.filter(b => b.motivo === 'cx').length}</td>
+          <td></td>
+        </tr>` : '<tr><td colspan="12" class="empty">Nenhum responsável com os filtros atuais.</td></tr>';
+    $('#rel-resp-rows').querySelectorAll('[data-pct]').forEach(el => { el.style.width = el.dataset.pct + '%'; });
+    // origem de reingresso com mais reingressos
+    const origens = rankingOrigens(lista);
+    const lider = origens.find(g => !g.vazia && g.n > 0);
+    let posO = 0;
+    $('#rel-origem-rows').innerHTML = origens.length ? origens.map(g => `
+        <tr class="${lider && g === lider ? 'top' : ''}${g.vazia ? ' zero' : ''}">
+          <td class="idx">${g.vazia ? '—' : ++posO}</td>
+          <td><strong>${esc(g.origem)}</strong></td>
+          <td class="num">${g.n}</td>
+          <td class="num">${g.un}</td>
+          <td class="num">${pctDe(g.un, totUn)}%</td>
+          <td class="num">${g.resp}</td>
+          <td class="num">${g.skus}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="7" class="empty">Nenhuma baixa com os filtros atuais.</td></tr>';
+    // resumo por turno (com a origem líder de cada turno)
+    const chaves = R.turno ? [R.turno] : [...TURNOS, ''];
+    $('#rel-turno-rows').innerHTML = chaves.map(t => {
+      const lt = lista.filter(b => turnoOf(b) === t);
+      if (!TURNOS.includes(t) && !lt.length) return '';
+      const un = soma(lt, unidades);
+      const resp = new Set(lt.map(b => norm(b.responsavel)).filter(Boolean)).size;
+      const l = rankingOrigens(lt).find(g => !g.vazia && g.n > 0);
       return `
-        <section class="card">
-          <div class="card-head">
-            ${turnoHTML(g.t)}
-            <h2>${g.t ? 'Turno ' + esc(g.t) : 'Sem turno'}</h2>
-            <span class="pill">${tot.n} ${tot.n === 1 ? 'baixa' : 'baixas'}</span>
-            <span class="pill">${tot.un} ${tot.un === 1 ? 'unidade' : 'unidades'}</span>
-            <span class="pill y">${com} de ${g.linhas.length} com baixa</span>
-          </div>
-          <div class="table-wrap free">
-            <table class="controle">
-              <colgroup>
-                <col style="width:14%"><col style="width:9%"><col style="width:6%"><col style="width:13%"><col style="width:6%"><col style="width:7%"><col style="width:5%"><col style="width:31%"><col style="width:9%">
-              </colgroup>
-              <thead>
-                <tr><th>Responsável</th><th>Cargo</th><th>Baixas</th><th>Unidades</th><th>Saldo</th><th>SKU inv.</th><th>CX</th><th>Baixas solicitadas (SKU · qtd · motivo)</th><th>Última</th></tr>
-              </thead>
-              <tbody>${corpo}</tbody>
-            </table>
-          </div>
-        </section>`;
+        <tr>
+          <td>${turnoHTML(t)}</td>
+          <td class="num">${lt.length}</td>
+          <td class="num">${un}</td>
+          <td class="num">${pctDe(un, totUn)}%</td>
+          <td class="num">${resp}</td>
+          <td>${esc(l ? l.origem : '—')}</td>
+        </tr>`;
     }).join('');
-    $('#pt-turnos').querySelectorAll('[data-pct]').forEach(el => { el.style.width = el.dataset.pct + '%'; });
-    const todas = grupos.flatMap(g => g.linhas);
-    const nTot = soma(todas, 'n');
-    const unTot = soma(todas, 'un');
-    const comTot = todas.filter(p => p.n > 0).length;
-    $('#pt-baixas').textContent = `${nTot} ${nTot === 1 ? 'baixa' : 'baixas'}`;
-    $('#pt-un').textContent = `${unTot} ${unTot === 1 ? 'unidade' : 'unidades'}`;
-    $('#pt-resp').textContent = `${comTot} ${comTot === 1 ? 'responsável' : 'responsáveis'} com baixa`;
+    const comBaixa = pes.filter(p => p.n > 0).length;
+    $('#rel-baixas').textContent = `${totN} ${totN === 1 ? 'baixa' : 'baixas'}`;
+    $('#rel-un').textContent = `${totUn} ${totUn === 1 ? 'unidade' : 'unidades'}`;
+    $('#rel-resp').textContent = `${comBaixa} ${comBaixa === 1 ? 'responsável' : 'responsáveis'} com baixa`;
+    $('#rel-origem').textContent = lider ? `Origem com mais reingressos: ${lider.origem} (${lider.un} un.)` : 'Origem com mais reingressos: —';
   }
 
   // ---------- Salvar lote ----------
@@ -786,22 +821,33 @@
     commit(view.baixas.map(b => ({ t: 'del', c: 'baixas', id: b.id })));
   });
 
-  // ---------- controle por turno: filtros próprios (período e turno), independentes da lista de baixas ----------
-  function lerPainel() {
-    P.de = $('#pt-de').value;
-    P.ate = $('#pt-ate').value;
-    P.turno = $('#pt-turno').value;
-    renderPainelTurno();
+  // ---------- relatório: filtros próprios (período e turno) e detalhe por responsável ----------
+  function lerRelatorio() {
+    R.de = $('#rel-de').value;
+    R.ate = $('#rel-ate').value;
+    R.turno = $('#rel-turno').value;
+    renderRelatorio();
   }
-  ['#pt-de', '#pt-ate', '#pt-turno'].forEach(id => {
-    $(id).addEventListener('input', lerPainel);
-    $(id).addEventListener('change', lerPainel);
+  ['#rel-de', '#rel-ate', '#rel-turno'].forEach(id => {
+    $(id).addEventListener('input', lerRelatorio);
+    $(id).addEventListener('change', lerRelatorio);
   });
-  $('#pt-limpar').addEventListener('click', () => {
-    $('#pt-de').value = '';
-    $('#pt-ate').value = '';
-    $('#pt-turno').value = '';
-    lerPainel();
+  $('#rel-limpar').addEventListener('click', () => {
+    $('#rel-de').value = '';
+    $('#rel-ate').value = '';
+    $('#rel-turno').value = '';
+    lerRelatorio();
+  });
+  // clique num responsável abre ou fecha o detalhe das baixas dele
+  $('#rel-resp-rows').addEventListener('click', e => {
+    const tr = e.target.closest('tr.resumo');
+    const det = tr && tr.nextElementSibling;
+    if (!det || !det.classList.contains('det')) return;
+    const k = norm(tr.dataset.nome);
+    if (ABERTOS.has(k)) ABERTOS.delete(k); else ABERTOS.add(k);
+    const aberto = ABERTOS.has(k);
+    tr.classList.toggle('aberto', aberto);
+    det.hidden = !aberto;
   });
 
   // ---------- início ----------

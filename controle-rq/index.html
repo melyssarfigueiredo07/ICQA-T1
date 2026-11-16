@@ -19,7 +19,7 @@
 <aside class="side">
 <nav class="tabs">
   <button class="tab active" data-tab="baixas" type="button">Baixas</button>
-  <button class="tab" data-tab="turno" type="button">Controle por turno</button>
+  <button class="tab" data-tab="relatorio" type="button">Relatório</button>
   <button class="tab" data-tab="resp" type="button">Cadastro de responsáveis</button>
 </nav>
 </aside>
@@ -94,31 +94,84 @@
 
   </section>
 
-  <!-- ===================== ABA: CONTROLE POR TURNO ===================== -->
-  <section id="tab-turno" hidden>
+  <!-- ===================== ABA: RELATÓRIO ===================== -->
+  <section id="tab-relatorio" hidden>
 
     <section class="card">
       <div class="card-head">
-        <h2>Controle por turno</h2>
-        <span class="pill" id="pt-baixas">0 baixas</span>
-        <span class="pill" id="pt-un">0 unidades</span>
-        <span class="pill y" id="pt-resp">0 responsáveis com baixa</span>
-        <span class="hint-inline">Quem solicitou o quê, em cada turno · estes filtros são independentes da lista de baixas</span>
+        <h2>Relatório</h2>
+        <span class="pill" id="rel-baixas">0 baixas</span>
+        <span class="pill" id="rel-un">0 unidades</span>
+        <span class="pill y" id="rel-resp">0 responsáveis com baixa</span>
+        <span class="pill" id="rel-origem">Origem com mais reingressos: —</span>
       </div>
-      <div class="filters pt">
-        <label><span>Data de</span><input id="pt-de" type="date"></label>
-        <label><span>Data até</span><input id="pt-ate" type="date"></label>
+      <div class="filters rel">
+        <label><span>Data de</span><input id="rel-de" type="date"></label>
+        <label><span>Data até</span><input id="rel-ate" type="date"></label>
         <label><span>Turno</span>
-          <select id="pt-turno">
+          <select id="rel-turno">
             <option value="">Todos</option>
             <option>T1</option><option>T2</option><option>T3</option><option>T4</option>
           </select>
         </label>
-        <button class="btn-ghost" id="pt-limpar" type="button">Limpar filtros</button>
+        <button class="btn-ghost" id="rel-limpar" type="button">Limpar filtros</button>
       </div>
     </section>
 
-    <div id="pt-turnos"></div>
+    <section class="card">
+      <div class="card-head">
+        <h2>Quanto cada responsável fez</h2>
+        <span class="hint-inline">Conforme as baixas preenchidas · ordenado por unidades · clique num responsável para ver cada baixa</span>
+      </div>
+      <div class="table-wrap free">
+        <table class="controle">
+          <colgroup>
+            <col style="width:3%"><col style="width:16%"><col style="width:6%"><col style="width:9%"><col style="width:6%"><col style="width:15%"><col style="width:7%"><col style="width:8%"><col style="width:6%"><col style="width:7%"><col style="width:5%"><col style="width:12%">
+          </colgroup>
+          <thead>
+            <tr><th>#</th><th>Responsável</th><th>Turno</th><th>Cargo</th><th>Baixas</th><th>Unidades</th><th>% do total</th><th>Média por baixa</th><th>Saldo</th><th>SKU inv.</th><th>CX</th><th>Última</th></tr>
+          </thead>
+          <tbody id="rel-resp-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <div class="grid-rel">
+      <section class="card">
+        <div class="card-head">
+          <h2>Origem de reingresso</h2>
+          <span class="hint-inline">Reingressos = baixas com esta origem · a de mais unidades fica em destaque</span>
+        </div>
+        <div class="table-wrap">
+          <table class="controle">
+            <colgroup>
+              <col style="width:5%"><col style="width:25%"><col style="width:15%"><col style="width:12%"><col style="width:11%"><col style="width:17%"><col style="width:15%">
+            </colgroup>
+            <thead>
+              <tr><th>#</th><th>Origem</th><th>Reingressos</th><th>Unidades</th><th>% unid.</th><th>Responsáveis</th><th>SKUs</th></tr>
+            </thead>
+            <tbody id="rel-origem-rows"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-head">
+          <h2>Resumo por turno</h2>
+        </div>
+        <div class="table-wrap">
+          <table class="controle">
+            <colgroup>
+              <col style="width:13%"><col style="width:11%"><col style="width:13%"><col style="width:12%"><col style="width:18%"><col style="width:33%">
+            </colgroup>
+            <thead>
+              <tr><th>Turno</th><th>Baixas</th><th>Unidades</th><th>% unid.</th><th>Responsáveis</th><th>Origem com mais reingressos</th></tr>
+            </thead>
+            <tbody id="rel-turno-rows"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
   </section>
 
   <!-- ===================== ABA: RESPONSÁVEIS ===================== -->
