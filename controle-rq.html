@@ -17,6 +17,11 @@
   header{background:var(--yellow);padding:14px 24px;display:flex;align-items:center;gap:14px}
   .logo{font-weight:800;font-size:20px;color:var(--navy);letter-spacing:-.5px}
   .logo span{color:var(--blue)}
+  .sync{margin-left:auto;font-size:12px;font-weight:700;color:var(--navy);background:rgba(255,255,255,.6);padding:5px 12px;border-radius:999px}
+  .sync.ok{color:#00733B}
+  .sync.warn{color:#8A5A00}
+  .sync.err{color:var(--danger)}
+  .sync.busy{color:var(--blue-d)}
   header h1{margin:0;font-size:18px;font-weight:700;color:var(--navy);padding-left:14px;border-left:2px solid var(--navy)}
 
   nav.tabs{background:#fff;border-bottom:1px solid var(--border)}
@@ -94,6 +99,7 @@
 <header>
   <div class="logo">mercado<span>livre</span></div>
   <h1>Controle de RQ</h1>
+  <span id="sync" class="sync"></span>
 </header>
 
 <nav class="tabs"><div>
@@ -238,6 +244,9 @@
   const TURNOS   = ['Manhã','Tarde','Noite'];
   const CARGOS   = ['Operador','Conferente','Líder','Supervisor','Coordenador','Gerente'];
   const TURNO_CLS = {'Manhã':'t-manha','Tarde':'t-tarde','Noite':'t-noite'};
+  // URL do Web App (Google Apps Script, ver apps-script/Code.gs) que guarda os dados compartilhados.
+  // Vazio = modo local: cada navegador guarda os próprios dados.
+  const SHARED_URL = '';
 
   const $ = s => document.querySelector(s);
   let baixas = load(K_BAIXAS, []);
@@ -247,8 +256,103 @@
 
   // ---------- utilidades ----------
   function load(k, d){ try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch(e){ return d; } }
-  function saveB(){ localStorage.setItem(K_BAIXAS, JSON.stringify(baixas)); }
-  function saveR(){ localStorage.setItem(K_RESP, JSON.stringify(resp)); }
+  // ---------- sincronização compartilhada ----------
+  let version = 0, seq = 0, savedSeq = 0, inFlight = false, again = false, pushTimer = null, retryTimer = null;
+  const dirty = () => seq !== savedSeq;
+  const hhmm = () => new Date().toTimeString().slice(0,5);
+  function setStatus(txt, cls){ const el = $('#sync'); el.textContent = txt; el.className = 'sync ' + (cls || ''); }
+  function refreshAll(){ refreshSelects(); renderResp(); renderBaixas(); }
+
+  function normalize(d){
+    baixas = (d.baixas || []).map(b => ({...b, quantidade: Number(b.quantidade) || 0}));
+    resp   = d.resp || [];
+    localStorage.setItem(K_BAIXAS, JSON.stringify(baixas));
+    localStorage.setItem(K_RESP, JSON.stringify(resp));
+  }
+
+  function saveB(){ localStorage.setItem(K_BAIXAS, JSON.stringify(baixas)); queuePush(); }
+  function saveR(){ localStorage.setItem(K_RESP, JSON.stringify(resp)); queuePush(); }
+
+  function queuePush(){
+    if(!SHARED_URL) return;
+    seq++;
+    setStatus('Salvando…', 'busy');
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(push, 400);
+  }
+
+  async function push(){
+    if(inFlight){ again = true; return; }
+    inFlight = true;
+    const mySeq = seq;
+    try{
+      const r = await fetch(SHARED_URL, {
+        method: 'POST',
+        headers: {'Content-Type': 'text/plain;charset=utf-8'},  // evita preflight de CORS
+        body: JSON.stringify({baseVersion: version, baixas, resp})
+      });
+      const d = await r.json();
+      if(d.conflict){
+        // mantém o que é novo neste navegador (ids ainda não existentes no servidor) e reenvia
+        const novasB = baixas.filter(b => !(d.baixas || []).some(s => s.id === b.id));
+        const novasR = resp.filter(r => !(d.resp || []).some(s => s.id === r.id));
+        normalize(d);
+        baixas = [...novasB, ...baixas];
+        resp   = [...novasR, ...resp].sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'));
+        version = d.version;
+        localStorage.setItem(K_BAIXAS, JSON.stringify(baixas));
+        localStorage.setItem(K_RESP, JSON.stringify(resp));
+        refreshAll();
+        seq++;                       // ainda há o que enviar
+        queuePush();
+        alert('Outra pessoa salvou ao mesmo tempo. Suas novas baixas e cadastros foram mantidos e reenviados. Se uma linha existente mudou, vale a versão mais recente.');
+      } else {
+        version = d.version;
+        savedSeq = mySeq;
+        if(!dirty()) setStatus(`Sincronizado · ${hhmm()}`, 'ok');
+      }
+    }catch(err){
+      setStatus('Sem conexão — salvo neste navegador, reenviando…', 'err');
+      clearTimeout(retryTimer);
+      retryTimer = setTimeout(push, 5000);
+    }finally{
+      inFlight = false;
+      if(again){ again = false; push(); }
+    }
+  }
+
+  async function pullInitial(){
+    if(!SHARED_URL){ setStatus('Modo local', 'warn'); return; }
+    try{
+      const r = await fetch(SHARED_URL, {cache: 'no-store'});
+      const d = await r.json();
+      version = d.version;
+      normalize(d);
+      setStatus(`Sincronizado · ${hhmm()}`, 'ok');
+    }catch(err){
+      setStatus('Sem conexão — usando cópia local', 'err');
+    }
+  }
+
+  // busca atualizações feitas por outras pessoas
+  async function poll(){
+    if(inFlight || dirty()) return;
+    const ae = document.activeElement;
+    if(ae && ae.closest && ae.closest('#rows,#resp-rows')) return; // não atrapalha uma edição na grid
+    try{
+      const r = await fetch(SHARED_URL, {cache: 'no-store'});
+      const d = await r.json();
+      if(d.version !== version){
+        normalize(d); version = d.version;
+        refreshAll();
+        setStatus(`Atualizado · ${hhmm()}`, 'ok');
+      } else {
+        setStatus(`Sincronizado · ${hhmm()}`, 'ok');
+      }
+    }catch(err){
+      setStatus('Sem conexão — exibindo a última cópia', 'err');
+    }
+  }
   function saveS(){ localStorage.setItem(K_STICKY, JSON.stringify(sticky)); }
   const norm = s => String(s ?? '').trim().toLowerCase();
   const uid  = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -589,14 +693,18 @@
   });
 
   // ---------- início ----------
-  $('#data').value = todayISO();
-  $('#origem').value = sticky.origem || '';
-  refreshSelects();
-  if(sticky.responsavel && findResp(sticky.responsavel)) $('#responsavel').value = sticky.responsavel;
-  updateTurnoInfo();
-  renderResp();
-  renderBaixas();
-  showTab('baixas', false);
+  (async () => {
+    await pullInitial();
+    $('#data').value = todayISO();
+    $('#origem').value = sticky.origem || '';
+    refreshSelects();
+    if(sticky.responsavel && findResp(sticky.responsavel)) $('#responsavel').value = sticky.responsavel;
+    updateTurnoInfo();
+    renderResp();
+    renderBaixas();
+    showTab('baixas', false);
+    if(SHARED_URL) setInterval(poll, 5000);
+  })();
 })();
 </script>
 </body>
