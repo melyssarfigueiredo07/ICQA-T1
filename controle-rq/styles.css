@@ -49,9 +49,9 @@ button{font:inherit;font-weight:700;cursor:pointer;border:0;border-radius:6px;pa
 .hint{margin-top:12px;color:var(--muted);font-size:12px}
 kbd{background:#F0F0F0;border:1px solid #CCC;border-radius:4px;padding:1px 5px;font-size:11px;font-family:inherit}
 
-.form-baixa{display:grid;grid-template-columns:1fr .8fr 1fr 1.3fr 1.1fr 1.3fr .9fr auto;gap:10px;align-items:end}
+.form-baixa{display:grid;gap:12px 10px;align-items:end}
 .form-resp{display:grid;grid-template-columns:2fr 1fr 2fr auto;gap:10px;align-items:end}
-.turno-info{font-size:12px;color:var(--navy);font-weight:700;text-transform:none;letter-spacing:0;min-height:14px}
+.turno-info{font-size:11px;color:var(--navy);font-weight:700;text-transform:none;letter-spacing:0;margin-left:6px}
 
 .motivos{border:1px solid #DDD;border-radius:6px;padding:10px 14px 12px;margin:14px 0 0;display:flex;gap:28px;flex-wrap:wrap;align-items:center}
 .motivos legend{font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;padding:0 6px}
@@ -101,6 +101,19 @@ td.idx{color:var(--muted);text-align:center;width:44px}
 .modal .acts{display:flex;gap:10px;justify-content:flex-end}
 
 input[type=radio]{width:16px;height:16px;padding:0;margin:0;accent-color:var(--blue);cursor:pointer;flex:none}
+
+/* formulários alinhados: todo rótulo tem a mesma altura e todo campo e botão tem 38px */
+.lbl{display:block;height:14px;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.form-baixa label,.form-resp label{gap:6px}
+.form-baixa input,.form-baixa select,.form-resp input,.form-resp select,.form-baixa .btn-add,.form-resp .btn-add{height:38px}
+@media (min-width:1181px){
+  .form-baixa{grid-template-columns:1fr .75fr .95fr 1.6fr 1.15fr 1.45fr .95fr auto}
+  .form-baixa .btn-add{width:auto}
+}
+@media (max-width:1180px){
+  .form-baixa{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .form-baixa .btn-add{width:100%}
+}
 
 /* lembrete de compartilhamento das planilhas (aparece enquanto houver planilha pendente) */
 .lembrete{background:var(--yellow);color:var(--navy);padding:10px 24px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}

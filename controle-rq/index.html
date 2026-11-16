@@ -34,26 +34,25 @@
     <section class="card">
       <h2>Nova solicitação de baixa</h2>
       <form id="form" class="form-baixa" autocomplete="off">
-        <label>SKU
+        <label><span class="lbl">SKU</span>
           <input id="sku" name="sku" class="sku" placeholder="Ex.: MLB123" required autofocus>
         </label>
-        <label>Quantidade
+        <label><span class="lbl">Quantidade</span>
           <input id="quantidade" name="quantidade" type="number" min="1" step="1" placeholder="0" required>
         </label>
-        <label>Warehouse
+        <label><span class="lbl">Warehouse</span>
           <input id="warehouse" name="warehouse" class="sku" list="dl-warehouse" placeholder="Ex.: BRRJ02" required>
         </label>
-        <label>Endereço RQ
+        <label><span class="lbl">Endereço RQ</span>
           <input id="origem" name="origem" class="sku" list="dl-origem" placeholder="Ex.: RQ-0-005-000-00-00" required>
         </label>
-        <label>SKU Reingresso
+        <label><span class="lbl">SKU Reingresso</span>
           <input id="skuReingresso" name="skuReingresso" class="sku" placeholder="Opcional">
         </label>
-        <label>Responsável
+        <label><span class="lbl">Responsável<span id="turno-info" class="turno-info"></span></span>
           <select id="responsavel" name="responsavel" required></select>
-          <span id="turno-info" class="turno-info"></span>
         </label>
-        <label>Data
+        <label><span class="lbl">Data</span>
           <input id="data" name="data" type="date" required>
         </label>
         <button type="submit" class="btn-add">+ Adicionar</button>
@@ -173,13 +172,13 @@
     <section class="card">
       <h2>Cadastrar responsável</h2>
       <form id="formResp" class="form-resp" autocomplete="off">
-        <label>Nome
+        <label><span class="lbl">Nome</span>
           <input id="r-nome" placeholder="Nome completo" required>
         </label>
-        <label>Turno
+        <label><span class="lbl">Turno</span>
           <select id="r-turno" required></select>
         </label>
-        <label>Cargo
+        <label><span class="lbl">Cargo</span>
           <input id="r-cargo" list="dl-cargo" placeholder="Ex.: Operador">
         </label>
         <button type="submit" class="btn-add">+ Cadastrar</button>

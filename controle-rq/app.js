@@ -305,7 +305,7 @@
     const warehouses = uniq(view.baixas.map(b => b.warehouse));
     const pessoas = uniq([...nomes, ...view.baixas.map(b => b.responsavel)]);
     setOptions($('#responsavel'),
-      (nomes.length ? '<option value="">Selecione…</option>' : '<option value="">Cadastre um responsável primeiro</option>') +
+      (nomes.length ? '<option value="">Selecione…</option>' : '<option value="">Cadastre responsáveis</option>') +
       nomes.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join(''), $('#responsavel').value);
     setOptions($('#f-origem'), '<option value="">Todos</option>' + origens.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join(''), F.origem);
     setOptions($('#f-nome'), '<option value="">Todos</option>' + pessoas.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join(''), F.nome);
