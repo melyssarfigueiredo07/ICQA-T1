@@ -31,6 +31,14 @@ ZIP = os.path.join(PASTA_DO_SCRIPT, "controle-rq-grid.zip")
 ESTADO = os.path.join(PASTA_DO_SCRIPT, ".controle-rq-grid.json")
 
 
+# O Grid recusa executáveis dentro do zip (erro 400, "arquivo inválido").
+EXECUTAVEIS = {".exe", ".sh", ".py", ".bat"}
+
+
+def executaveis_em(nomes):
+    return [n for n in nomes if os.path.splitext(n)[1].lower() in EXECUTAVEIS]
+
+
 def montar_zip():
     """Recria o zip a partir de controle-rq/ (se a pasta existir) e confere o zip."""
     if os.path.isdir(PASTA_FONTE):
@@ -45,6 +53,10 @@ def montar_zip():
                 arquivos.append((arcname, completo))
         if not any(arcname == "index.html" for arcname, _ in arquivos):
             sys.exit("A pasta controle-rq/ não tem index.html. Nada foi enviado.")
+        ruins = executaveis_em(arcname for arcname, _ in arquivos)
+        if ruins:
+            sys.exit("Estes arquivos não podem ir para o Grid (são executáveis e o Grid recusa): "
+                     + ", ".join(ruins) + ". Tire-os da pasta controle-rq/. Nada foi enviado.")
         with zipfile.ZipFile(ZIP, "w", zipfile.ZIP_DEFLATED) as zf:
             for arcname, completo in arquivos:
                 zf.write(completo, arcname)
@@ -55,6 +67,10 @@ def montar_zip():
         infos = [i for i in zf.infolist() if not i.is_dir()]
     if not any(i.filename == "index.html" for i in infos):
         sys.exit("O zip precisa ter index.html na raiz. Nada foi enviado.")
+    ruins = executaveis_em(i.filename for i in infos)
+    if ruins:
+        sys.exit("O zip tem arquivos executáveis, que o Grid recusa: " + ", ".join(ruins)
+                 + ". Nada foi enviado.")
     if len(infos) > 500 or any(i.file_size > 25 * 1024 * 1024 for i in infos):
         sys.exit("O zip passa dos limites do Grid (500 arquivos, 25 MB por arquivo). Nada foi enviado.")
     return len(infos)
