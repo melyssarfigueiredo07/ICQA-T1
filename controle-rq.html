@@ -14,15 +14,18 @@
   [hidden]{display:none!important}
   body{margin:0;font-family:"Proxima Nova",Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text);font-size:14px}
 
-  header{background:var(--yellow);padding:14px 24px;display:flex;align-items:center;gap:14px}
+  header{background:var(--yellow);padding:14px 24px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
   .logo{font-weight:800;font-size:20px;color:var(--navy);letter-spacing:-.5px}
   .logo span{color:var(--blue)}
-  .sync{margin-left:auto;font-size:12px;font-weight:700;color:var(--navy);background:rgba(255,255,255,.6);padding:5px 12px;border-radius:999px}
+  header h1{margin:0;font-size:18px;font-weight:700;color:var(--navy);padding-left:14px;border-left:2px solid var(--navy)}
+  .team-wrap{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;margin-left:auto}
+  .team-wrap input{width:220px;padding:7px 10px;background:#fff}
+  .sync{font-size:12px;font-weight:700;color:var(--navy);background:rgba(255,255,255,.7);padding:5px 12px;border-radius:999px;white-space:nowrap}
   .sync.ok{color:#00733B}
   .sync.warn{color:#8A5A00}
   .sync.err{color:var(--danger)}
   .sync.busy{color:var(--blue-d)}
-  header h1{margin:0;font-size:18px;font-weight:700;color:var(--navy);padding-left:14px;border-left:2px solid var(--navy)}
+  .banner{background:#FFF3B0;color:#7A5C00;padding:10px 24px;font-weight:700;font-size:13px}
 
   nav.tabs{background:#fff;border-bottom:1px solid var(--border)}
   nav.tabs div{max-width:1200px;margin:0 auto;padding:0 16px;display:flex;gap:4px}
@@ -46,26 +49,24 @@
   .btn-ghost:hover{border-color:var(--navy)}
   .btn-danger{background:#fff;color:var(--danger);border:1px solid #F5C0C5;padding:5px 9px;line-height:1}
   .btn-danger:hover{background:#FDECEE}
+  .btn-danger-solid{background:var(--danger);color:#fff;white-space:nowrap}
+  .btn-danger-solid:hover{background:#D9303F}
 
   .hint{margin-top:12px;color:var(--muted);font-size:12px}
   kbd{background:#F0F0F0;border:1px solid #CCC;border-radius:4px;padding:1px 5px;font-size:11px;font-family:inherit}
 
-  /* formulários */
   .form-baixa{display:grid;grid-template-columns:1.3fr .8fr 1.2fr 1.3fr 1.5fr 1fr auto;gap:10px;align-items:end}
   .form-resp{display:grid;grid-template-columns:2fr 1fr 2fr auto;gap:10px;align-items:end}
   .turno-info{font-size:12px;color:var(--navy);font-weight:700;text-transform:none;letter-spacing:0;min-height:14px}
 
-  /* filtros */
   .filters{display:grid;grid-template-columns:repeat(6,1fr) auto;gap:10px;align-items:end}
   .filters .btn-ghost{height:38px}
 
-  /* barra da grid */
   .toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
   .stats{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
   .pill{background:var(--navy);color:#fff;border-radius:999px;padding:6px 12px;font-weight:700;font-size:12px}
   .pill.y{background:var(--yellow);color:var(--navy)}
 
-  /* grid */
   .table-wrap{overflow:auto;max-height:60vh;border:1px solid var(--border);border-radius:8px}
   table{width:100%;border-collapse:collapse}
   table.baixas{min-width:1000px}
@@ -88,9 +89,15 @@
   .flash{animation:flash 1.4s ease-out}
   @keyframes flash{from{background:#FFF59D}to{background:transparent}}
 
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px}
+  .modal .box{background:#fff;border-radius:10px;padding:22px;max-width:440px;width:100%;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+  .modal p{margin:0 0 18px;font-size:15px;line-height:1.45}
+  .modal .acts{display:flex;gap:10px;justify-content:flex-end}
+
   @media (max-width:900px){
     .form-baixa,.form-resp,.filters{grid-template-columns:1fr 1fr}
     .form-baixa .btn-add,.form-resp .btn-add,.filters .btn-ghost{grid-column:1/-1}
+    .team-wrap{margin-left:0}
   }
 </style>
 </head>
@@ -99,8 +106,10 @@
 <header>
   <div class="logo">mercado<span>livre</span></div>
   <h1>Controle de RQ</h1>
-  <span id="sync" class="sync"></span>
+  <div class="team-wrap"><span>Time</span><input id="teamName" placeholder="Nome do time" maxlength="60"></div>
+  <span id="sync" class="sync busy">Carregando…</span>
 </header>
+<div id="banner" class="banner" hidden></div>
 
 <nav class="tabs"><div>
   <button class="tab active" data-tab="baixas" type="button">Baixas feitas</button>
@@ -138,9 +147,8 @@
       </form>
       <p class="hint">
         Preencha e pressione <kbd>Enter</kbd> em qualquer campo para lançar. <kbd>Tab</kbd> avança entre campos.
-        Origem e Responsável são mantidos após cada lançamento. O turno vem do cadastro do responsável.
+        Origem e Responsável continuam preenchidos após cada lançamento. O turno vem do cadastro do responsável.
       </p>
-      <datalist id="dl-origem"></datalist>
     </section>
 
     <section class="card">
@@ -167,6 +175,8 @@
         <span class="pill" id="st-qtd">0 unidades</span>
         <div class="stats">
           <button class="btn-ghost" id="btn-csv" type="button">Exportar CSV (filtrado)</button>
+          <button class="btn-ghost" id="btn-backup" type="button">Backup (JSON)</button>
+          <button class="btn-ghost" id="btn-importar" type="button">Importar JSON</button>
           <button class="btn-ghost" id="btn-limpar" type="button">Limpar tudo</button>
         </div>
       </div>
@@ -188,7 +198,7 @@
           <tbody id="rows"></tbody>
         </table>
       </div>
-      <p class="hint">Clique em qualquer célula para editar. Os dados ficam salvos neste navegador.</p>
+      <p class="hint">Clique em qualquer célula para editar. Os dados são compartilhados com todos que abrem este documento no Grid.</p>
     </section>
   </section>
 
@@ -209,8 +219,7 @@
         </label>
         <button type="submit" class="btn-add">+ Cadastrar</button>
       </form>
-      <p class="hint">Os responsáveis cadastrados aparecem na lista do lançamento de baixas. Alterar o turno ou o nome aqui atualiza as baixas já lançadas.</p>
-      <datalist id="dl-cargo"></datalist>
+      <p class="hint">Alterar o nome ou o turno aqui atualiza também as baixas já lançadas.</p>
     </section>
 
     <section class="card">
@@ -236,141 +245,213 @@
 
 </main>
 
+<!-- diálogo próprio (confirm/alert são bloqueados dentro do Grid) -->
+<div id="modal" class="modal" hidden>
+  <div class="box" role="dialog" aria-modal="true">
+    <p id="modal-msg"></p>
+    <div class="acts">
+      <button id="modal-no" class="btn-ghost" type="button"></button>
+      <button id="modal-ok" class="btn-add" type="button"></button>
+    </div>
+  </div>
+</div>
+
+<input type="file" id="file-import" accept=".json,application/json" hidden>
+<datalist id="dl-origem"></datalist>
+<datalist id="dl-cargo"></datalist>
+
 <script>
 (function(){
-  const K_BAIXAS = 'controle-rq-v1';
-  const K_RESP   = 'controle-rq-responsaveis-v1';
-  const K_STICKY = 'controle-rq-sticky-v1';
-  const TURNOS   = ['Manhã','Tarde','Noite'];
-  const CARGOS   = ['Operador','Conferente','Líder','Supervisor','Coordenador','Gerente'];
-  const TURNO_CLS = {'Manhã':'t-manha','Tarde':'t-tarde','Noite':'t-noite'};
-  // URL do Web App (Google Apps Script, ver apps-script/Code.gs) que guarda os dados compartilhados.
-  // Vazio = modo local: cada navegador guarda os próprios dados.
-  const SHARED_URL = '';
+  'use strict';
 
-  const $ = s => document.querySelector(s);
-  let baixas = load(K_BAIXAS, []);
-  let resp   = load(K_RESP, []);
-  let sticky = load(K_STICKY, {});
-  const F = {de:'', ate:'', turno:'', sku:'', origem:'', nome:''};
+  // ---------- configuração ----------
+  const POLL_MS   = 10000; // leitura periódica do Grid, só com a aba visível (6 req/min por aba; limite do Grid é 60/min)
+  const SAVE_MS   = 500;   // agrupa digitações antes de gravar
+  const TURNOS    = ['Manhã','Tarde','Noite'];
+  const CARGOS    = ['Operador','Conferente','Líder','Supervisor','Coordenador','Gerente'];
+  const TURNO_CLS = {'Manhã':'t-manha','Tarde':'t-tarde','Noite':'t-noite'};
 
   // ---------- utilidades ----------
-  function load(k, d){ try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch(e){ return d; } }
-  // ---------- sincronização compartilhada ----------
-  let version = 0, seq = 0, savedSeq = 0, inFlight = false, again = false, pushTimer = null, retryTimer = null;
-  const dirty = () => seq !== savedSeq;
+  const $ = s => document.querySelector(s);
+  const norm = s => String(s ?? '').trim().toLowerCase();
+  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
   const hhmm = () => new Date().toTimeString().slice(0,5);
+  const todayISO = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
+  const fmtBR = iso => { if(!iso) return ''; const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; };
+  const uniq = arr => [...new Set(arr.map(v => String(v ?? '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b,'pt-BR'));
+  const byNome = (a,b) => a.nome.localeCompare(b.nome,'pt-BR');
+  const hasData = s => !!s && ((Array.isArray(s.baixas) && s.baixas.length > 0) || (Array.isArray(s.responsaveis) && s.responsaveis.length > 0));
+
+  // ---------- armazenamento: window.GRID.state (compartilhado e ao vivo) ----------
+  // Fora do Grid (ex.: prévia local) não existe estado compartilhado: usamos uma cópia só em memória.
+  const preview = !(window.GRID && window.GRID.state);
+  let memDoc = {state: {}, updated_at: null};
+  const store = preview ? {
+    get: () => Promise.resolve(JSON.parse(JSON.stringify(memDoc))),
+    set: data => { memDoc = {state: JSON.parse(JSON.stringify(data)), updated_at: new Date().toISOString()}; return Promise.resolve(JSON.parse(JSON.stringify(memDoc))); }
+  } : window.GRID.state;
+
+  // ---------- modelo de dados (mesmo formato do JSON base / backup) ----------
+  // {teamName, responsaveis:[{id,nome,turno,cargo}], baixas:[{id,sku,quantidade,origem,skuReingresso,responsavel,turno,data}]}
+  const emptyRoot = () => ({teamName:'', responsaveis:[], baixas:[]});
+  function normRoot(s){
+    s = s || {};
+    return {
+      teamName: String(s.teamName || ''),
+      responsaveis: Array.isArray(s.responsaveis) ? s.responsaveis.slice() : [],
+      baixas: (Array.isArray(s.baixas) ? s.baixas : []).map(b => ({...b, quantidade: Number(b.quantidade) || 0}))
+    };
+  }
+  // Cada alteração local é uma operação. Ao gravar, as operações são reaplicadas sobre o estado do Grid,
+  // então uma gravação de outra pessoa não apaga as nossas (e vice-versa).
+  function applyOps(base, ops){
+    let r = normRoot(base);
+    for(const op of ops){
+      if(op.t === 'replace'){ r = normRoot(op.root); continue; }
+      if(op.t === 'root'){ r.teamName = op.teamName; continue; }
+      const list = r[op.c];
+      const i = list.findIndex(x => x.id === (op.t === 'add' ? op.rec.id : op.id));
+      if(op.t === 'add'){ if(i >= 0) list[i] = {...op.rec}; else list.unshift({...op.rec}); }
+      else if(op.t === 'set' && i >= 0){ list[i] = {...list[i], ...op.patch}; }
+      else if(op.t === 'del' && i >= 0){ list.splice(i, 1); }
+    }
+    return r;
+  }
+
+  // ---------- estado ----------
+  let serverRoot = emptyRoot(), serverAt = null, loaded = false; // último estado confirmado pelo Grid
+  let pending = [], view = emptyRoot();                          // operações ainda não confirmadas e o que aparece na tela
+  let timer = null, inFlight = false, needRender = false;
+  const F = {de:'', ate:'', turno:'', sku:'', origem:'', nome:''};
+
+  const findResp = nome => { const n = norm(nome); return n ? view.responsaveis.find(r => norm(r.nome) === n) : undefined; };
+  const turnoOf = b => { const r = findResp(b.responsavel); return r ? r.turno : (b.turno || ''); };
+  const gridFocused = () => { const ae = document.activeElement; return !!(ae && ae.closest && ae.closest('#rows,#resp-rows')); };
+
+  // ---------- status, avisos e diálogos ----------
   function setStatus(txt, cls){ const el = $('#sync'); el.textContent = txt; el.className = 'sync ' + (cls || ''); }
-  function refreshAll(){ refreshSelects(); renderResp(); renderBaixas(); }
+  function banner(msg){ const el = $('#banner'); el.textContent = msg || ''; el.hidden = !msg; }
 
-  function normalize(d){
-    baixas = (d.baixas || []).map(b => ({...b, quantidade: Number(b.quantidade) || 0}));
-    resp   = d.resp || [];
-    localStorage.setItem(K_BAIXAS, JSON.stringify(baixas));
-    localStorage.setItem(K_RESP, JSON.stringify(resp));
+  function dialog(msg, ok, cancel, danger){
+    return new Promise(resolve => {
+      const m = $('#modal'), okB = $('#modal-ok'), noB = $('#modal-no');
+      $('#modal-msg').textContent = msg;
+      okB.textContent = ok;
+      okB.className = danger ? 'btn-danger-solid' : 'btn-add';
+      noB.hidden = !cancel;
+      noB.textContent = cancel || '';
+      m.hidden = false;
+      okB.focus();
+      const done = v => { m.hidden = true; okB.onclick = noB.onclick = m.onkeydown = null; resolve(v); };
+      okB.onclick = () => done(true);
+      noB.onclick = () => done(false);
+      m.onkeydown = e => { if(e.key === 'Escape' && cancel) done(false); };
+    });
+  }
+  const confirmar = (msg, ok, danger = false) => dialog(msg, ok, 'Cancelar', danger);
+  const avisar    = msg => dialog(msg, 'Entendi', null, false);
+
+  // ---------- sincronização ----------
+  function takeServer(res){
+    serverRoot = normRoot(res.state);
+    serverAt = res.updated_at || null;
+    loaded = true;
+    view = applyOps(serverRoot, pending);
+  }
+  // leitura periódica: ignora uma resposta mais antiga do que a que já temos
+  function adoptIfNewer(res){
+    const novo = Date.parse(res.updated_at), atual = Date.parse(serverAt);
+    if(serverAt && !isNaN(novo) && !isNaN(atual) && novo < atual) return false;
+    takeServer(res);
+    return true;
+  }
+  function later(ms){ clearTimeout(timer); timer = setTimeout(flush, ms); }
+
+  function commit(ops){
+    pending.push(...ops);
+    view = applyOps(serverRoot, pending);
+    renderSoon();
+    setStatus(loaded ? 'Salvando…' : 'Carregando…', 'busy');
+    later(SAVE_MS);
   }
 
-  function saveB(){ localStorage.setItem(K_BAIXAS, JSON.stringify(baixas)); queuePush(); }
-  function saveR(){ localStorage.setItem(K_RESP, JSON.stringify(resp)); queuePush(); }
-
-  function queuePush(){
-    if(!SHARED_URL) return;
-    seq++;
-    setStatus('Salvando…', 'busy');
-    clearTimeout(pushTimer);
-    pushTimer = setTimeout(push, 400);
-  }
-
-  async function push(){
-    if(inFlight){ again = true; return; }
+  async function flush(){
+    if(!loaded) return;                 // nunca grava antes de ler o estado do Grid
+    if(!pending.length) return;
+    if(inFlight){ later(300); return; }
     inFlight = true;
-    const mySeq = seq;
+    const n = pending.length;
+    const next = applyOps(serverRoot, pending.slice(0, n));
     try{
-      const r = await fetch(SHARED_URL, {
-        method: 'POST',
-        headers: {'Content-Type': 'text/plain;charset=utf-8'},  // evita preflight de CORS
-        body: JSON.stringify({baseVersion: version, baixas, resp})
-      });
-      const d = await r.json();
-      if(d.conflict){
-        // mantém o que é novo neste navegador (ids ainda não existentes no servidor) e reenvia
-        const novasB = baixas.filter(b => !(d.baixas || []).some(s => s.id === b.id));
-        const novasR = resp.filter(r => !(d.resp || []).some(s => s.id === r.id));
-        normalize(d);
-        baixas = [...novasB, ...baixas];
-        resp   = [...novasR, ...resp].sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'));
-        version = d.version;
-        localStorage.setItem(K_BAIXAS, JSON.stringify(baixas));
-        localStorage.setItem(K_RESP, JSON.stringify(resp));
-        refreshAll();
-        seq++;                       // ainda há o que enviar
-        queuePush();
-        alert('Outra pessoa salvou ao mesmo tempo. Suas novas baixas e cadastros foram mantidos e reenviados. Se uma linha existente mudou, vale a versão mais recente.');
+      const res = serverAt ? await store.set(next, serverAt) : await store.set(next);
+      serverRoot = next;
+      serverAt = res.updated_at || serverAt;
+      pending.splice(0, n);
+      view = applyOps(serverRoot, pending);
+      if(pending.length){
+        setStatus('Salvando…', 'busy');
+        later(SAVE_MS);
       } else {
-        version = d.version;
-        savedSeq = mySeq;
-        if(!dirty()) setStatus(`Sincronizado · ${hhmm()}`, 'ok');
+        setStatus(preview ? 'Prévia · não salvo fora do Grid' : `Salvo · ${hhmm()}`, preview ? 'warn' : 'ok');
       }
+      renderSoon();
     }catch(err){
-      setStatus('Sem conexão — salvo neste navegador, reenviando…', 'err');
-      clearTimeout(retryTimer);
-      retryTimer = setTimeout(push, 5000);
+      if(err && err.error === 'state_conflict'){
+        // outra pessoa gravou antes: pega o estado atual e refaz nossas alterações por cima
+        try{
+          takeServer(await store.get());
+          renderSoon();
+          setStatus('Atualizado por outra pessoa · reaplicando…', 'warn');
+          later(0);
+        }catch(e){
+          setStatus('Sem conexão com o Grid — alterações mantidas nesta tela', 'err');
+          later(5000);
+        }
+      } else {
+        setStatus('Sem conexão com o Grid — tentando de novo…', 'err');
+        later(5000);
+      }
     }finally{
       inFlight = false;
-      if(again){ again = false; push(); }
     }
   }
 
-  async function pullInitial(){
-    if(!SHARED_URL){ setStatus('Modo local', 'warn'); return; }
-    try{
-      const r = await fetch(SHARED_URL, {cache: 'no-store'});
-      const d = await r.json();
-      version = d.version;
-      normalize(d);
-      setStatus(`Sincronizado · ${hhmm()}`, 'ok');
-    }catch(err){
-      setStatus('Sem conexão — usando cópia local', 'err');
-    }
-  }
-
-  // busca atualizações feitas por outras pessoas
   async function poll(){
-    if(inFlight || dirty()) return;
-    const ae = document.activeElement;
-    if(ae && ae.closest && ae.closest('#rows,#resp-rows')) return; // não atrapalha uma edição na grid
+    if(preview || !loaded || inFlight || document.hidden) return;
     try{
-      const r = await fetch(SHARED_URL, {cache: 'no-store'});
-      const d = await r.json();
-      if(d.version !== version){
-        normalize(d); version = d.version;
-        refreshAll();
-        setStatus(`Atualizado · ${hhmm()}`, 'ok');
-      } else {
+      const res = await store.get();
+      if(res.updated_at !== serverAt){
+        if(adoptIfNewer(res)){
+          if(!pending.length) setStatus(`Atualizado · ${hhmm()}`, 'ok');
+          renderSoon();
+        }
+      } else if(!pending.length){
         setStatus(`Sincronizado · ${hhmm()}`, 'ok');
       }
-    }catch(err){
-      setStatus('Sem conexão — exibindo a última cópia', 'err');
+    }catch(e){
+      setStatus('Sem conexão com o Grid — exibindo a última cópia', 'err');
     }
   }
-  function saveS(){ localStorage.setItem(K_STICKY, JSON.stringify(sticky)); }
-  const norm = s => String(s ?? '').trim().toLowerCase();
-  const uid  = () => Date.now().toString(36) + Math.random().toString(36).slice(2,7);
-  function esc(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-  function todayISO(){ const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); }
-  function fmtBR(iso){ if(!iso) return ''; const [y,m,d] = iso.split('-'); return `${d}/${m}/${y}`; }
-  function findResp(nome){ const n = norm(nome); return n ? resp.find(r => norm(r.nome) === n) : undefined; }
-  function turnoOf(b){ const r = findResp(b.responsavel); return r ? r.turno : (b.turno || ''); }
-  function uniq(arr){
-    return [...new Set(arr.map(v => String(v ?? '').trim()).filter(Boolean))]
-      .sort((a,b) => a.localeCompare(b,'pt-BR'));
+
+  async function load(){
+    let res = await store.get();
+    // um documento novo pode voltar vazio por um instante: tenta mais duas vezes antes de aceitar
+    for(let i = 0; i < 2 && !hasData(res.state); i++){ await sleep(700); res = await store.get(); }
+    takeServer(res);
+    banner(preview ? 'Prévia fora do Grid: as alterações não são salvas. Abra o documento no Grid para usar de verdade.' : '');
+    renderAll();
+    setStatus(preview ? 'Prévia · não salvo fora do Grid' : `Sincronizado · ${hhmm()}`, preview ? 'warn' : 'ok');
+    if(pending.length) later(0);
   }
-  // preenche um <select> preservando o valor atual quando ele ainda existir
-  function fillSelect(sel, values, placeholder){
-    const cur = sel.value;
-    const head = placeholder !== undefined ? `<option value="">${esc(placeholder)}</option>` : '';
-    sel.innerHTML = head + values.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join('');
-    if([...sel.options].some(o => o.value === cur)) sel.value = cur;
+  async function loadWithRetry(){
+    try{ await load(); }
+    catch(err){
+      setStatus('Não foi possível ler o Grid — nada será gravado até a conexão voltar', 'err');
+      banner('Sem leitura do Grid. Tentando de novo em instantes…');
+      setTimeout(loadWithRetry, 3000);
+    }
   }
 
   // ---------- abas ----------
@@ -382,9 +463,117 @@
   }
   document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
-  // ================= RESPONSÁVEIS =================
+  // ---------- render ----------
+  // Não redesenha a grid enquanto alguém está editando uma célula (o foco se perderia).
+  function renderSoon(){
+    if(gridFocused()){ needRender = true; updateStats(); return; }
+    renderAll();
+  }
+  document.addEventListener('focusout', () => setTimeout(() => { if(needRender && !gridFocused()) renderAll(); }, 0));
+
+  function renderAll(){
+    needRender = false;
+    refreshSelects();
+    renderResp();
+    renderBaixas();
+    if(document.activeElement !== $('#teamName')) $('#teamName').value = view.teamName;
+  }
+
+  function setOptions(sel, html, value){
+    if(sel.dataset.html !== html){ sel.innerHTML = html; sel.dataset.html = html; }
+    if(value !== undefined && [...sel.options].some(o => o.value === value)) sel.value = value;
+  }
+  function refreshSelects(){
+    const nomes = view.responsaveis.slice().sort(byNome).map(r => r.nome);
+    const origens = uniq(view.baixas.map(b => b.origem));
+    const pessoas = uniq([...nomes, ...view.baixas.map(b => b.responsavel)]);
+    setOptions($('#responsavel'),
+      (nomes.length ? '<option value="">Selecione…</option>' : '<option value="">Cadastre um responsável primeiro</option>') +
+      nomes.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join(''), $('#responsavel').value);
+    setOptions($('#f-origem'), '<option value="">Todas</option>' + origens.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join(''), F.origem);
+    setOptions($('#f-nome'),   '<option value="">Todos</option>' + pessoas.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join(''), F.nome);
+    $('#dl-origem').innerHTML = origens.map(v => `<option value="${esc(v)}">`).join('');
+    F.origem = $('#f-origem').value;
+    F.nome   = $('#f-nome').value;
+    updateTurnoInfo();
+  }
+  function updateTurnoInfo(){
+    const r = findResp($('#responsavel').value);
+    $('#turno-info').textContent = r ? `Turno: ${r.turno}` : '';
+  }
+
+  function renderResp(){
+    const list = view.responsaveis.slice().sort(byNome);
+    $('#resp-rows').innerHTML = list.length ? list.map(r => `
+        <tr data-id="${esc(r.id)}">
+          <td><input data-rf="nome" value="${esc(r.nome)}"></td>
+          <td><select data-rf="turno">${TURNOS.map(t => `<option ${t === r.turno ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+          <td><input data-rf="cargo" list="dl-cargo" value="${esc(r.cargo)}"></td>
+          <td class="actions"><button class="btn-danger" data-rdel title="Remover">✕</button></td>
+        </tr>`).join('')
+      : '<tr><td colspan="4" class="empty">Nenhum responsável cadastrado ainda. Cadastre acima para liberar os lançamentos.</td></tr>';
+    $('#st-resp').textContent = `${list.length} ${list.length === 1 ? 'responsável' : 'responsáveis'}`;
+  }
+
+  function turnoHTML(t){
+    return t ? `<span class="turno ${TURNO_CLS[t] || 't-none'}">${esc(t)}</span>` : '<span class="turno t-none">—</span>';
+  }
+  function respOpts(sel){
+    const nomes = view.responsaveis.slice().sort(byNome).map(r => r.nome);
+    if(sel && !nomes.some(n => norm(n) === norm(sel))) nomes.unshift(sel);
+    return nomes.map(n => `<option ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('');
+  }
+  function rowHTML(b){
+    return `
+      <td><input data-f="sku" class="sku" value="${esc(b.sku)}"></td>
+      <td class="num"><input data-f="quantidade" type="number" min="1" step="1" value="${esc(b.quantidade)}"></td>
+      <td><input data-f="origem" value="${esc(b.origem)}"></td>
+      <td><input data-f="skuReingresso" class="sku" value="${esc(b.skuReingresso)}"></td>
+      <td><select data-f="responsavel">${respOpts(b.responsavel)}</select></td>
+      <td data-turno>${turnoHTML(turnoOf(b))}</td>
+      <td><input data-f="data" type="date" value="${esc(b.data)}"></td>
+      <td class="actions"><button class="btn-danger" data-del title="Remover">✕</button></td>`;
+  }
+  function matches(b){
+    if(F.de  && b.data < F.de) return false;
+    if(F.ate && b.data > F.ate) return false;
+    if(F.turno && turnoOf(b) !== F.turno) return false;
+    if(F.sku && !String(b.sku).toLowerCase().includes(F.sku)) return false;
+    if(F.origem && norm(b.origem) !== norm(F.origem)) return false;
+    if(F.nome   && norm(b.responsavel) !== norm(F.nome)) return false;
+    return true;
+  }
+  function renderBaixas(flashId){
+    const list = view.baixas.filter(matches);
+    const tb = $('#rows');
+    if(!list.length){
+      tb.innerHTML = `<tr><td colspan="8" class="empty">${
+        view.baixas.length ? 'Nenhuma baixa corresponde aos filtros.'
+                           : 'Nenhuma baixa ainda. Preencha o formulário acima e pressione Enter.'}</td></tr>`;
+    } else {
+      const frag = document.createDocumentFragment();
+      list.forEach(b => {
+        const tr = document.createElement('tr');
+        tr.dataset.id = b.id;
+        if(b.id === flashId) tr.classList.add('flash');
+        tr.innerHTML = rowHTML(b);
+        frag.appendChild(tr);
+      });
+      tb.replaceChildren(frag);
+    }
+    updateStats();
+  }
+  function updateStats(){
+    const list = view.baixas.filter(matches);
+    const units = list.reduce((s,x) => s + (Number(x.quantidade) || 0), 0);
+    const filtrado = list.length !== view.baixas.length;
+    $('#st-linhas').textContent = `${list.length} ${list.length === 1 ? 'baixa' : 'baixas'}${filtrado ? ` de ${view.baixas.length}` : ''}`;
+    $('#st-qtd').textContent = `${units} ${units === 1 ? 'unidade' : 'unidades'}`;
+  }
+
+  // ---------- Responsáveis ----------
   $('#r-turno').innerHTML = TURNOS.map(t => `<option>${t}</option>`).join('');
-  $('#r-turno').value = sticky.rTurno || 'Manhã';
+  $('#r-turno').value = 'Manhã';
   $('#dl-cargo').innerHTML = CARGOS.map(c => `<option value="${esc(c)}">`).join('');
 
   $('#formResp').addEventListener('submit', e => {
@@ -394,127 +583,71 @@
     const cargo = $('#r-cargo').value.trim();
     if(!nome){ $('#r-nome').focus(); return; }
     if(findResp(nome)){
-      alert(`Já existe um responsável cadastrado como "${nome}".`);
-      $('#r-nome').select();
+      avisar(`Já existe um responsável cadastrado como "${nome}".`).then(() => $('#r-nome').select());
       return;
     }
-    const r = {id: uid(), nome, turno, cargo};
-    resp.push(r);
-    resp.sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR'));
-    saveR();
-    sticky.rTurno = turno; saveS();
+    commit([{t:'add', c:'responsaveis', rec:{id: uid(), nome, turno, cargo}}]);
     $('#r-nome').value = '';
     $('#r-cargo').value = '';
-    refreshSelects();
-    renderResp(r.id);
-    renderBaixas();
     $('#r-nome').focus();
   });
-
-  function renderResp(flashId){
-    const tb = $('#resp-rows');
-    if(!resp.length){
-      tb.innerHTML = '<tr><td colspan="4" class="empty">Nenhum responsável cadastrado ainda. Cadastre acima para liberar os lançamentos.</td></tr>';
-    } else {
-      tb.innerHTML = resp.map(r => `
-        <tr data-id="${r.id}" class="${r.id === flashId ? 'flash' : ''}">
-          <td><input data-rf="nome" value="${esc(r.nome)}"></td>
-          <td><select data-rf="turno">${TURNOS.map(t => `<option ${t===r.turno?'selected':''}>${t}</option>`).join('')}</select></td>
-          <td><input data-rf="cargo" list="dl-cargo" value="${esc(r.cargo)}"></td>
-          <td class="actions"><button class="btn-danger" data-rdel title="Remover">✕</button></td>
-        </tr>`).join('');
-    }
-    $('#st-resp').textContent = `${resp.length} ${resp.length === 1 ? 'responsável' : 'responsáveis'}`;
-  }
 
   $('#resp-rows').addEventListener('change', e => {
     const inp = e.target.closest('[data-rf]');
     if(!inp) return;
-    const r = resp.find(x => x.id === inp.closest('tr').dataset.id);
+    const id = inp.closest('tr').dataset.id;
+    const r = view.responsaveis.find(x => x.id === id);
     if(!r) return;
     const f = inp.dataset.rf;
     const v = inp.value.trim();
-
     if(f === 'nome'){
       if(!v){ inp.value = r.nome; return; }
-      if(resp.some(x => x !== r && norm(x.nome) === norm(v))){
-        alert('Já existe um responsável com esse nome.');
-        inp.value = r.nome; return;
+      if(view.responsaveis.some(x => x.id !== id && norm(x.nome) === norm(v))){
+        inp.value = r.nome;
+        avisar('Já existe um responsável com esse nome.');
+        return;
       }
-      // mantém as baixas já lançadas apontando para o nome novo
-      const antigo = r.nome;
-      baixas.forEach(b => { if(norm(b.responsavel) === norm(antigo)) b.responsavel = v; });
-      saveB();
+      // renomear também atualiza as baixas já lançadas com o nome antigo
+      const ops = [{t:'set', c:'responsaveis', id, patch:{nome: v}}];
+      view.baixas.filter(b => norm(b.responsavel) === norm(r.nome))
+        .forEach(b => ops.push({t:'set', c:'baixas', id: b.id, patch:{responsavel: v}}));
+      commit(ops);
+    } else {
+      commit([{t:'set', c:'responsaveis', id, patch:{[f]: v}}]);
     }
-    r[f] = v;
-    if(f === 'nome'){ resp.sort((a,b) => a.nome.localeCompare(b.nome,'pt-BR')); }
-    saveR();
-    renderResp(r.id);
-    refreshSelects();
-    renderBaixas();
   });
 
-  $('#resp-rows').addEventListener('click', e => {
+  $('#resp-rows').addEventListener('click', async e => {
     const btn = e.target.closest('[data-rdel]');
     if(!btn) return;
-    const r = resp.find(x => x.id === btn.closest('tr').dataset.id);
+    const id = btn.closest('tr').dataset.id;
+    const r = view.responsaveis.find(x => x.id === id);
     if(!r) return;
-    if(!confirm(`Remover ${r.nome} do cadastro? As baixas já lançadas com este nome são mantidas.`)) return;
-    resp = resp.filter(x => x !== r);
-    saveR();
-    renderResp();
-    refreshSelects();
-    renderBaixas();
+    if(!await confirmar(`Remover ${r.nome} do cadastro? As baixas já lançadas com este nome são mantidas.`, 'Remover', true)) return;
+    commit([{t:'del', c:'responsaveis', id}]);
   });
 
-  // ================= BAIXAS =================
+  // ---------- Baixas ----------
   const form = $('#form');
-
-  function updateTurnoInfo(){
-    const r = findResp($('#responsavel').value);
-    $('#turno-info').textContent = r ? `Turno: ${r.turno}` : '';
-  }
   $('#responsavel').addEventListener('change', updateTurnoInfo);
-
-  // atualiza listas de seleção (formulário e filtros) a partir do cadastro e das baixas
-  function refreshSelects(){
-    const nomes = resp.map(r => r.nome);
-    const sel = $('#responsavel');
-    const curForm = sel.value;
-    sel.innerHTML = (nomes.length
-        ? '<option value="">Selecione…</option>'
-        : '<option value="">Cadastre um responsável primeiro</option>')
-      + nomes.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
-    if(nomes.includes(curForm)) sel.value = curForm;
-
-    fillSelect($('#f-origem'), uniq(baixas.map(b => b.origem)), 'Todas');
-    fillSelect($('#f-nome'), uniq([...nomes, ...baixas.map(b => b.responsavel)]), 'Todos');
-    $('#dl-origem').innerHTML = uniq(baixas.map(b => b.origem)).map(v => `<option value="${esc(v)}">`).join('');
-    F.origem = $('#f-origem').value;
-    F.nome   = $('#f-nome').value;
-    updateTurnoInfo();
-  }
 
   form.addEventListener('submit', e => {
     e.preventDefault();
-    const sku   = $('#sku').value.trim().toUpperCase();
-    const qtd   = parseInt($('#quantidade').value, 10);
-    const nome  = $('#responsavel').value;
-
+    const sku  = $('#sku').value.trim().toUpperCase();
+    const qtd  = parseInt($('#quantidade').value, 10);
+    const nome = $('#responsavel').value;
     if(!sku){ $('#sku').focus(); return; }
     if(!(qtd > 0)){ $('#quantidade').focus(); return; }
     if(!nome){
-      if(!resp.length){
-        alert('Cadastre os responsáveis na aba "Cadastro de responsáveis" antes de lançar baixas.');
-        showTab('resp');
+      if(!view.responsaveis.length){
+        avisar('Cadastre os responsáveis na aba "Cadastro de responsáveis" antes de lançar baixas.').then(() => showTab('resp'));
       } else {
         $('#responsavel').focus();
       }
       return;
     }
-
     const r = findResp(nome);
-    const item = {
+    commit([{t:'add', c:'baixas', rec:{
       id: uid(),
       sku,
       quantidade: qtd,
@@ -523,21 +656,46 @@
       responsavel: r ? r.nome : nome,
       turno: r ? r.turno : '',
       data: $('#data').value || todayISO()
-    };
-    baixas.unshift(item);
-    saveB();
-
-    sticky.origem = item.origem;
-    sticky.responsavel = item.responsavel;
-    saveS();
-
+    }}]);
+    // origem e responsável continuam preenchidos; só o que muda a cada lançamento é limpo
     $('#sku').value = '';
     $('#quantidade').value = '';
     $('#skuReingresso').value = '';
     $('#sku').focus();
+  });
 
-    refreshSelects();
-    renderBaixas(item.id);
+  $('#rows').addEventListener('change', e => {
+    const inp = e.target.closest('[data-f]');
+    if(!inp) return;
+    const id = inp.closest('tr').dataset.id;
+    const b = view.baixas.find(x => x.id === id);
+    if(!b) return;
+    const f = inp.dataset.f;
+    let v = inp.value;
+    if(f === 'quantidade'){
+      v = parseInt(v, 10);
+      if(!(v > 0)){ inp.value = b.quantidade; return; }
+    } else if(f === 'sku' || f === 'skuReingresso'){
+      v = v.trim().toUpperCase();
+    } else if(f === 'data'){
+      if(!v){ inp.value = b.data; return; }
+    } else {
+      v = v.trim();
+    }
+    const patch = {[f]: v};
+    if(f === 'responsavel'){ const r = findResp(v); patch.turno = r ? r.turno : ''; }
+    commit([{t:'set', c:'baixas', id, patch}]);
+    if(f === 'origem' || f === 'responsavel') refreshSelects();
+  });
+
+  $('#rows').addEventListener('click', async e => {
+    const btn = e.target.closest('[data-del]');
+    if(!btn) return;
+    const id = btn.closest('tr').dataset.id;
+    const b = view.baixas.find(x => x.id === id);
+    if(!b) return;
+    if(!await confirmar(`Remover a baixa de ${b.sku} (${b.quantidade} un.)?`, 'Remover', true)) return;
+    commit([{t:'del', c:'baixas', id}]);
   });
 
   // ---------- filtros ----------
@@ -555,156 +713,70 @@
     $(id).addEventListener('change', readFilters);
   });
   $('#btn-limpar-filtros').addEventListener('click', () => {
-    ['#f-de','#f-ate','#f-sku'].forEach(id => $(id).value = '');
-    ['#f-turno','#f-origem','#f-nome'].forEach(id => $(id).value = '');
+    ['#f-de','#f-ate','#f-sku','#f-turno','#f-origem','#f-nome'].forEach(id => $(id).value = '');
     readFilters();
   });
 
-  function matches(b){
-    if(F.de  && b.data < F.de) return false;
-    if(F.ate && b.data > F.ate) return false;
-    if(F.turno && turnoOf(b) !== F.turno) return false;
-    if(F.sku && !String(b.sku).toLowerCase().includes(F.sku)) return false;
-    if(F.origem && norm(b.origem) !== norm(F.origem)) return false;
-    if(F.nome   && norm(b.responsavel) !== norm(F.nome)) return false;
-    return true;
-  }
-
-  // ---------- grid de baixas ----------
-  function respOpts(sel){
-    const nomes = resp.map(r => r.nome);
-    if(sel && !nomes.some(n => norm(n) === norm(sel))) nomes.unshift(sel);
-    return nomes.map(n => `<option ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('');
-  }
-  function turnoHTML(t){
-    return t ? `<span class="turno ${TURNO_CLS[t] || 't-none'}">${esc(t)}</span>` : '<span class="turno t-none">—</span>';
-  }
-  function rowHTML(b){
-    return `
-      <td><input data-f="sku" class="sku" value="${esc(b.sku)}"></td>
-      <td class="num"><input data-f="quantidade" type="number" min="1" step="1" value="${esc(b.quantidade)}"></td>
-      <td><input data-f="origem" value="${esc(b.origem)}"></td>
-      <td><input data-f="skuReingresso" class="sku" value="${esc(b.skuReingresso)}"></td>
-      <td><select data-f="responsavel">${respOpts(b.responsavel)}</select></td>
-      <td data-turno>${turnoHTML(turnoOf(b))}</td>
-      <td><input data-f="data" type="date" value="${esc(b.data)}"></td>
-      <td class="actions"><button class="btn-danger" data-del title="Remover">✕</button></td>`;
-  }
-
-  function renderBaixas(flashId){
-    const list = baixas.filter(matches);
-    const tb = $('#rows');
-    if(!list.length){
-      tb.innerHTML = `<tr><td colspan="8" class="empty">${
-        baixas.length ? 'Nenhuma baixa corresponde aos filtros.'
-                      : 'Nenhuma baixa ainda. Preencha o formulário acima e pressione Enter.'}</td></tr>`;
-    } else {
-      tb.innerHTML = '';
-      const frag = document.createDocumentFragment();
-      list.forEach(b => {
-        const tr = document.createElement('tr');
-        tr.dataset.id = b.id;
-        if(b.id === flashId) tr.classList.add('flash');
-        tr.innerHTML = rowHTML(b);
-        frag.appendChild(tr);
-      });
-      tb.appendChild(frag);
-    }
-    updateStats();
-  }
-
-  function updateStats(){
-    const list = baixas.filter(matches);
-    const units = list.reduce((s,x) => s + (Number(x.quantidade) || 0), 0);
-    const filtrado = list.length !== baixas.length;
-    $('#st-linhas').textContent = `${list.length} ${list.length === 1 ? 'baixa' : 'baixas'}${filtrado ? ` de ${baixas.length}` : ''}`;
-    $('#st-qtd').textContent = `${units} ${units === 1 ? 'unidade' : 'unidades'}`;
-  }
-
-  $('#rows').addEventListener('change', e => {
-    const inp = e.target.closest('[data-f]');
-    if(!inp) return;
-    const tr = inp.closest('tr');
-    const it = baixas.find(x => x.id === tr.dataset.id);
-    if(!it) return;
-    const f = inp.dataset.f;
-    let val = inp.value;
-
-    if(f === 'quantidade'){
-      val = parseInt(val, 10);
-      if(!(val > 0)){ inp.value = it.quantidade; return; }
-    } else if(f === 'sku' || f === 'skuReingresso'){
-      val = val.trim().toUpperCase();
-    } else if(f === 'data'){
-      if(!val){ inp.value = it.data; return; }
-    } else {
-      val = val.trim();
-    }
-
-    it[f] = val;
-    if(f === 'responsavel'){
-      const r = findResp(val);
-      it.turno = r ? r.turno : '';
-      tr.querySelector('[data-turno]').innerHTML = turnoHTML(turnoOf(it));
-      inp.value = val;
-    } else {
-      inp.value = val;
-    }
-    saveB();
-    refreshSelects();
-    updateStats(); // sem redesenhar a tabela, para não tirar o foco da edição
-  });
-
-  $('#rows').addEventListener('click', e => {
-    const btn = e.target.closest('[data-del]');
-    if(!btn) return;
-    const it = baixas.find(x => x.id === btn.closest('tr').dataset.id);
-    if(!it) return;
-    if(!confirm(`Remover a baixa de ${it.sku} (${it.quantidade} un.)?`)) return;
-    baixas = baixas.filter(x => x !== it);
-    saveB();
-    refreshSelects();
-    renderBaixas();
+  // ---------- nome do time ----------
+  $('#teamName').addEventListener('change', e => {
+    const v = e.target.value.trim();
+    if(v !== view.teamName) commit([{t:'root', teamName: v}]);
   });
 
   // ---------- ações ----------
-  $('#btn-limpar').addEventListener('click', () => {
-    if(!baixas.length) return;
-    if(!confirm('Apagar TODAS as baixas deste controle? (O cadastro de responsáveis é mantido.)')) return;
-    baixas = [];
-    saveB();
-    refreshSelects();
-    renderBaixas();
+  $('#btn-limpar').addEventListener('click', async () => {
+    if(!view.baixas.length) return;
+    if(!await confirmar(`Apagar TODAS as ${view.baixas.length} baixas deste controle? O cadastro de responsáveis é mantido.`, 'Apagar tudo', true)) return;
+    commit(view.baixas.map(b => ({t:'del', c:'baixas', id: b.id})));
   });
 
   $('#btn-csv').addEventListener('click', () => {
-    const list = baixas.filter(matches);
+    const list = view.baixas.filter(matches);
     const head = ['SKU','QUANTIDADE','ORIGEM','SKU REINGRESSO','RESPONSÁVEL','TURNO','DATA'];
     const cell = v => `"${String(v ?? '').replace(/"/g,'""')}"`;
     const lines = [head.map(cell).join(';')].concat(
       list.map(b => [b.sku, b.quantidade, b.origem, b.skuReingresso, b.responsavel, turnoOf(b), fmtBR(b.data)].map(cell).join(';'))
     );
-    const blob = new Blob(['﻿' + lines.join('\r\n')], {type:'text/csv;charset=utf-8'});
+    downloadBlob(new Blob(['﻿' + lines.join('\r\n')], {type:'text/csv;charset=utf-8'}), `controle-rq-${todayISO()}.csv`);
+  });
+
+  // backup no mesmo formato do JSON base (controle-rq-dados.json)
+  $('#btn-backup').addEventListener('click', () => {
+    const data = {teamName: view.teamName, responsaveis: view.responsaveis, baixas: view.baixas};
+    downloadBlob(new Blob([JSON.stringify(data, null, 2)], {type:'application/json'}), `controle-rq-backup-${todayISO()}.json`);
+  });
+
+  function downloadBlob(blob, name){
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `controle-rq-${todayISO()}.csv`;
+    a.download = name;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+
+  $('#btn-importar').addEventListener('click', () => $('#file-import').click());
+  $('#file-import').addEventListener('change', async e => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if(!file) return;
+    let data;
+    try{ data = JSON.parse(await file.text()); }
+    catch(err){ await avisar('Arquivo inválido: não é um JSON.'); return; }
+    if(!data || !Array.isArray(data.responsaveis) || !Array.isArray(data.baixas)){
+      await avisar('Arquivo inválido: precisa ter as listas "responsaveis" e "baixas" (mesmo formato do backup).');
+      return;
+    }
+    if(!await confirmar(`Substituir TODOS os dados deste controle pelos ${data.baixas.length} lançamentos e ${data.responsaveis.length} responsáveis do arquivo?`, 'Substituir', true)) return;
+    commit([{t:'replace', root: {teamName: String(data.teamName || ''), responsaveis: data.responsaveis, baixas: data.baixas}}]);
   });
 
   // ---------- início ----------
-  (async () => {
-    await pullInitial();
-    $('#data').value = todayISO();
-    $('#origem').value = sticky.origem || '';
-    refreshSelects();
-    if(sticky.responsavel && findResp(sticky.responsavel)) $('#responsavel').value = sticky.responsavel;
-    updateTurnoInfo();
-    renderResp();
-    renderBaixas();
-    showTab('baixas', false);
-    if(SHARED_URL) setInterval(poll, 5000);
-  })();
+  $('#data').value = todayISO();
+  setInterval(poll, POLL_MS);
+  document.addEventListener('visibilitychange', () => { if(!document.hidden) poll(); });
+  renderAll();
+  showTab('baixas', false);
+  loadWithRetry();
 })();
 </script>
 </body>
