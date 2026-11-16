@@ -18,6 +18,7 @@
 
 <nav class="tabs"><div>
   <button class="tab active" data-tab="baixas" type="button">Baixas feitas</button>
+  <button class="tab" data-tab="massa" type="button">Baixa em massa</button>
   <button class="tab" data-tab="resp" type="button">Cadastro de responsáveis</button>
 </div></nav>
 
@@ -50,6 +51,11 @@
         </label>
         <button type="submit" class="btn-add">+ Adicionar</button>
       </form>
+      <fieldset class="motivos">
+        <legend>Motivo</legend>
+        <label class="ck-label"><input id="m-saldo" type="checkbox"> Saldo Sistêmico Incorreto <span class="dica">(entrada sistêmica maior que física)</span></label>
+        <label class="ck-label"><input id="m-sku" type="checkbox"> Meli SKU Invertida</label>
+      </fieldset>
       <p class="hint">
         Preencha e pressione <kbd>Enter</kbd> em qualquer campo para lançar. <kbd>Tab</kbd> avança entre campos.
         Origem e Responsável continuam preenchidos após cada lançamento. O turno vem do cadastro do responsável.
@@ -64,7 +70,7 @@
         <label>Turno
           <select id="f-turno">
             <option value="">Todos</option>
-            <option>Manhã</option><option>Tarde</option><option>Noite</option>
+            <option>T1</option><option>T2</option><option>T3</option><option>T4</option>
           </select>
         </label>
         <label>SKU <input id="f-sku" class="sku" placeholder="Contém…"></label>
@@ -79,6 +85,7 @@
         <span class="pill y" id="st-linhas">0 baixas</span>
         <span class="pill" id="st-qtd">0 unidades</span>
         <div class="stats">
+          <button class="btn-ghost" id="btn-export" type="button">Exportar planilha por responsável</button>
           <button class="btn-ghost" id="btn-csv" type="button">Exportar CSV (filtrado)</button>
           <button class="btn-ghost" id="btn-backup" type="button">Backup (JSON)</button>
           <button class="btn-ghost" id="btn-importar" type="button">Importar JSON</button>
@@ -96,6 +103,8 @@
               <th>SKU Reingresso</th>
               <th>Responsável</th>
               <th>Turno</th>
+              <th class="ck">Saldo Sist. Incorreto</th>
+              <th class="ck">Meli SKU Invertida</th>
               <th>Data</th>
               <th></th>
             </tr>
@@ -104,6 +113,44 @@
         </table>
       </div>
       <p class="hint">Clique em qualquer célula para editar. Os dados são compartilhados com todos que abrem este documento no Grid.</p>
+    </section>
+  </section>
+
+  <!-- ===================== ABA: BAIXA EM MASSA ===================== -->
+  <section id="tab-massa" hidden>
+    <section class="card">
+      <h2>Baixa em massa</h2>
+      <div class="toolbar">
+        <button class="btn-ghost" id="massa-add" type="button">+ Linha</button>
+        <button class="btn-ghost" id="massa-limpar" type="button">Limpar rascunho</button>
+        <span class="pill" id="massa-stats">0 linhas</span>
+        <div class="stats">
+          <button class="btn-add" id="massa-salvar" type="button">Salvar lote</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="massa">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>SKU</th>
+              <th style="text-align:right">Quantidade</th>
+              <th>Origem</th>
+              <th>SKU Reingresso</th>
+              <th class="ck">Saldo Sist. Incorreto</th>
+              <th class="ck">Meli SKU Invertida</th>
+              <th>Data</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="massa-rows"></tbody>
+        </table>
+      </div>
+      <p class="hint">
+        Preencha linha a linha; <kbd>Enter</kbd> vai para a próxima linha e cria uma nova no fim.
+        O rascunho fica guardado enquanto você preenche. Ao clicar em <strong>Salvar lote</strong>, o sistema pede o responsável,
+        grava as baixas e gera a planilha.
+      </p>
     </section>
   </section>
 
@@ -154,6 +201,7 @@
 <div id="modal" class="modal" hidden>
   <div class="box" role="dialog" aria-modal="true">
     <p id="modal-msg"></p>
+    <select id="modal-sel" hidden></select>
     <div class="acts">
       <button id="modal-no" class="btn-ghost" type="button"></button>
       <button id="modal-ok" class="btn-add" type="button"></button>
