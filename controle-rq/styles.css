@@ -12,8 +12,6 @@ header{background:var(--yellow);padding:8px 14px;display:flex;align-items:center
 .logo{font-weight:800;font-size:17px;color:var(--navy);letter-spacing:-.5px}
 .logo span{color:var(--blue)}
 header h1{margin:0;font-size:15px;font-weight:700;color:var(--navy);padding-left:12px;border-left:2px solid var(--navy)}
-.team-wrap{display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;color:var(--navy);text-transform:uppercase;margin-left:auto}
-.team-wrap input{width:180px;height:28px;padding:5px 8px;background:#fff;font-size:13px}
 .sync{font-size:11px;font-weight:700;color:var(--navy);background:rgba(255,255,255,.7);padding:4px 10px;border-radius:999px;white-space:nowrap}
 .sync.ok{color:#00733B}
 .sync.warn{color:#8A5A00}
@@ -116,5 +114,4 @@ tr.ok td.status{background:#F6FFF9}
   .filters{grid-template-columns:1fr 1fr}
   .filters .btn-ghost{grid-column:1/-1}
   table{table-layout:auto;min-width:860px}
-  .team-wrap{margin-left:0}
 }

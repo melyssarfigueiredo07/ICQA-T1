@@ -3,15 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Controle de RQ · Mercado Livre</title>
+<title>ICQA RJ02 - Controle de RQ</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
 <header>
   <div class="logo">mercado<span>livre</span></div>
-  <h1>Controle de RQ</h1>
-  <div class="team-wrap"><span>Time</span><input id="teamName" placeholder="Nome do time" maxlength="60"></div>
+  <h1>ICQA RJ02 - Controle de RQ</h1>
   <span id="sync" class="sync busy">Carregando…</span>
 </header>
 <div id="banner" class="banner" hidden></div>
@@ -45,10 +44,10 @@
       <div class="table-wrap small">
         <table class="rasc">
           <colgroup>
-            <col style="width:3.5%"><col style="width:13%"><col style="width:7%"><col style="width:9%"><col style="width:18.5%"><col style="width:18%"><col style="width:12.5%"><col style="width:14.5%"><col style="width:4%">
+            <col style="width:3.5%"><col style="width:14%"><col style="width:7%"><col style="width:22%"><col style="width:19%"><col style="width:14.5%"><col style="width:16%"><col style="width:4%">
           </colgroup>
           <thead>
-            <tr><th>#</th><th>SKU</th><th>Qtd</th><th>Warehouse</th><th>Endereço RQ</th><th>Motivo</th><th>SKU reingr.</th><th>Data</th><th></th></tr>
+            <tr><th>#</th><th>SKU</th><th>Qtd</th><th>Origem de reingresso</th><th>Motivo</th><th>SKU reingr.</th><th>Data</th><th></th></tr>
           </thead>
           <tbody id="massa-rows"></tbody>
         </table>
@@ -79,17 +78,17 @@
           </select>
         </label>
         <label><span>SKU</span><input id="f-sku" class="sku" placeholder="Contém…"></label>
-        <label><span>Endereço RQ</span><select id="f-origem"></select></label>
+        <label><span>Origem de reingresso</span><select id="f-origem"></select></label>
         <label><span>Responsável</span><select id="f-nome"></select></label>
         <button class="btn-ghost" id="btn-limpar-filtros" type="button">Limpar filtros</button>
       </div>
       <div class="table-wrap">
         <table class="baixas">
           <colgroup>
-            <col style="width:11%"><col style="width:6%"><col style="width:8.5%"><col style="width:16%"><col style="width:13%"><col style="width:5.5%"><col style="width:15%"><col style="width:10.5%"><col style="width:11.5%"><col style="width:3%">
+            <col style="width:12%"><col style="width:6%"><col style="width:17%"><col style="width:16%"><col style="width:6%"><col style="width:16%"><col style="width:12%"><col style="width:10.5%"><col style="width:4.5%">
           </colgroup>
           <thead>
-            <tr><th>SKU</th><th>Qtd</th><th>Warehouse</th><th>Endereço RQ</th><th>Responsável</th><th>Turno</th><th>Motivo</th><th>SKU reingr.</th><th>Data</th><th></th></tr>
+            <tr><th>SKU</th><th>Qtd</th><th>Origem de reingresso</th><th>Responsável</th><th>Turno</th><th>Motivo</th><th>SKU reingr.</th><th>Data</th><th></th></tr>
           </thead>
           <tbody id="rows"></tbody>
         </table>
@@ -171,10 +170,6 @@
 
 <input type="file" id="file-import" accept=".json,application/json" hidden>
 <datalist id="dl-origem"></datalist>
-<datalist id="dl-warehouse">
-  <option value="BRRJ02"></option>
-  <option value="BRSP01"></option>
-</datalist>
 <datalist id="dl-cargo"></datalist>
 
 <script src="app.js"></script>

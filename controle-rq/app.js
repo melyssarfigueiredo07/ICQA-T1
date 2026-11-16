@@ -8,7 +8,9 @@
   const CARGOS = ['Operador', 'Conferente', 'Líder', 'Supervisor', 'Coordenador', 'Gerente'];
   const TURNO_CLS = { T1: 't-t1', T2: 't-t2', T3: 't-t3', T4: 't-t4' };
   const TODOS = '__todos__';
-  const RQ_RE = /^RQ-/i;
+  // configuração fixa do chamado: vai para o modelo Baja de RQ e para as guias no mesmo formato (não é pedida na tela)
+  const WAREHOUSE_FIXO = 'BRRJ02';
+  const RQ_FIXO = 'RQ-0-005-000-00-00';
   const EMAIL_SUPORTE = 'soporteME@mercadolibre.com';
 
   // Motivos: label = nome curto na tela; nome = texto completo; reason = texto exato do modelo de chamado (Baja de RQ)
@@ -29,8 +31,8 @@
   const TEMPLATE_LARG = [16, 12, 16, 24, 80];
   // Guia de painel e guia de saldo (internas)
   const PAINEL_NOME = 'Painel';
-  const PAINEL_HEAD = ['SKU', 'QUANTIDADE', 'WAREHOUSE', 'ENDEREÇO RQ', 'MOTIVO', 'SKU REINGRESSO', 'RESPONSÁVEL', 'TURNO', 'DATA'];
-  const PAINEL_LARG = [16, 12, 14, 24, 30, 18, 24, 10, 14];
+  const PAINEL_HEAD = ['SKU', 'QUANTIDADE', 'MOTIVO', 'ORIGEM DE REINGRESSO', 'SKU REINGRESSO', 'RESPONSÁVEL', 'TURNO', 'DATA'];
+  const PAINEL_LARG = [16, 12, 30, 24, 18, 24, 10, 14];
   const SALDO_NOME = 'Saldo por responsável';
   const SALDO_HEAD = ['RESPONSÁVEL', 'TURNO', 'CARGO', 'SOLICITAÇÕES', 'UNIDADES', 'SALDO SIST. INCORRETO (SOLIC.)', 'SALDO SIST. INCORRETO (UN.)', 'MELI SKU INVERTIDA (SOLIC.)', 'MELI SKU INVERTIDA (UN.)', 'PRIMEIRA DATA', 'ÚLTIMA DATA'];
   const SALDO_LARG = [26, 10, 14, 14, 12, 28, 26, 26, 24, 16, 16];
@@ -66,12 +68,13 @@
   } : window.GRID.state;
 
   // ---------- modelo de dados ----------
-  // { teamName, responsaveis:[{id,nome,turno,cargo}],
-  //   baixas:[{id,sku,quantidade,warehouse,origem,skuReingresso,responsavel,turno,data,motivo}],
-  //   rascunhos:[{id,sku,quantidade,warehouse,origem,skuReingresso,motivo,data}],
+  // { responsaveis:[{id,nome,turno,cargo}],
+  //   baixas:[{id,sku,quantidade,origemReingresso,skuReingresso,responsavel,turno,data,motivo}],
+  //   rascunhos:[{id,sku,quantidade,origemReingresso,skuReingresso,motivo,data}],
   //   planilhas:[{id,arquivo,tipo,criadaEm,responsaveis,baixas,compartilhada,compartilhadaEm}] }
-  //   origem = endereço RQ (address_id);  motivo = '' | 'saldo' | 'sku'
-  const emptyRoot = () => ({ teamName: '', responsaveis: [], baixas: [], rascunhos: [], planilhas: [] });
+  //   origemReingresso = texto livre por baixa;  motivo = '' | 'saldo' | 'sku'
+  //   warehouse e endereço RQ são fixos (WAREHOUSE_FIXO, RQ_FIXO); campos antigos desses dados ficam guardados, sem uso
+  const emptyRoot = () => ({ responsaveis: [], baixas: [], rascunhos: [], planilhas: [] });
   const qtdBaixa = v => Number(v) || 0;
   const qtdRascunho = v => (v === '' || v == null) ? '' : (Number(v) || 0);
   // dados antigos guardavam uma lista de motivos (motivos: [...]); fica só o primeiro
@@ -80,12 +83,11 @@
     if (Array.isArray(r.motivos) && MOTIVOS[r.motivos[0]]) return r.motivos[0];
     return '';
   };
-  const normBaixa = b => ({ ...b, quantidade: qtdBaixa(b.quantidade), warehouse: String(b.warehouse || ''), origem: String(b.origem || ''), motivo: motivoDe(b), motivos: undefined });
-  const normRasc = r => ({ ...r, quantidade: qtdRascunho(r.quantidade), warehouse: String(r.warehouse || ''), origem: String(r.origem || ''), motivo: motivoDe(r), motivos: undefined });
+  const normBaixa = b => ({ ...b, quantidade: qtdBaixa(b.quantidade), origemReingresso: String(b.origemReingresso || ''), motivo: motivoDe(b), motivos: undefined });
+  const normRasc = r => ({ ...r, quantidade: qtdRascunho(r.quantidade), origemReingresso: String(r.origemReingresso || ''), motivo: motivoDe(r), motivos: undefined });
   function normRoot(s) {
     s = s || {};
     return {
-      teamName: String(s.teamName || ''),
       responsaveis: Array.isArray(s.responsaveis) ? s.responsaveis.slice() : [],
       baixas: (Array.isArray(s.baixas) ? s.baixas : []).map(normBaixa),
       rascunhos: (Array.isArray(s.rascunhos) ? s.rascunhos : []).map(normRasc),
@@ -98,7 +100,6 @@
     let r = normRoot(base);
     for (const op of ops) {
       if (op.t === 'replace') { r = normRoot(op.root); continue; }
-      if (op.t === 'root') { r.teamName = op.teamName; continue; }
       const list = r[op.c];
       const i = list.findIndex(x => x.id === (op.t === 'add' ? op.rec.id : op.id));
       if (op.t === 'add') {
@@ -127,14 +128,11 @@
     const f = [];
     if (!r.sku) f.push('SKU');
     if (!(Number(r.quantidade) > 0)) f.push('quantidade');
-    if (!r.warehouse) f.push('warehouse');
-    if (!r.origem) f.push('endereço RQ');
-    else if (!RQ_RE.test(r.origem)) f.push('endereço RQ (deve começar com RQ-)');
     if (!MOTIVOS[r.motivo]) f.push('motivo');
     return f;
   }
   const completa = r => faltas(r).length === 0;
-  // linha sem nada digitado: warehouse, endereço e data podem vir copiados da linha anterior
+  // linha sem nada digitado: origem de reingresso e data podem vir copiados da linha anterior
   const vazia = r => !r.sku && !(Number(r.quantidade) > 0) && !r.motivo && !r.skuReingresso;
   const resumoFaltas = lista => lista.slice(0, 5).map(b => `${b.sku || 'sem SKU'} (${faltas(b).join(', ')})`).join('; ') + (lista.length > 5 ? '…' : '');
 
@@ -299,7 +297,6 @@
     renderBaixas();
     renderMassa();
     renderPlanilhas();
-    if (document.activeElement !== $('#teamName')) $('#teamName').value = view.teamName;
   }
 
   function setOptions(sel, html, value) {
@@ -307,13 +304,11 @@
     if (value !== undefined && [...sel.options].some(o => o.value === value)) sel.value = value;
   }
   function refreshSelects() {
-    const origens = uniq(view.baixas.map(b => b.origem));
-    const warehouses = uniq(view.baixas.map(b => b.warehouse));
+    const origens = uniq(view.baixas.map(b => b.origemReingresso));
     const nomes = uniq([...view.responsaveis.map(r => r.nome), ...view.baixas.map(b => b.responsavel)]);
     setOptions($('#f-origem'), '<option value="">Todos</option>' + origens.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join(''), F.origem);
     setOptions($('#f-nome'), '<option value="">Todos</option>' + nomes.map(v => `<option value="${esc(v)}">${esc(v)}</option>`).join(''), F.nome);
     $('#dl-origem').innerHTML = origens.map(v => `<option value="${esc(v)}">`).join('');
-    $('#dl-warehouse').innerHTML = warehouses.map(v => `<option value="${esc(v)}">`).join('');
     F.origem = $('#f-origem').value;
     F.nome = $('#f-nome').value;
   }
@@ -348,8 +343,7 @@
     return `
       <td><input data-f="sku" class="sku" value="${esc(b.sku)}"></td>
       <td><input data-f="quantidade" type="number" min="1" step="1" value="${esc(b.quantidade)}"></td>
-      <td><input data-f="warehouse" class="sku" value="${esc(b.warehouse)}"></td>
-      <td><input data-f="origem" class="sku" value="${esc(b.origem)}"></td>
+      <td><input data-f="origemReingresso" list="dl-origem" value="${esc(b.origemReingresso)}"></td>
       <td><select data-f="responsavel">${respOpts(b.responsavel)}</select></td>
       <td data-turno>${turnoHTML(turnoOf(b))}</td>
       <td>${motivoSelect(b.motivo, 'data-f="motivo"')}</td>
@@ -362,7 +356,7 @@
     if (F.ate && b.data > F.ate) return false;
     if (F.turno && turnoOf(b) !== F.turno) return false;
     if (F.sku && !String(b.sku).toLowerCase().includes(F.sku)) return false;
-    if (F.origem && norm(b.origem) !== norm(F.origem)) return false;
+    if (F.origem && norm(b.origemReingresso) !== norm(F.origem)) return false;
     if (F.nome && norm(b.responsavel) !== norm(F.nome)) return false;
     return true;
   }
@@ -370,7 +364,7 @@
     const list = view.baixas.filter(matches);
     const tb = $('#rows');
     if (!list.length) {
-      tb.innerHTML = `<tr><td colspan="10" class="empty">${view.baixas.length ? 'Nenhuma baixa corresponde aos filtros.'
+      tb.innerHTML = `<tr><td colspan="9" class="empty">${view.baixas.length ? 'Nenhuma baixa corresponde aos filtros.'
         : 'Nenhuma baixa salva ainda. Lance as baixas no bloco de cima e clique em Salvar.'}</td></tr>`;
     } else {
       const frag = document.createDocumentFragment();
@@ -396,7 +390,7 @@
   // ---------- lançamento em grade (rascunho guardado no Grid) ----------
   function novaLinha(ref) {
     return {
-      id: uid(), sku: '', quantidade: '', warehouse: ref ? ref.warehouse : '', origem: ref ? ref.origem : '',
+      id: uid(), sku: '', quantidade: '', origemReingresso: ref ? ref.origemReingresso : '',
       skuReingresso: '', motivo: '', data: (ref && ref.data) || todayISO()
     };
   }
@@ -408,14 +402,13 @@
         <td class="idx">${i + 1}</td>
         <td><input data-m="sku" class="sku" value="${esc(r.sku)}" autocomplete="off"></td>
         <td><input data-m="quantidade" type="number" min="1" step="1" value="${esc(r.quantidade)}"></td>
-        <td><input data-m="warehouse" class="sku" value="${esc(r.warehouse)}" autocomplete="off"></td>
-        <td><input data-m="origem" class="sku" value="${esc(r.origem)}" autocomplete="off"></td>
+        <td><input data-m="origemReingresso" list="dl-origem" value="${esc(r.origemReingresso)}" autocomplete="off"></td>
         <td>${motivoSelect(r.motivo, 'data-m="motivo"')}</td>
         <td><input data-m="skuReingresso" class="sku" value="${esc(r.skuReingresso)}" autocomplete="off"></td>
         <td><input data-m="data" type="date" value="${esc(r.data)}"></td>
         <td class="actions"><button class="btn-danger" data-mdel title="Remover linha">✕</button></td>
       </tr>`).join('')
-      : '<tr><td colspan="9" class="empty">Nenhuma linha. Clique em "+ Linha" para começar.</td></tr>';
+      : '<tr><td colspan="8" class="empty">Nenhuma linha. Clique em "+ Linha" para começar.</td></tr>';
     if (focusId) tb.querySelector(`tr[data-id="${focusId}"] [data-m="sku"]`)?.focus();
     updateMassaStats();
   }
@@ -553,9 +546,9 @@
   }
 
   // linhas das guias
-  const templateLinha = b => [b.sku, Number(b.quantidade) || 0, b.warehouse, b.origem, MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].reason : ''];
-  const painelLinha = b => [b.sku, Number(b.quantidade) || 0, b.warehouse, b.origem, MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].nome : '',
-    b.skuReingresso, b.responsavel, turnoOf(b), dataCel(b.data)];
+  const templateLinha = b => [b.sku, Number(b.quantidade) || 0, WAREHOUSE_FIXO, RQ_FIXO, MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].reason : ''];
+  const painelLinha = b => [b.sku, Number(b.quantidade) || 0, MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].nome : '',
+    b.origemReingresso, b.skuReingresso, b.responsavel, turnoOf(b), dataCel(b.data)];
 
   // guia de saldo: uma linha por responsável, com total no final (considera todas as baixas do documento)
   function saldoRows() {
@@ -624,7 +617,7 @@
       const ignoradas = ids.length - ok.length;
       if (!ok.length) return { lote: [], ignoradas };
       const lote = ok.map(c => ({
-        id: uid(), sku: c.sku, quantidade: Number(c.quantidade), warehouse: c.warehouse, origem: c.origem,
+        id: uid(), sku: c.sku, quantidade: Number(c.quantidade), origemReingresso: c.origemReingresso,
         skuReingresso: c.skuReingresso, responsavel: nome, turno, motivo: c.motivo, data: c.data || todayISO()
       }));
       const limpar = view.rascunhos.filter(r => ids.includes(r.id) || vazia(r));
@@ -671,7 +664,7 @@
         incompletas.map(({ r, i }) => `linha ${i + 1}: falta ${faltas(r).join(', ')}`).join('\n'));
       return;
     }
-    if (!ok.length) { await avisar('Nenhuma linha preenchida. Preencha SKU, quantidade, warehouse, endereço RQ e motivo.'); return; }
+    if (!ok.length) { await avisar('Nenhuma linha preenchida. Preencha SKU, quantidade e motivo.'); return; }
     if (!view.responsaveis.length) { await avisar('Cadastre os responsáveis antes de salvar.'); showTab('resp'); return; }
     const nomes = view.responsaveis.slice().sort(byNome).map(r => r.nome);
     const escolhido = await escolher(`Quem é o responsável por este lote (${ok.length} baixa(s))?`, nomes.map(n => ({ value: n, label: n })), 'Salvar lote');
@@ -705,7 +698,7 @@
       const f = inp.dataset.m;
       let v = inp.value;
       if (f === 'quantidade') v = v === '' ? '' : (parseInt(v, 10) || 0);
-      else if (f === 'sku' || f === 'skuReingresso' || f === 'warehouse' || f === 'origem') v = v.trim().toUpperCase();
+      else if (f === 'sku' || f === 'skuReingresso') v = v.trim().toUpperCase();
       commit([{ t: 'set', c: 'rascunhos', id, patch: { [f]: v } }]);
     });
     tb.addEventListener('change', e => {
@@ -806,7 +799,7 @@
     if (f === 'quantidade') {
       v = parseInt(v, 10);
       if (!(v > 0)) { inp.value = b.quantidade; return; }
-    } else if (f === 'sku' || f === 'skuReingresso' || f === 'warehouse' || f === 'origem') {
+    } else if (f === 'sku' || f === 'skuReingresso') {
       v = v.trim().toUpperCase();
     } else if (f === 'data') {
       if (!v) { inp.value = b.data; return; }
@@ -819,7 +812,7 @@
     if (f === 'responsavel') { const r = findResp(v); patch.turno = r ? r.turno : ''; }
     commit([{ t: 'set', c: 'baixas', id, patch }]);
     inp.value = v;
-    if (f === 'origem' || f === 'responsavel') refreshSelects();
+    if (f === 'origemReingresso' || f === 'responsavel') refreshSelects();
   });
 
   $('#rows').addEventListener('click', async e => {
@@ -849,12 +842,6 @@
   $('#btn-limpar-filtros').addEventListener('click', () => {
     ['#f-de', '#f-ate', '#f-sku', '#f-turno', '#f-origem', '#f-nome'].forEach(id => { $(id).value = ''; });
     readFilters();
-  });
-
-  // ---------- nome do time ----------
-  $('#teamName').addEventListener('change', e => {
-    const v = e.target.value.trim();
-    if (v !== view.teamName) commit([{ t: 'root', teamName: v }]);
   });
 
   // ---------- exportações ----------
@@ -889,17 +876,17 @@
 
   $('#btn-csv').addEventListener('click', () => {
     const list = view.baixas.filter(matches);
-    const head = ['SKU', 'QUANTIDADE', 'WAREHOUSE', 'ENDEREÇO RQ', 'MOTIVO', 'SKU REINGRESSO', 'RESPONSÁVEL', 'TURNO', 'DATA'];
+    const head = ['SKU', 'QUANTIDADE', 'MOTIVO', 'ORIGEM DE REINGRESSO', 'SKU REINGRESSO', 'RESPONSÁVEL', 'TURNO', 'DATA'];
     const cell = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const lines = [head.map(cell).join(';')].concat(
-      list.map(b => [b.sku, b.quantidade, b.warehouse, b.origem, MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].nome : '', b.skuReingresso, b.responsavel, turnoOf(b), fmtBR(b.data)].map(cell).join(';'))
+      list.map(b => [b.sku, b.quantidade, MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].nome : '', b.origemReingresso, b.skuReingresso, b.responsavel, turnoOf(b), fmtBR(b.data)].map(cell).join(';'))
     );
     baixar(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }), `controle-rq-${todayISO()}.csv`);
   });
 
   // backup no mesmo formato do JSON base (inclui rascunho e planilhas)
   $('#btn-backup').addEventListener('click', () => {
-    const data = { teamName: view.teamName, responsaveis: view.responsaveis, baixas: view.baixas, rascunhos: view.rascunhos, planilhas: view.planilhas };
+    const data = { responsaveis: view.responsaveis, baixas: view.baixas, rascunhos: view.rascunhos, planilhas: view.planilhas };
     baixar(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `controle-rq-backup-${todayISO()}.json`);
   });
 
@@ -917,7 +904,6 @@
     }
     if (!await confirmar(`Substituir TODOS os dados deste controle pelos ${data.baixas.length} lançamentos e ${data.responsaveis.length} responsáveis do arquivo?`, 'Substituir', true)) return;
     commit([{ t: 'replace', root: {
-      teamName: String(data.teamName || ''),
       responsaveis: data.responsaveis,
       baixas: data.baixas,
       rascunhos: Array.isArray(data.rascunhos) ? data.rascunhos : [],
