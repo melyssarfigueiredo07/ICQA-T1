@@ -14,10 +14,6 @@
   <span id="sync" class="sync busy">Carregando…</span>
 </header>
 <div id="banner" class="banner" hidden></div>
-<div id="lembrete" class="lembrete" hidden>
-  <span id="lembrete-txt"></span>
-  <button id="lembrete-ver" class="btn-ghost small" type="button">Ver planilhas</button>
-</div>
 
 <nav class="tabs"><div>
   <button class="tab active" data-tab="baixas" type="button">Baixas</button>
@@ -38,7 +34,7 @@
           <button class="btn-ghost" id="massa-add" type="button">+ Linha</button>
           <button class="btn-ghost" id="massa-limpar" type="button">Limpar</button>
           <span class="pill" id="massa-stats">0 linhas</span>
-          <button class="btn-add" id="massa-salvar" type="button">Salvar lote e gerar planilha</button>
+          <button class="btn-add" id="massa-salvar" type="button">Salvar lote</button>
         </div>
       </div>
       <div class="table-wrap small">
@@ -61,8 +57,6 @@
         <span class="pill y" id="st-linhas">0 baixas</span>
         <span class="pill" id="st-qtd">0 unidades</span>
         <div class="card-actions">
-          <button class="btn-ghost" id="btn-export" type="button">Planilha por responsável</button>
-          <button class="btn-ghost" id="btn-csv" type="button">CSV (filtrado)</button>
           <button class="btn-ghost" id="btn-backup" type="button">Backup</button>
           <button class="btn-ghost" id="btn-importar" type="button">Importar</button>
           <button class="btn-ghost" id="btn-limpar" type="button">Limpar tudo</button>
@@ -95,23 +89,27 @@
       </div>
     </section>
 
-    <!-- planilhas geradas: cada geração é um arquivo novo; marque como compartilhada depois de enviar -->
-    <section class="card" id="planilhas-card">
+    <!-- controle: quem solicitou qual baixa; segue os filtros da lista acima -->
+    <section class="card" id="controle-card">
       <div class="card-head">
-        <h2>Planilhas geradas</h2>
-        <span class="hint-inline">Compartilhe cada planilha com o TL responsável pela baixa e com soporteME@mercadolibre.com</span>
+        <h2>Controle por responsável</h2>
+        <span class="pill" id="ctl-baixas">0 baixas</span>
+        <span class="pill" id="ctl-un">0 unidades</span>
+        <span class="pill y" id="ctl-resp">0 responsáveis</span>
+        <span class="hint-inline">Quem solicitou quais baixas · segue os filtros · clique num responsável para filtrar a lista</span>
       </div>
-      <div class="table-wrap small">
-        <table class="planilhas">
+      <div class="table-wrap">
+        <table class="controle">
           <colgroup>
-            <col style="width:34%"><col style="width:16%"><col style="width:7%"><col style="width:15%"><col style="width:28%">
+            <col style="width:13%"><col style="width:6%"><col style="width:6%"><col style="width:16%"><col style="width:14%"><col style="width:35%"><col style="width:10%">
           </colgroup>
           <thead>
-            <tr><th>Arquivo</th><th>Gerada em</th><th>Baixas</th><th>Responsável</th><th>Compartilhamento</th></tr>
+            <tr><th>Responsável</th><th>Turno</th><th>Baixas</th><th>Unidades</th><th>Motivos</th><th>Baixas solicitadas (SKU · qtd · motivo)</th><th>Última</th></tr>
           </thead>
-          <tbody id="planilhas-list"></tbody>
+          <tbody id="controle-rows"></tbody>
         </table>
       </div>
+      <p class="hint" id="ctl-sem"></p>
     </section>
   </section>
 
