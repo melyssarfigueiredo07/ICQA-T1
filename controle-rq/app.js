@@ -587,7 +587,7 @@
   // estilos: 0 = travado (warehouse_id e address_id), 1 = cabeçalho, 2 = destravado (sku, quantity e reason)
   const STYLES_TEMPLATE = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
     '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
-    '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>' +
+    '<fonts count="1"><font><sz val="11"/><name val="Calibri"/><family val="2"/></font></fonts>' +
     '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' +
     '<fill><patternFill patternType="solid"><fgColor rgb="FFD9EAD3"/><bgColor indexed="64"/></patternFill></fill></fills>' +
     '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
@@ -599,40 +599,66 @@
     '</cellXfs>' +
     '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
 
-  // a aba: cabeçalho verde, sku/quantity/reason editáveis, warehouse_id e address_id travados;
-  // a planilha é protegida sem senha, e reason tem a lista suspensa com os dois motivos do modelo
-  function sheetTemplate(header, rows, widths) {
-    const cell = (v, ref, estilo) => {
-      if (typeof v === 'number' && isFinite(v)) return `<c r="${ref}" s="${estilo}"><v>${v}</v></c>`;
-      if (v === '' || v == null) return `<c r="${ref}" s="${estilo}"/>`;
-      return `<c r="${ref}" s="${estilo}" t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`;
-    };
-    const todas = [header, ...rows];
-    const body = todas.map((linha, i) => `<row r="${i + 1}">${linha.map((v, j) => cell(v, colName(j) + (i + 1), i === 0 ? 1 : (j === 2 || j === 3 ? 0 : 2))).join('')}</row>`).join('');
-    const cols = `<cols>${widths.map((w, j) => `<col min="${j + 1}" max="${j + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>`;
-    const motivos = [MOTIVOS.saldo.reason, MOTIVOS.sku.reason].map(esc).join(',');
-    const validacao = `<dataValidations count="1"><dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Motivo" error="Escolha um dos motivos do modelo." sqref="E2:E1000"><formula1>"${motivos}"</formula1></dataValidation></dataValidations>`;
-    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${cols}<sheetData>${body}</sheetData><sheetProtection sheet="1" objects="1" scenarios="1"/>${validacao}</worksheet>`;
-  }
-
-  // pasta do .xlsx com uma única aba, "Template", com as colunas do modelo
+  // o .xlsx no formato padrão do Excel: textos em sharedStrings, propriedades do arquivo e uma aba "Template";
+  // a aba é protegida sem senha, com warehouse_id e address_id travados e a lista suspensa do motivo
   function xlsxTemplate(header, rows, widths) {
     const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+    const textos = [];
+    const indice = new Map();
+    let refs = 0;
+    const textoRef = s => {
+      refs++;
+      if (!indice.has(s)) { indice.set(s, textos.length); textos.push(s); }
+      return indice.get(s);
+    };
+    const todas = [header, ...rows];
+    const celula = (v, ref, estilo) => {
+      if (typeof v === 'number' && isFinite(v)) return `<c r="${ref}" s="${estilo}"><v>${v}</v></c>`;
+      if (v === '' || v == null) return `<c r="${ref}" s="${estilo}"/>`;
+      return `<c r="${ref}" s="${estilo}" t="s"><v>${textoRef(String(v))}</v></c>`;
+    };
+    const linhas = todas.map((linha, i) => `<row r="${i + 1}" spans="1:${linha.length}">${linha.map((v, j) => celula(v, colName(j) + (i + 1), i === 0 ? 1 : (j === 2 || j === 3 ? 0 : 2))).join('')}</row>`).join('');
+    const colunas = `<cols>${widths.map((w, j) => `<col min="${j + 1}" max="${j + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>`;
+    const motivos = [MOTIVOS.saldo.reason, MOTIVOS.sku.reason].map(esc).join(',');
+    const validacao = `<dataValidations count="1"><dataValidation type="list" allowBlank="1" showInputMessage="1" showErrorMessage="1" errorTitle="Motivo" error="Escolha um dos motivos do modelo." sqref="E2:E1000"><formula1>"${motivos}"</formula1></dataValidation></dataValidations>`;
+    const planilha = XML + '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      `<dimension ref="A1:${colName(header.length - 1)}${todas.length}"/>` +
+      '<sheetViews><sheetView tabSelected="1" workbookViewId="0"/></sheetViews>' +
+      '<sheetFormatPr defaultRowHeight="15"/>' + colunas +
+      `<sheetData>${linhas}</sheetData>` +
+      '<sheetProtection sheet="1" objects="1" scenarios="1"/>' + validacao +
+      '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/></worksheet>';
+    const sst = XML + `<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${refs}" uniqueCount="${textos.length}">` +
+      textos.map(t => `<si><t xml:space="preserve">${esc(t)}</t></si>`).join('') + '</sst>';
+    const agora = new Date().toISOString().replace(/\.\d{3}Z$/, 'Z');
     const files = {};
     files['[Content_Types].xml'] = XML + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
       '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
       '<Default Extension="xml" ContentType="application/xml"/>' +
       '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
       '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
-      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>';
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>' +
+      '<Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/>' +
+      '<Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>' +
+      '<Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>';
     files['_rels/.rels'] = XML + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
-      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
-    files['xl/workbook.xml'] = XML + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Template" sheetId="1" r:id="rId1"/></sheets></workbook>';
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>' +
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>' +
+      '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>';
+    files['docProps/core.xml'] = XML + '<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">' +
+      '<dc:title>Solicitação de baixa RQ</dc:title><dc:creator>Controle de RQ</dc:creator>' +
+      `<dcterms:created xsi:type="dcterms:W3CDTF">${agora}</dcterms:created><dcterms:modified xsi:type="dcterms:W3CDTF">${agora}</dcterms:modified></cp:coreProperties>`;
+    files['docProps/app.xml'] = XML + '<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Application>Controle de RQ</Application></Properties>';
+    files['xl/workbook.xml'] = XML + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">' +
+      '<bookViews><workbookView xWindow="0" yWindow="0" windowWidth="16000" windowHeight="9000"/></bookViews>' +
+      '<sheets><sheet name="Template" sheetId="1" r:id="rId1"/></sheets><calcPr calcId="191029"/></workbook>';
     files['xl/_rels/workbook.xml.rels'] = XML + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
       '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
-      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>' +
+      '<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/></Relationships>';
     files['xl/styles.xml'] = STYLES_TEMPLATE;
-    files['xl/worksheets/sheet1.xml'] = sheetTemplate(header, rows, widths);
+    files['xl/sharedStrings.xml'] = sst;
+    files['xl/worksheets/sheet1.xml'] = planilha;
     return zipBlob(files);
   }
 
@@ -946,7 +972,7 @@
     document.body.appendChild(a);
     a.click();
     a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
   }
 
   // backup no mesmo formato do JSON base (inclui rascunho e planilhas)
