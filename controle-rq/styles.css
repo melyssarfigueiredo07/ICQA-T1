@@ -5,7 +5,7 @@
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-body{margin:0;font-family:"Proxima Nova",Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text);font-size:13px}
+body{margin:0;font-family:"Proxima Nova",Arial,Helvetica,sans-serif;background:var(--bg);color:var(--text);font-size:13px;min-height:100vh;display:flex;flex-direction:column}
 
 /* ---------- topo ---------- */
 header{background:var(--yellow);padding:5px 12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
@@ -19,7 +19,7 @@ header h1{margin:0;font-size:15px;font-weight:700;color:var(--navy);padding-left
 .sync.busy{color:var(--blue-d)}
 .banner{background:#FFF3B0;color:#7A5C00;padding:6px 14px;font-weight:700;font-size:12px}
 
-.layout{display:flex;align-items:stretch}
+.layout{display:flex;align-items:stretch;flex:1}
 aside.side{width:150px;flex:none;background:#fff;border-right:1px solid var(--border)}
 nav.tabs{position:sticky;top:0;display:flex;flex-direction:column;padding:8px 0}
 .tab{display:block;width:100%;text-align:left;white-space:normal;line-height:1.3;background:none;border:0;border-left:4px solid transparent;border-radius:0;color:var(--muted);padding:9px 12px;font-weight:700;font-size:13px}
@@ -27,7 +27,11 @@ nav.tabs{position:sticky;top:0;display:flex;flex-direction:column;padding:8px 0}
 .tab.active{color:var(--navy);border-left-color:var(--blue);background:#F3F7FF}
 
 /* ---------- blocos ---------- */
-main{flex:1;min-width:0;max-width:1400px;padding:8px 12px 16px}
+main{flex:1;min-width:0;padding:8px 12px 16px;display:flex;flex-direction:column}
+/* a aba Baixas ocupa a altura que sobra da tela: a lista de baixas salvas cresce e rola por dentro */
+#tab-baixas{flex:1 0 auto;display:flex;flex-direction:column}
+#baixas-card{flex:1 0 auto;display:flex;flex-direction:column}
+#baixas-card .table-wrap{flex:1 1 0;min-height:160px;max-height:none}
 .card{background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.08);padding:9px 10px;margin-bottom:8px}
 .card h2{margin:0;font-size:14px;color:var(--navy)}
 .card-head{display:flex;align-items:center;gap:6px 10px;flex-wrap:wrap;margin-bottom:6px}
