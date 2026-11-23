@@ -566,6 +566,7 @@
           ${p.compartilhada
             ? `<span class="ok-txt">Compartilhada em ${esc(fmtDataHora(p.compartilhadaEm))}</span>`
             : `<span class="pend-txt">OBRIGATÓRIO: ${esc(destinatarios(p).join(' + '))}</span>`}
+          <button class="btn-ghost small" data-pl-ver>Ver planilha</button>
           <button class="btn-ghost small" data-pl-toggle>${p.compartilhada ? 'Desfazer' : 'Marcar compartilhada'}</button>
         </td>
       </tr>`).join('')
@@ -700,10 +701,11 @@
   // gera SEMPRE uma planilha nova do lote, com as colunas do modelo, e registra o lembrete de compartilhamento
   async function gerarPlanilha(lista, nomeBase, nomes) {
     const arquivo = `controle-rq-lote-${nomeBase}-${stamp()}.xlsx`;
-    baixar(xlsxTemplate(TEMPLATE_HEAD, lista.map(templateLinha), TEMPLATE_LARG), arquivo);
+    const linhas = lista.map(templateLinha);
+    baixar(xlsxTemplate(TEMPLATE_HEAD, linhas, TEMPLATE_LARG), arquivo);
     const p = {
       id: uid(), arquivo, tipo: 'lote', criadaEm: new Date().toISOString(), responsaveis: nomes,
-      baixas: lista.length, compartilhada: false, compartilhadaEm: ''
+      baixas: lista.length, compartilhada: false, compartilhadaEm: '', linhas
     };
     commit([{ t: 'add', c: 'planilhas', rec: p }]);
     flushNow();
@@ -1039,6 +1041,8 @@
 
   // ---------- planilhas geradas: marcar como compartilhada ----------
   $('#planilhas-list').addEventListener('click', async e => {
+    const ver = e.target.closest('[data-pl-ver]');
+    if (ver) { abrirPlanilha(ver.closest('[data-id]').dataset.id); return; }
     const btn = e.target.closest('[data-pl-toggle]');
     if (!btn) return;
     const id = btn.closest('[data-id]').dataset.id;
@@ -1055,6 +1059,8 @@
   // "Ver planilhas": mostra a aba Baixas, leva até a lista de planilhas e destaca o cartão (mesmo que ele já esteja na tela)
   $('#lembrete-ver').addEventListener('click', () => {
     showTab('baixas', false);
+    const pendente = view.planilhas.find(p => !p.compartilhada) || view.planilhas[0];
+    if (pendente) abrirPlanilha(pendente.id, false);
     const cartao = $('#planilhas-card');
     if (!cartao) return;
     cartao.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -1062,6 +1068,47 @@
     void cartao.offsetWidth;   // reinicia a animação do destaque
     cartao.classList.add('destaque');
     cartao.addEventListener('animationend', () => cartao.classList.remove('destaque'), { once: true });
+  });
+
+  // ---------- planilha aberta na tela: conferir, copiar para o Google Sheets ou baixar o .xlsx ----------
+  let planilhaAberta = null;
+  function abrirPlanilha(id, rolar = true) {
+    const p = view.planilhas.find(x => x.id === id);
+    if (!p) return;
+    planilhaAberta = id;
+    $('#pv-titulo').textContent = p.arquivo;
+    $('#pv-info').textContent = `${p.baixas} ${p.baixas === 1 ? 'baixa' : 'baixas'} · ${(p.responsaveis || []).join(', ')} · gerada em ${fmtDataHora(p.criadaEm)}`;
+    const linhas = Array.isArray(p.linhas) ? p.linhas : null;
+    if (linhas) {
+      $('#pv-tabela').innerHTML = linhas.map(l => `<tr>${l.map((v, j) => `<td${j === 1 ? ' class="num"' : ''}>${esc(v)}</td>`).join('')}</tr>`).join('');
+      $('#pv-tsv').value = [TEMPLATE_HEAD, ...linhas].map(l => l.map(v => String(v ?? '')).join('\t')).join('\n');
+    } else {
+      $('#pv-tabela').innerHTML = '<tr><td colspan="5" class="empty">O conteúdo desta planilha não foi guardado (ela é anterior a esta versão). Gere um novo lote para ter a planilha na tela.</td></tr>';
+      $('#pv-tsv').value = '';
+    }
+    $('#pv-card').hidden = false;
+    if (rolar) $('#pv-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+  $('#pv-copiar').addEventListener('click', async () => {
+    const area = $('#pv-tsv');
+    area.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+    if (!ok && navigator.clipboard) {
+      try { await navigator.clipboard.writeText(area.value); ok = true; } catch (err) { ok = false; }
+    }
+    await avisar(ok
+      ? 'Tabela copiada. Abra o Google Sheets, cole numa cópia da RQ BASE (Ctrl+V) e baixe como .xlsx por lá.'
+      : 'Não consegui copiar automaticamente. O texto já está selecionado na caixa abaixo: use Ctrl+C.');
+  });
+  $('#pv-baixar').addEventListener('click', () => {
+    const p = view.planilhas.find(x => x.id === planilhaAberta);
+    if (!p || !Array.isArray(p.linhas)) { avisar('Esta planilha não tem o conteúdo guardado. Gere um novo lote para baixar o arquivo.'); return; }
+    baixar(xlsxTemplate(TEMPLATE_HEAD, p.linhas, TEMPLATE_LARG), p.arquivo);
+  });
+  $('#pv-fechar').addEventListener('click', () => {
+    planilhaAberta = null;
+    $('#pv-card').hidden = true;
   });
 
   // ---------- início ----------

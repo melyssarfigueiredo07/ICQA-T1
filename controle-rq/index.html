@@ -113,6 +113,30 @@
           <tbody id="planilhas-list"></tbody>
         </table>
       </div>
+      <div class="card pv" id="pv-card" hidden>
+        <div class="card-head">
+          <h2 id="pv-titulo">Planilha</h2>
+          <span class="hint-inline" id="pv-info"></span>
+          <div class="card-actions">
+            <button class="btn-add" id="pv-copiar" type="button">Copiar tabela</button>
+            <button class="btn-ghost" id="pv-baixar" type="button">Baixar .xlsx</button>
+            <button class="btn-ghost" id="pv-fechar" type="button">Fechar</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="controle">
+            <colgroup>
+              <col style="width:14%"><col style="width:10%"><col style="width:14%"><col style="width:22%"><col style="width:40%">
+            </colgroup>
+            <thead>
+              <tr><th>sku</th><th>quantity</th><th>warehouse_id</th><th>address_id</th><th>reason</th></tr>
+            </thead>
+            <tbody id="pv-tabela"></tbody>
+          </table>
+        </div>
+        <p class="hint">Para o Jira: copie a tabela e cole numa cópia da RQ BASE (Google Sheets), que já tem as colunas travadas. Se o navegador bloquear o .xlsx dentro do Grid, use Copiar tabela.</p>
+        <textarea id="pv-tsv" class="pv-tsv" readonly aria-label="Texto da planilha para colar no Google Sheets"></textarea>
+      </div>
     </section>
   </section>
 

@@ -155,3 +155,7 @@ tr.ok td.status{background:#F6FFF9}
 /* ---------- destaque da lista de planilhas ao clicar em "Ver planilhas" ---------- */
 @keyframes destaque{from{box-shadow:0 0 0 4px #FFE600}to{box-shadow:0 0 0 0 rgba(255,230,0,0)}}
 .destaque{animation:destaque 1.6s ease-out}
+
+/* ---------- planilha aberta na tela ---------- */
+.pv{box-shadow:none;border:1px solid var(--border);margin:8px 0 0;padding:8px 10px}
+.pv-tsv{width:100%;height:96px;margin-top:6px;font-family:monospace;font-size:11px;border:1px solid #CCC;border-radius:6px;padding:6px;background:#FAFAFA;color:var(--text);resize:vertical}
