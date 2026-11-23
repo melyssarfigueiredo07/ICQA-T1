@@ -568,6 +568,7 @@
             : `<span class="pend-txt">OBRIGATÓRIO: ${esc(destinatarios(p).join(' + '))}</span>`}
           <button class="btn-ghost small" data-pl-ver>Ver planilha</button>
           <button class="btn-ghost small" data-pl-toggle>${p.compartilhada ? 'Desfazer' : 'Marcar compartilhada'}</button>
+          <button class="btn-danger" data-pl-excluir title="Excluir esta planilha da lista">Excluir</button>
         </td>
       </tr>`).join('')
       : '<tr><td colspan="5" class="empty">Nenhuma planilha gerada ainda.</td></tr>';
@@ -1043,6 +1044,17 @@
   $('#planilhas-list').addEventListener('click', async e => {
     const ver = e.target.closest('[data-pl-ver]');
     if (ver) { abrirPlanilha(ver.closest('[data-id]').dataset.id); return; }
+    const exc = e.target.closest('[data-pl-excluir]');
+    if (exc) {
+      const id = exc.closest('[data-id]').dataset.id;
+      const p = view.planilhas.find(x => x.id === id);
+      if (!p) return;
+      const aviso = p.compartilhada ? '' : ' Ela ainda não foi marcada como compartilhada.';
+      if (!await confirmar(`Excluir a planilha ${p.arquivo} da lista?${aviso} As baixas continuam salvas, e o arquivo que já está no seu computador não é apagado.`, 'Excluir', true)) return;
+      if (planilhaAberta === id) { planilhaAberta = null; $('#pv-card').hidden = true; }
+      commit([{ t: 'del', c: 'planilhas', id }]);
+      return;
+    }
     const btn = e.target.closest('[data-pl-toggle]');
     if (!btn) return;
     const id = btn.closest('[data-id]').dataset.id;
