@@ -15,6 +15,10 @@
 </header>
 <div id="banner" class="banner" hidden></div>
 
+<div id="lembrete" class="lembrete" hidden>
+  <span id="lembrete-txt"></span>
+  <button id="lembrete-ver" class="btn-ghost small" type="button">Ver planilhas</button>
+</div>
 <div class="layout">
 <aside class="side">
 <nav class="tabs">
@@ -37,7 +41,7 @@
           <button class="btn-ghost" id="massa-add" type="button">+ Linha</button>
           <button class="btn-ghost" id="massa-limpar" type="button">Limpar</button>
           <span class="pill" id="massa-stats">0 linhas</span>
-          <button class="btn-add" id="massa-salvar" type="button">Salvar lote</button>
+          <button class="btn-add" id="massa-salvar" type="button">Salvar lote e gerar planilha</button>
         </div>
       </div>
       <div class="table-wrap small">
@@ -92,6 +96,24 @@
       </div>
     </section>
 
+    <!-- planilhas geradas: cada geração é um arquivo novo; marque como compartilhada depois de enviar -->
+    <section class="card" id="planilhas-card">
+      <div class="card-head">
+        <h2>Planilhas geradas</h2>
+        <span class="hint-inline">Compartilhe cada planilha com o TL responsável pela baixa e com soporteME@mercadolibre.com</span>
+      </div>
+      <div class="table-wrap small">
+        <table class="planilhas">
+          <colgroup>
+            <col style="width:34%"><col style="width:16%"><col style="width:7%"><col style="width:15%"><col style="width:28%">
+          </colgroup>
+          <thead>
+            <tr><th>Arquivo</th><th>Gerada em</th><th>Baixas</th><th>Responsável</th><th>Compartilhamento</th></tr>
+          </thead>
+          <tbody id="planilhas-list"></tbody>
+        </table>
+      </div>
+    </section>
   </section>
 
   <!-- ===================== ABA: RELATÓRIO ===================== -->

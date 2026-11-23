@@ -140,3 +140,14 @@ tr.det td{background:#FBFCFF;padding:4px 10px 6px;font-size:11px;white-space:nor
 tr.det div{padding:2px 0;border-bottom:1px dashed #E6EAF5}
 tr.top td{background:#FFF6CC;font-weight:700}
 @media (max-width:1100px){.grid-rel{grid-template-columns:minmax(0,1fr)}}
+
+/* ---------- planilha de solicitação e lembrete de compartilhamento ---------- */
+.lembrete{background:var(--yellow);color:var(--navy);padding:6px 14px;font-weight:700;font-size:12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.lembrete[hidden]{display:none!important}
+td.arq{font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:4px 6px}
+td.status{font-size:11px;white-space:normal;line-height:1.3;padding:3px 6px}
+td.status button{margin-top:3px}
+tr.pend td.status{background:#FFF9F9}
+tr.ok td.status{background:#F6FFF9}
+.pend-txt{color:#B00020;font-weight:700;display:block}
+.ok-txt{color:#00733B;font-weight:600;display:block}

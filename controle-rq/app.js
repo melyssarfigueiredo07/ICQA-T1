@@ -27,6 +27,13 @@
     }
   };
 
+  // Modelo da planilha de solicitação de baixa (Baja de RQ): só estas colunas; warehouse e endereço são fixos
+  const TEMPLATE_HEAD = ['sku', 'quantity', 'warehouse_id', 'address_id', 'reason'];
+  const TEMPLATE_LARG = [16, 12, 16, 24, 80];
+  const WAREHOUSE_FIXO = 'BRRJ02';
+  const RQ_FIXO = 'RQ-0-005-000-00-00';
+  const EMAIL_SUPORTE = 'soporteME@mercadolibre.com';
+
   // ---------- utilidades ----------
   const $ = s => document.querySelector(s);
   const norm = s => String(s ?? '').trim().toLowerCase();
@@ -39,6 +46,14 @@
   const uniq = arr => [...new Set(arr.map(v => String(v ?? '').trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
   const byNome = (a, b) => a.nome.localeCompare(b.nome, 'pt-BR');
   const hasData = s => !!s && ((Array.isArray(s.baixas) && s.baixas.length > 0) || (Array.isArray(s.responsaveis) && s.responsaveis.length > 0));
+
+  const pad = n => String(n).padStart(2, '0');
+  const fmtDataHora = iso => { const d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('pt-BR'); };
+  const slug = s => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'sem-nome';
+  const stamp = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}-${String(d.getMilliseconds()).padStart(3, '0')}`;
+  };
 
   // ---------- armazenamento: window.GRID.state (compartilhado e ao vivo) ----------
   // Fora do Grid (prévia local) não existe estado compartilhado: usa uma cópia só em memória.
@@ -279,6 +294,7 @@
     renderBaixas();
     renderMassa();
     renderRelatorio();
+    renderPlanilhas();
   }
 
   function setOptions(sel, html, value) {
@@ -531,6 +547,146 @@
     $('#rel-origem').textContent = lider ? `Origem com mais reingressos: ${lider.origem} (${lider.un} un.)` : 'Origem com mais reingressos: —';
   }
 
+  // ---------- planilha de solicitação de baixa (modelo Baja de RQ) e lembrete obrigatório de compartilhamento ----------
+  // destinatários obrigatórios: o TL responsável pela baixa de cada responsável da planilha + o suporte
+  function destinatarios(p) {
+    const tls = (p.responsaveis || []).map(nome => `TL responsável pela baixa (responsável: ${nome})`);
+    return [...tls, `Suporte: ${EMAIL_SUPORTE}`];
+  }
+  function renderPlanilhas() {
+    const lista = view.planilhas;
+    const pend = lista.filter(p => !p.compartilhada);
+    $('#planilhas-list').innerHTML = lista.length ? lista.map(p => `
+      <tr class="${p.compartilhada ? 'ok' : 'pend'}" data-id="${esc(p.id)}">
+        <td class="arq" title="${esc(p.arquivo)}">${esc(p.arquivo)}</td>
+        <td>${esc(fmtDataHora(p.criadaEm))}</td>
+        <td class="num">${p.baixas}</td>
+        <td>${esc((p.responsaveis || []).join(', '))}</td>
+        <td class="status">
+          ${p.compartilhada
+            ? `<span class="ok-txt">Compartilhada em ${esc(fmtDataHora(p.compartilhadaEm))}</span>`
+            : `<span class="pend-txt">OBRIGATÓRIO: ${esc(destinatarios(p).join(' + '))}</span>`}
+          <button class="btn-ghost small" data-pl-toggle>${p.compartilhada ? 'Desfazer' : 'Marcar compartilhada'}</button>
+        </td>
+      </tr>`).join('')
+      : '<tr><td colspan="5" class="empty">Nenhuma planilha gerada ainda.</td></tr>';
+    $('#lembrete').hidden = pend.length === 0;
+    $('#lembrete-txt').textContent = `${pend.length} planilha(s) ainda não compartilhada(s). Compartilhe obrigatoriamente com o TL responsável e com ${EMAIL_SUPORTE}.`;
+  }
+
+  // ---------- planilha .xlsx do modelo (gerada aqui, sem bibliotecas externas) ----------
+  const CRC_TABLE = (() => {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; }
+    return t;
+  })();
+  const crc32 = bytes => { let c = 0xFFFFFFFF; for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  const enc = new TextEncoder();
+  const colName = i => { let s = ''; i++; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+
+  // estilos: 0 = travado (warehouse_id e address_id), 1 = cabeçalho, 2 = destravado (sku, quantity e reason)
+  const STYLES_TEMPLATE = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' +
+    '<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">' +
+    '<fonts count="1"><font><sz val="11"/><name val="Calibri"/></font></fonts>' +
+    '<fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill>' +
+    '<fill><patternFill patternType="solid"><fgColor rgb="FFD9EAD3"/><bgColor indexed="64"/></patternFill></fill></fills>' +
+    '<borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders>' +
+    '<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>' +
+    '<cellXfs count="3">' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>' +
+    '<xf numFmtId="0" fontId="0" fillId="2" borderId="0" xfId="0" applyFill="1"/>' +
+    '<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyProtection="1"><protection locked="0"/></xf>' +
+    '</cellXfs>' +
+    '<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+
+  // a aba: cabeçalho verde, sku/quantity/reason editáveis, warehouse_id e address_id travados;
+  // a planilha é protegida sem senha, e reason tem a lista suspensa com os dois motivos do modelo
+  function sheetTemplate(header, rows, widths) {
+    const cell = (v, ref, estilo) => {
+      if (typeof v === 'number' && isFinite(v)) return `<c r="${ref}" s="${estilo}"><v>${v}</v></c>`;
+      if (v === '' || v == null) return `<c r="${ref}" s="${estilo}"/>`;
+      return `<c r="${ref}" s="${estilo}" t="inlineStr"><is><t xml:space="preserve">${esc(v)}</t></is></c>`;
+    };
+    const todas = [header, ...rows];
+    const body = todas.map((linha, i) => `<row r="${i + 1}">${linha.map((v, j) => cell(v, colName(j) + (i + 1), i === 0 ? 1 : (j === 2 || j === 3 ? 0 : 2))).join('')}</row>`).join('');
+    const cols = `<cols>${widths.map((w, j) => `<col min="${j + 1}" max="${j + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>`;
+    const motivos = [MOTIVOS.saldo.reason, MOTIVOS.sku.reason].map(esc).join(',');
+    const validacao = `<dataValidations count="1"><dataValidation type="list" allowBlank="1" showErrorMessage="1" errorTitle="Motivo" error="Escolha um dos motivos do modelo." sqref="E2:E1000"><formula1>"${motivos}"</formula1></dataValidation></dataValidations>`;
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">${cols}<sheetData>${body}</sheetData><sheetProtection sheet="1" objects="1" scenarios="1"/>${validacao}</worksheet>`;
+  }
+
+  // pasta do .xlsx com uma única aba, "Template", com as colunas do modelo
+  function xlsxTemplate(header, rows, widths) {
+    const XML = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+    const files = {};
+    files['[Content_Types].xml'] = XML + '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>' +
+      '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>' +
+      '<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>';
+    files['_rels/.rels'] = XML + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>';
+    files['xl/workbook.xml'] = XML + '<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Template" sheetId="1" r:id="rId1"/></sheets></workbook>';
+    files['xl/_rels/workbook.xml.rels'] = XML + '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>' +
+      '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>';
+    files['xl/styles.xml'] = STYLES_TEMPLATE;
+    files['xl/worksheets/sheet1.xml'] = sheetTemplate(header, rows, widths);
+    return zipBlob(files);
+  }
+
+  // zip sem compressão (método STORE), com CRC-32, como o .xlsx exige
+  function zipBlob(files) {
+    const partes = [], central = [];
+    let offset = 0;
+    const agora = new Date();
+    const hora = (agora.getHours() << 11) | (agora.getMinutes() << 5) | (agora.getSeconds() >> 1);
+    const data = ((agora.getFullYear() - 1980) << 9) | ((agora.getMonth() + 1) << 5) | agora.getDate();
+    const entradas = Object.entries(files);
+    for (const [nome, texto] of entradas) {
+      const nomeB = enc.encode(nome), dados = enc.encode(texto), crc = crc32(dados);
+      const lh = new DataView(new ArrayBuffer(30));
+      lh.setUint32(0, 0x04034b50, true); lh.setUint16(4, 20, true); lh.setUint16(6, 0x0800, true); lh.setUint16(8, 0, true);
+      lh.setUint16(10, hora, true); lh.setUint16(12, data, true); lh.setUint32(14, crc, true);
+      lh.setUint32(18, dados.length, true); lh.setUint32(22, dados.length, true); lh.setUint16(26, nomeB.length, true); lh.setUint16(28, 0, true);
+      partes.push(new Uint8Array(lh.buffer), nomeB, dados);
+      const ch = new DataView(new ArrayBuffer(46));
+      ch.setUint32(0, 0x02014b50, true); ch.setUint16(4, 20, true); ch.setUint16(6, 20, true); ch.setUint16(8, 0x0800, true); ch.setUint16(10, 0, true);
+      ch.setUint16(12, hora, true); ch.setUint16(14, data, true); ch.setUint32(16, crc, true);
+      ch.setUint32(20, dados.length, true); ch.setUint32(24, dados.length, true); ch.setUint16(28, nomeB.length, true);
+      ch.setUint16(30, 0, true); ch.setUint16(32, 0, true); ch.setUint16(34, 0, true); ch.setUint16(36, 0, true);
+      ch.setUint32(38, 0, true); ch.setUint32(42, offset, true);
+      central.push(new Uint8Array(ch.buffer), nomeB);
+      offset += 30 + nomeB.length + dados.length;
+    }
+    const tamCentral = central.reduce((s, p) => s + p.length, 0);
+    const eocd = new DataView(new ArrayBuffer(22));
+    eocd.setUint32(0, 0x06054b50, true); eocd.setUint16(4, 0, true); eocd.setUint16(6, 0, true);
+    eocd.setUint16(8, entradas.length, true); eocd.setUint16(10, entradas.length, true);
+    eocd.setUint32(12, tamCentral, true); eocd.setUint32(16, offset, true); eocd.setUint16(20, 0, true);
+    return new Blob([...partes, ...central, new Uint8Array(eocd.buffer)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  }
+
+  // linhas do modelo: sku, quantity, warehouse_id e address_id fixos, reason com o texto do motivo (CX não tem texto no modelo)
+  const templateLinha = b => [b.sku, Number(b.quantidade) || 0, WAREHOUSE_FIXO, RQ_FIXO, MOTIVOS[b.motivo] ? MOTIVOS[b.motivo].reason : ''];
+
+  // gera SEMPRE uma planilha nova do lote, com as colunas do modelo, e registra o lembrete de compartilhamento
+  async function gerarPlanilha(lista, nomeBase, nomes) {
+    const arquivo = `controle-rq-lote-${nomeBase}-${stamp()}.xlsx`;
+    baixar(xlsxTemplate(TEMPLATE_HEAD, lista.map(templateLinha), TEMPLATE_LARG), arquivo);
+    const p = {
+      id: uid(), arquivo, tipo: 'lote', criadaEm: new Date().toISOString(), responsaveis: nomes,
+      baixas: lista.length, compartilhada: false, compartilhadaEm: ''
+    };
+    commit([{ t: 'add', c: 'planilhas', rec: p }]);
+    flushNow();
+    return p;
+  }
+  async function lembreteModal(p, resumo) {
+    await avisar(`${resumo}\nPlanilha gerada: ${p.arquivo}\n\nLEMBRETE OBRIGATÓRIO: compartilhe esta planilha com:\n- ${destinatarios(p).join('\n- ')}\n\nEla fica na lista de planilhas geradas (nesta tela) até você marcar como compartilhada.`);
+  }
+
   // ---------- Salvar lote ----------
   // grava tudo que está pendente antes de uma operação atômica
   async function gravarPendencias() {
@@ -608,6 +764,8 @@
     const r = findResp(escolhido);
     const nome = r ? r.nome : escolhido;
     const turno = r ? r.turno : '';
+    const cx = ok.filter(c => c.motivo === 'cx').length;
+    if (cx && !await confirmar(`${cx} baixa(s) com motivo CX: o modelo da planilha ainda não tem o texto desse motivo, então a coluna reason fica em branco nessas linhas. Salvar e gerar a planilha mesmo assim?`, 'Gerar mesmo assim', true)) return;
     const res = await salvarLote(ok.map(c => c.id), nome, turno);
     if (res.erro) {
       const msgs = {
@@ -619,7 +777,10 @@
       return;
     }
     if (!res.lote.length) { await avisar('Essas linhas já foram salvas por outra pessoa ou deixaram de estar completas. A tela foi atualizada.'); return; }
-    if (res.ignoradas) await avisar(`${res.lote.length} baixa(s) salvas para ${nome}. ${res.ignoradas} linha(s) não entraram (já salvas por outra pessoa ou deixaram de estar completas).`);
+    // cada salvamento gera uma planilha nova, só com as colunas do modelo
+    const p = await gerarPlanilha(res.lote, slug(nome), [nome]);
+    const extra = res.ignoradas ? ` ${res.ignoradas} linha(s) não entraram (já salvas por outra pessoa ou deixaram de estar completas).` : '';
+    await lembreteModal(p, `${res.lote.length} baixa(s) salvas para ${nome}.${extra}`);
   });
   massaEventos();
   function massaEventos() {
@@ -848,6 +1009,25 @@
     const aberto = ABERTOS.has(k);
     tr.classList.toggle('aberto', aberto);
     det.hidden = !aberto;
+  });
+
+  // ---------- planilhas geradas: marcar como compartilhada ----------
+  $('#planilhas-list').addEventListener('click', async e => {
+    const btn = e.target.closest('[data-pl-toggle]');
+    if (!btn) return;
+    const id = btn.closest('[data-id]').dataset.id;
+    const p = view.planilhas.find(x => x.id === id);
+    if (!p) return;
+    if (!p.compartilhada) {
+      const ok = await confirmar(`Confirma que a planilha ${p.arquivo} foi compartilhada com: ${destinatarios(p).join(', ')}?`, 'Sim, compartilhei');
+      if (!ok) return;
+      commit([{ t: 'set', c: 'planilhas', id, patch: { compartilhada: true, compartilhadaEm: new Date().toISOString() } }]);
+    } else {
+      commit([{ t: 'set', c: 'planilhas', id, patch: { compartilhada: false, compartilhadaEm: '' } }]);
+    }
+  });
+  $('#lembrete-ver').addEventListener('click', () => {
+    $('#planilhas-card')?.scrollIntoView({ behavior: 'smooth' });
   });
 
   // ---------- início ----------
