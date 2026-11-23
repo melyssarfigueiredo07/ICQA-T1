@@ -1052,8 +1052,16 @@
       commit([{ t: 'set', c: 'planilhas', id, patch: { compartilhada: false, compartilhadaEm: '' } }]);
     }
   });
+  // "Ver planilhas": mostra a aba Baixas, leva até a lista de planilhas e destaca o cartão (mesmo que ele já esteja na tela)
   $('#lembrete-ver').addEventListener('click', () => {
-    $('#planilhas-card')?.scrollIntoView({ behavior: 'smooth' });
+    showTab('baixas', false);
+    const cartao = $('#planilhas-card');
+    if (!cartao) return;
+    cartao.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    cartao.classList.remove('destaque');
+    void cartao.offsetWidth;   // reinicia a animação do destaque
+    cartao.classList.add('destaque');
+    cartao.addEventListener('animationend', () => cartao.classList.remove('destaque'), { once: true });
   });
 
   // ---------- início ----------

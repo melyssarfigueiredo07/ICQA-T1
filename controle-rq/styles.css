@@ -151,3 +151,7 @@ tr.pend td.status{background:#FFF9F9}
 tr.ok td.status{background:#F6FFF9}
 .pend-txt{color:#B00020;font-weight:700;display:block}
 .ok-txt{color:#00733B;font-weight:600;display:block}
+
+/* ---------- destaque da lista de planilhas ao clicar em "Ver planilhas" ---------- */
+@keyframes destaque{from{box-shadow:0 0 0 4px #FFE600}to{box-shadow:0 0 0 0 rgba(255,230,0,0)}}
+.destaque{animation:destaque 1.6s ease-out}
