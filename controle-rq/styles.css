@@ -163,3 +163,13 @@ tr.ok td.status{background:#F6FFF9}
 /* ---------- planilha aberta na tela ---------- */
 .pv{box-shadow:none;border:1px solid var(--border);margin:8px 0 0;padding:8px 10px}
 .pv-tsv{width:100%;height:96px;margin-top:6px;font-family:monospace;font-size:11px;border:1px solid #CCC;border-radius:6px;padding:6px;background:#FAFAFA;color:var(--text);resize:vertical}
+
+/* ---------- reingresso, funções do responsável e aviso para todos ---------- */
+.tab-badge{display:inline-block;margin-left:6px;background:var(--yellow);color:var(--navy);border-radius:999px;padding:0 6px;font-size:10px;font-weight:800;line-height:16px;vertical-align:middle}
+.aviso-reingresso{background:#D6E8FF;color:#1B4F9C}
+.papeis{grid-column:1/-1;display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.papeis label{flex-direction:row;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:12px;font-weight:600;color:var(--text)}
+td.chk,th.chk{text-align:center}
+.btn-add.small{padding:3px 8px;font-size:11px}
+.linha-inline{flex-direction:row;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:12px;font-weight:600;color:var(--text)}
+.linha-inline select{width:auto;min-width:150px}

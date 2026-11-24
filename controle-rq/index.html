@@ -19,10 +19,15 @@
   <span id="lembrete-txt"></span>
   <button id="lembrete-ver" class="btn-ghost small" type="button">Ver planilhas</button>
 </div>
+<div id="aviso-reingresso" class="lembrete aviso-reingresso" hidden>
+  <span id="aviso-reingresso-txt"></span>
+  <button id="aviso-reingresso-ver" class="btn-ghost small" type="button">Ver pendentes</button>
+</div>
 <div class="layout">
 <aside class="side">
 <nav class="tabs">
   <button class="tab active" data-tab="baixas" type="button">Baixas</button>
+  <button class="tab" data-tab="reingresso" type="button">Reingresso <span class="tab-badge" id="tab-badge-reingresso" hidden></span></button>
   <button class="tab" data-tab="relatorio" type="button">Relatório</button>
   <button class="tab" data-tab="resp" type="button">Cadastro de responsáveis</button>
 </nav>
@@ -140,6 +145,59 @@
     </section>
   </section>
 
+  <!-- ===================== ABA: REINGRESSO ===================== -->
+  <section id="tab-reingresso" hidden>
+
+    <!-- baixas da planilha emitida que aguardam o reingresso: confirme e escolha quem fez -->
+    <section class="card" id="reing-card">
+      <div class="card-head">
+        <h2>Reingresso</h2>
+        <span class="pill y" id="reing-pend">0 pendentes</span>
+        <span class="pill" id="reing-un">0 unidades</span>
+        <span class="hint-inline">Entram aqui quando a planilha do lote é emitida</span>
+        <div class="card-actions">
+          <label class="linha-inline"><span>Mostrar</span>
+            <select id="reing-filtro">
+              <option value="pendentes">Pendentes</option>
+              <option value="confirmados">Confirmados</option>
+              <option value="todos">Todos</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="reing">
+          <colgroup>
+            <col style="width:9%"><col style="width:6%"><col style="width:16%"><col style="width:10%"><col style="width:14%"><col style="width:20%"><col style="width:17%"><col style="width:8%">
+          </colgroup>
+          <thead>
+            <tr><th>SKU</th><th>Qtd</th><th>Origem de reingresso</th><th>SKU reingr.</th><th>Responsável (baixa)</th><th>Planilha</th><th>Reingresso por</th><th></th></tr>
+          </thead>
+          <tbody id="reing-rows"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- uma notificação a cada emissão de planilha: aparece para todos que abrem o controle -->
+    <section class="card">
+      <div class="card-head">
+        <h2>Notificações de reingresso</h2>
+        <span class="hint-inline">Geradas quando uma planilha é emitida · aparecem para todos que abrem o controle</span>
+      </div>
+      <div class="table-wrap small">
+        <table class="planilhas">
+          <colgroup>
+            <col style="width:18%"><col style="width:40%"><col style="width:10%"><col style="width:12%"><col style="width:20%">
+          </colgroup>
+          <thead>
+            <tr><th>Quando</th><th>Planilha</th><th>Baixas</th><th>Unidades</th><th>Ainda pendentes</th></tr>
+          </thead>
+          <tbody id="notif-list"></tbody>
+        </table>
+      </div>
+    </section>
+  </section>
+
   <!-- ===================== ABA: RELATÓRIO ===================== -->
   <section id="tab-relatorio" hidden>
 
@@ -239,6 +297,10 @@
           <input id="r-cargo" list="dl-cargo" placeholder="Ex.: Operador">
         </label>
         <button type="submit" class="btn-add">+ Cadastrar</button>
+        <div class="papeis">
+          <label><input type="checkbox" id="r-baixa" checked> Responsável por baixa</label>
+          <label><input type="checkbox" id="r-reingresso"> Responsável por reingresso</label>
+        </div>
       </form>
       <p class="hint">Alterar o nome ou o turno aqui atualiza também as baixas já salvas.</p>
     </section>
@@ -250,15 +312,15 @@
       <div class="table-wrap">
         <table class="resps">
           <colgroup>
-            <col style="width:40%"><col style="width:20%"><col style="width:30%"><col style="width:10%">
+            <col style="width:30%"><col style="width:13%"><col style="width:24%"><col style="width:12%"><col style="width:14%"><col style="width:7%">
           </colgroup>
           <thead>
-            <tr><th>Nome</th><th>Turno</th><th>Cargo</th><th></th></tr>
+            <tr><th>Nome</th><th>Turno</th><th>Cargo</th><th class="chk">Baixa</th><th class="chk">Reingresso</th><th></th></tr>
           </thead>
           <tbody id="resp-rows"></tbody>
         </table>
       </div>
-      <p class="hint">Clique em qualquer campo para editar.</p>
+      <p class="hint">Clique em qualquer campo para editar. Baixa: aparece na escolha do responsável de cada lote. Reingresso: aparece na confirmação de reingresso.</p>
     </section>
   </section>
 

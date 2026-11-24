@@ -65,13 +65,17 @@
   } : window.GRID.state;
 
   // ---------- modelo de dados ----------
-  // { responsaveis:[{id,nome,turno,cargo}],
-  //   baixas:[{id,sku,quantidade,origemReingresso,skuReingresso,responsavel,turno,data,motivo}],
+  // { responsaveis:[{id,nome,turno,cargo,baixa,reingresso}],
+  //   baixas:[{id,sku,quantidade,origemReingresso,skuReingresso,responsavel,turno,data,motivo,planilhaId,planilhaArq,reingresso}],
   //   rascunhos:[{id,sku,quantidade,origemReingresso,skuReingresso,motivo,data}],
-  //   planilhas:[{id,arquivo,tipo,criadaEm,responsaveis,baixas,compartilhada,compartilhadaEm}] }
+  //   planilhas:[{id,arquivo,tipo,criadaEm,responsaveis,baixas,compartilhada,compartilhadaEm}],
+  //   notificacoes:[{id,tipo,planilhaId,arquivo,criadaEm,baixas,unidades,responsaveis}] }
+  //   responsável: baixa e reingresso são as funções (cadastro antigo sem a marca vale como responsável por baixa)
+  //   baixa: planilhaId = planilha emitida que a registrou como pendente de reingresso (só depois da emissão);
+  //          reingresso = null ou {por, data, em}, quando um responsável por reingresso confirma
   //   origemReingresso = texto livre por baixa;  motivo = '' | 'saldo' | 'sku'
   //   warehouse e endereço RQ são fixos (WAREHOUSE_FIXO, RQ_FIXO); campos antigos desses dados ficam guardados, sem uso
-  const emptyRoot = () => ({ responsaveis: [], baixas: [], rascunhos: [], planilhas: [] });
+  const emptyRoot = () => ({ responsaveis: [], baixas: [], rascunhos: [], planilhas: [], notificacoes: [] });
   const qtdBaixa = v => Number(v) || 0;
   const qtdRascunho = v => (v === '' || v == null) ? '' : (Number(v) || 0);
   // dados antigos guardavam uma lista de motivos (motivos: [...]); fica só o primeiro
@@ -88,7 +92,8 @@
       responsaveis: Array.isArray(s.responsaveis) ? s.responsaveis.slice() : [],
       baixas: (Array.isArray(s.baixas) ? s.baixas : []).map(normBaixa),
       rascunhos: (Array.isArray(s.rascunhos) ? s.rascunhos : []).map(normRasc),
-      planilhas: Array.isArray(s.planilhas) ? s.planilhas.slice() : []
+      planilhas: Array.isArray(s.planilhas) ? s.planilhas.slice() : [],
+      notificacoes: Array.isArray(s.notificacoes) ? s.notificacoes.slice() : []
     };
   }
   // Cada alteração local é uma operação. Ao gravar, as operações são reaplicadas sobre o estado do Grid,
@@ -118,7 +123,14 @@
 
   const findResp = nome => { const n = norm(nome); return n ? view.responsaveis.find(r => norm(r.nome) === n) : undefined; };
   const turnoOf = b => { const r = findResp(b.responsavel); return r ? r.turno : (b.turno || ''); };
-  const gridFocused = () => { const ae = document.activeElement; return !!(ae && ae.closest && ae.closest('#rows,#resp-rows,#massa-rows')); };
+  // funções do responsável (cadastro antigo, sem a marca, continua como responsável por baixa)
+  const podeBaixa = r => r.baixa !== false;
+  const podeReingresso = r => r.reingresso === true;
+  // a baixa entra na fila de reingresso quando a planilha do lote é emitida; sai quando é confirmada
+  const confirmadoReingresso = b => !!(b.reingresso && b.reingresso.por);
+  const pendenteReingresso = b => !!b.planilhaId && !confirmadoReingresso(b);
+  // só um campo de edição segura o redesenho (um botão com o foco não precisa disso)
+  const gridFocused = () => { const ae = document.activeElement; return !!(ae && ae.matches && ae.matches('input,select,textarea') && ae.closest('#rows,#resp-rows,#massa-rows,#reing-rows')); };
 
   // campos que faltam para a linha virar uma baixa do chamado
   function faltas(r) {
@@ -273,9 +285,10 @@
   function showTab(t, focus = true) {
     document.querySelectorAll('[data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === t));
     $('#tab-baixas').hidden = t !== 'baixas';
+    $('#tab-reingresso').hidden = t !== 'reingresso';
     $('#tab-relatorio').hidden = t !== 'relatorio';
     $('#tab-resp').hidden = t !== 'resp';
-    if (focus) { const alvo = { baixas: '#massa-add', resp: '#r-nome' }[t]; $(alvo)?.focus(); }
+    if (focus) { const alvo = { baixas: '#massa-add', reingresso: '#reing-filtro', resp: '#r-nome' }[t]; $(alvo)?.focus(); }
   }
   document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
 
@@ -295,6 +308,8 @@
     renderMassa();
     renderRelatorio();
     renderPlanilhas();
+    renderReingresso();
+    renderAviso();
   }
 
   function setOptions(sel, html, value) {
@@ -320,16 +335,18 @@
           <td><input data-rf="nome" value="${esc(r.nome)}"></td>
           <td><select data-rf="turno">${opts.map(t => `<option ${t === r.turno ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></td>
           <td><input data-rf="cargo" list="dl-cargo" value="${esc(r.cargo)}"></td>
+          <td class="chk"><input type="checkbox" data-rf="baixa" title="Responsável por baixa" ${podeBaixa(r) ? 'checked' : ''}></td>
+          <td class="chk"><input type="checkbox" data-rf="reingresso" title="Responsável por reingresso" ${podeReingresso(r) ? 'checked' : ''}></td>
           <td class="actions"><button class="btn-danger" data-rdel title="Remover">✕</button></td>
         </tr>`;
     }).join('')
-      : '<tr><td colspan="4" class="empty">Nenhum responsável cadastrado ainda.</td></tr>';
+      : '<tr><td colspan="6" class="empty">Nenhum responsável cadastrado ainda.</td></tr>';
     $('#st-resp').textContent = `${list.length} ${list.length === 1 ? 'responsável' : 'responsáveis'}`;
   }
 
   function turnoHTML(t) { return t ? `<span class="turno ${TURNO_CLS[t] || 't-none'}">${esc(t)}</span>` : '<span class="turno t-none">—</span>'; }
   function respOpts(sel) {
-    const nomes = view.responsaveis.slice().sort(byNome).map(r => r.nome);
+    const nomes = view.responsaveis.filter(podeBaixa).slice().sort(byNome).map(r => r.nome);
     if (sel && !nomes.some(n => norm(n) === norm(sel))) nomes.unshift(sel);
     return nomes.map(n => `<option ${n === sel ? 'selected' : ''}>${esc(n)}</option>`).join('');
   }
@@ -708,7 +725,17 @@
       id: uid(), arquivo, tipo: 'lote', criadaEm: new Date().toISOString(), responsaveis: nomes,
       baixas: lista.length, compartilhada: false, compartilhadaEm: '', linhas
     };
-    commit([{ t: 'add', c: 'planilhas', rec: p }]);
+    // emitir a planilha registra as baixas do lote como pendentes de reingresso e gera a notificação para todos;
+    // tudo numa única gravação, para não ficar meio registrado
+    const notificacao = {
+      id: uid(), tipo: 'reingresso', planilhaId: p.id, arquivo, criadaEm: p.criadaEm,
+      baixas: lista.length, unidades: lista.reduce((s, b) => s + (Number(b.quantidade) || 0), 0), responsaveis: nomes
+    };
+    commit([
+      { t: 'add', c: 'planilhas', rec: p },
+      ...lista.map(b => ({ t: 'set', c: 'baixas', id: b.id, patch: { planilhaId: p.id, planilhaArq: arquivo } })),
+      { t: 'add', c: 'notificacoes', rec: notificacao }
+    ]);
     flushNow();
     return p;
   }
@@ -786,9 +813,9 @@
       return;
     }
     if (!ok.length) { await avisar('Nenhuma linha preenchida. Preencha SKU, quantidade e motivo.'); return; }
-    if (!view.responsaveis.length) { await avisar('Cadastre os responsáveis antes de salvar.'); showTab('resp'); return; }
-    const nomes = view.responsaveis.slice().sort(byNome).map(r => r.nome);
-    const escolhido = await escolher(`Quem é o responsável por este lote (${ok.length} baixa(s))?`, nomes.map(n => ({ value: n, label: n })), 'Salvar lote');
+    const elegiveis = view.responsaveis.filter(podeBaixa).slice().sort(byNome);
+    if (!elegiveis.length) { await avisar('Nenhum responsável marcado como "Responsável por baixa". Marque a função no cadastro de responsáveis.'); showTab('resp'); return; }
+    const escolhido = await escolher(`Quem é o responsável por este lote (${ok.length} baixa(s))?`, elegiveis.map(r => ({ value: r.nome, label: r.nome })), 'Salvar lote');
     if (!escolhido) return;
     const r = findResp(escolhido);
     const nome = r ? r.nome : escolhido;
@@ -864,12 +891,15 @@
     const nome = $('#r-nome').value.trim();
     const turno = $('#r-turno').value;
     const cargo = $('#r-cargo').value.trim();
+    const baixa = $('#r-baixa').checked;
+    const reingresso = $('#r-reingresso').checked;
     if (!nome) { $('#r-nome').focus(); return; }
+    if (!baixa && !reingresso) { avisar('Marque pelo menos uma função: Responsável por baixa ou Responsável por reingresso.'); return; }
     if (findResp(nome)) {
       avisar(`Já existe um responsável cadastrado como "${nome}".`).then(() => $('#r-nome').select());
       return;
     }
-    commit([{ t: 'add', c: 'responsaveis', rec: { id: uid(), nome, turno, cargo } }]);
+    commit([{ t: 'add', c: 'responsaveis', rec: { id: uid(), nome, turno, cargo, baixa, reingresso } }]);
     $('#r-nome').value = '';
     $('#r-cargo').value = '';
     $('#r-nome').focus();
@@ -882,6 +912,16 @@
     const r = view.responsaveis.find(x => x.id === id);
     if (!r) return;
     const f = inp.dataset.rf;
+    if (f === 'baixa' || f === 'reingresso') {
+      const funcoes = { baixa: podeBaixa(r), reingresso: podeReingresso(r), [f]: inp.checked };
+      if (!funcoes.baixa && !funcoes.reingresso) {
+        inp.checked = true;   // não pode ficar sem função: desfaz a marcação
+        avisar('Cada responsável precisa ter pelo menos uma função: Responsável por baixa ou Responsável por reingresso.');
+        return;
+      }
+      commit([{ t: 'set', c: 'responsaveis', id, patch: { [f]: inp.checked } }]);
+      return;
+    }
     const v = inp.value.trim();
     if (f === 'nome') {
       if (!v) { inp.value = r.nome; return; }
@@ -894,6 +934,8 @@
       const ops = [{ t: 'set', c: 'responsaveis', id, patch: { nome: v } }];
       view.baixas.filter(b => norm(b.responsavel) === norm(r.nome))
         .forEach(b => ops.push({ t: 'set', c: 'baixas', id: b.id, patch: { responsavel: v } }));
+      view.baixas.filter(b => b.reingresso && norm(b.reingresso.por) === norm(r.nome))
+        .forEach(b => ops.push({ t: 'set', c: 'baixas', id: b.id, patch: { reingresso: { ...b.reingresso, por: v } } }));
       commit(ops);
     } else {
       commit([{ t: 'set', c: 'responsaveis', id, patch: { [f]: v } }]);
@@ -980,7 +1022,7 @@
 
   // backup no mesmo formato do JSON base (inclui rascunho e planilhas)
   $('#btn-backup').addEventListener('click', () => {
-    const data = { responsaveis: view.responsaveis, baixas: view.baixas, rascunhos: view.rascunhos, planilhas: view.planilhas };
+    const data = { responsaveis: view.responsaveis, baixas: view.baixas, rascunhos: view.rascunhos, planilhas: view.planilhas, notificacoes: view.notificacoes };
     baixar(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }), `controle-rq-backup-${todayISO()}.json`);
   });
 
@@ -1001,7 +1043,8 @@
       responsaveis: data.responsaveis,
       baixas: data.baixas,
       rascunhos: Array.isArray(data.rascunhos) ? data.rascunhos : [],
-      planilhas: Array.isArray(data.planilhas) ? data.planilhas : []
+      planilhas: Array.isArray(data.planilhas) ? data.planilhas : [],
+      notificacoes: Array.isArray(data.notificacoes) ? data.notificacoes : []
     } }]);
   });
 
@@ -1132,6 +1175,94 @@
   $('#pv-fechar').addEventListener('click', () => {
     planilhaAberta = null;
     $('#pv-card').hidden = true;
+  });
+
+  // ---------- reingresso: baixas pendentes (entram quando a planilha do lote é emitida) e notificações ----------
+  const nomePlanilha = b => b.planilhaArq || (view.planilhas.find(p => p.id === b.planilhaId) || {}).arquivo || '—';
+  const unidadesDe = lista => lista.reduce((s, b) => s + (Number(b.quantidade) || 0), 0);
+  function renderReingresso() {
+    const registradas = view.baixas.filter(b => b.planilhaId || confirmadoReingresso(b));
+    const pend = registradas.filter(pendenteReingresso);
+    const filtro = $('#reing-filtro').value;
+    const lista = filtro === 'pendentes' ? pend : filtro === 'confirmados' ? registradas.filter(confirmadoReingresso) : registradas;
+    const opts = view.responsaveis.filter(podeReingresso).slice().sort(byNome)
+      .map(r => `<option value="${esc(r.nome)}">${esc(r.nome)}</option>`).join('');
+    $('#reing-rows').innerHTML = lista.length ? lista.slice()
+      .sort((a, b) => String(a.data).localeCompare(String(b.data)) || String(a.sku).localeCompare(String(b.sku)))
+      .map(b => {
+        const conf = confirmadoReingresso(b);
+        return `
+          <tr data-id="${esc(b.id)}" class="${conf ? 'ok' : 'pend'}">
+            <td>${esc(b.sku)}</td>
+            <td class="num">${esc(b.quantidade)}</td>
+            <td>${esc(b.origemReingresso || '—')}</td>
+            <td>${esc(b.skuReingresso || '—')}</td>
+            <td>${esc(b.responsavel || '—')}</td>
+            <td class="arq" title="${esc(nomePlanilha(b))}">${esc(nomePlanilha(b))}</td>
+            <td>${conf
+              ? `${esc(b.reingresso.por)} · ${esc(fmtBR(b.reingresso.data))}`
+              : `<select data-rr="por"><option value="">— escolha quem fez —</option>${opts}</select>`}</td>
+            <td class="actions">${conf
+              ? '<button class="btn-ghost small" data-rdesf>Desfazer</button>'
+              : '<button class="btn-add small" data-rconf>Confirmar</button>'}</td>
+          </tr>`;
+      }).join('')
+      : `<tr><td colspan="8" class="empty">${filtro === 'pendentes'
+        ? 'Nenhuma baixa pendente de reingresso. Ela entra aqui quando a planilha do lote é emitida.'
+        : 'Nada para mostrar com este filtro.'}</td></tr>`;
+    const un = unidadesDe(pend);
+    $('#reing-pend').textContent = `${pend.length} ${pend.length === 1 ? 'pendente' : 'pendentes'}`;
+    $('#reing-un').textContent = `${un} ${un === 1 ? 'unidade' : 'unidades'}`;
+    renderNotificacoes(pend);
+  }
+  function renderNotificacoes(pend) {
+    $('#notif-list').innerHTML = view.notificacoes.length ? view.notificacoes.map(n => {
+      const abertas = pend.filter(b => b.planilhaId === n.planilhaId);
+      return `
+        <tr class="${abertas.length ? 'pend' : 'ok'}">
+          <td>${esc(fmtDataHora(n.criadaEm))}</td>
+          <td class="arq" title="${esc(n.arquivo)}">${esc(n.arquivo)}</td>
+          <td class="num">${n.baixas}</td>
+          <td class="num">${n.unidades}</td>
+          <td>${abertas.length ? `${abertas.length} ${abertas.length === 1 ? 'baixa' : 'baixas'} (${unidadesDe(abertas)} un.)` : 'sem pendências'}</td>
+        </tr>`;
+    }).join('')
+      : '<tr><td colspan="5" class="empty">Nenhuma notificação ainda. Ela é gerada quando uma planilha é emitida.</td></tr>';
+  }
+  // aviso para todos que abrem o controle enquanto houver baixas pendentes de reingresso
+  function renderAviso() {
+    const pend = view.baixas.filter(pendenteReingresso);
+    const planilhas = new Set(pend.map(b => b.planilhaId));
+    const ultima = view.notificacoes.find(n => planilhas.has(n.planilhaId));
+    const outras = planilhas.size - 1;
+    $('#aviso-reingresso').hidden = !pend.length;
+    if (pend.length) {
+      $('#aviso-reingresso-txt').textContent = `Reingresso pendente: ${pend.length} ${pend.length === 1 ? 'baixa' : 'baixas'} (${unidadesDe(pend)} un.)`
+        + (ultima ? ` · planilha ${ultima.arquivo}` : '') + (outras > 0 ? ` e mais ${outras} planilha(s)` : '')
+        + '. Confirme o reingresso na aba Reingresso.';
+    }
+    const badge = $('#tab-badge-reingresso');
+    badge.hidden = !pend.length;
+    badge.textContent = pend.length ? String(pend.length) : '';
+  }
+  $('#reing-filtro').addEventListener('change', renderReingresso);
+  $('#aviso-reingresso-ver').addEventListener('click', () => { $('#reing-filtro').value = 'pendentes'; showTab('reingresso'); });
+  $('#reing-rows').addEventListener('click', async e => {
+    const tr = e.target.closest('tr[data-id]');
+    if (!tr) return;
+    const id = tr.dataset.id;
+    const b = view.baixas.find(x => x.id === id);
+    if (!b) return;
+    if (e.target.closest('[data-rconf]')) {
+      const r = findResp(tr.querySelector('[data-rr="por"]')?.value || '');
+      if (!r || !podeReingresso(r)) { await avisar('Escolha quem fez o reingresso (um responsável marcado como "Responsável por reingresso").'); return; }
+      commit([{ t: 'set', c: 'baixas', id, patch: { reingresso: { por: r.nome, data: todayISO(), em: new Date().toISOString() } } }]);
+      return;
+    }
+    if (e.target.closest('[data-rdesf]')) {
+      if (!await confirmar(`Desfazer a confirmação do reingresso de ${b.sku}? A baixa volta para pendentes.`, 'Desfazer')) return;
+      commit([{ t: 'set', c: 'baixas', id, patch: { reingresso: null } }]);
+    }
   });
 
   // ---------- início ----------
