@@ -4,6 +4,8 @@
   // ---------- configuração ----------
   const POLL_MS = 10000;   // leitura periódica do Grid (só com a aba visível): 6 req/min por aba
   const SAVE_MS = 1500;    // alterações agrupadas: no máximo ~40 gravações/min por aba (limite do Grid: 60/min)
+  const NOTIF_GUARDADAS = 500;   // notificações de reingresso guardadas no Grid (as mais recentes): cada gravação as carrega
+  const NOTIF_MOSTRADAS = 100;   // quantas aparecem na lista da aba Reingresso
   const TURNOS = ['T1', 'T2', 'T3', 'T4'];
   const CARGOS = ['Operador', 'Conferente', 'Líder', 'Supervisor', 'Coordenador', 'Gerente'];
   const TURNO_CLS = { T1: 't-t1', T2: 't-t2', T3: 't-t3', T4: 't-t4' };
@@ -108,6 +110,7 @@
         if (i >= 0) list[i] = { ...op.rec };
         else if (op.c === 'rascunhos') list.push({ ...op.rec });
         else list.unshift({ ...op.rec });
+        if (op.c === 'notificacoes' && list.length > NOTIF_GUARDADAS) list.length = NOTIF_GUARDADAS;
       }
       else if (op.t === 'set' && i >= 0) list[i] = { ...list[i], ...op.patch };
       else if (op.t === 'del' && i >= 0) list.splice(i, 1);
@@ -725,16 +728,16 @@
       id: uid(), arquivo, tipo: 'lote', criadaEm: new Date().toISOString(), responsaveis: nomes,
       baixas: lista.length, compartilhada: false, compartilhadaEm: '', linhas
     };
-    // emitir a planilha registra as baixas do lote como pendentes de reingresso e gera a notificação para todos;
-    // tudo numa única gravação, para não ficar meio registrado
-    const notificacao = {
-      id: uid(), tipo: 'reingresso', planilhaId: p.id, arquivo, criadaEm: p.criadaEm,
-      baixas: lista.length, unidades: lista.reduce((s, b) => s + (Number(b.quantidade) || 0), 0), responsaveis: nomes
-    };
+    // emitir a planilha registra cada baixa do lote como pendente de reingresso e gera uma notificação por item novo;
+    // tudo numa única gravação, para não ficar meio registrado (a ordem se inverte porque cada inclusão vai para o topo)
+    const itens = lista.slice().reverse().map(b => ({
+      id: uid(), tipo: 'item-pendente', baixaId: b.id, planilhaId: p.id, arquivo, criadaEm: p.criadaEm,
+      sku: b.sku, quantidade: Number(b.quantidade) || 0, responsavel: b.responsavel || ''
+    }));
     commit([
       { t: 'add', c: 'planilhas', rec: p },
       ...lista.map(b => ({ t: 'set', c: 'baixas', id: b.id, patch: { planilhaId: p.id, planilhaArq: arquivo } })),
-      { t: 'add', c: 'notificacoes', rec: notificacao }
+      ...itens.map(rec => ({ t: 'add', c: 'notificacoes', rec }))
     ]);
     flushNow();
     return p;
@@ -1213,33 +1216,50 @@
     const un = unidadesDe(pend);
     $('#reing-pend').textContent = `${pend.length} ${pend.length === 1 ? 'pendente' : 'pendentes'}`;
     $('#reing-un').textContent = `${un} ${un === 1 ? 'unidade' : 'unidades'}`;
-    renderNotificacoes(pend);
+    renderNotificacoes();
   }
-  function renderNotificacoes(pend) {
-    $('#notif-list').innerHTML = view.notificacoes.length ? view.notificacoes.map(n => {
-      const abertas = pend.filter(b => b.planilhaId === n.planilhaId);
+  // uma notificação por item novo (e as de lote, de versões anteriores); a lista mostra as mais recentes
+  function renderNotificacoes() {
+    const porId = new Map(view.baixas.map(b => [b.id, b]));
+    const lista = view.notificacoes.slice(0, NOTIF_MOSTRADAS);
+    $('#notif-list').innerHTML = lista.length ? lista.map(n => {
+      if (!n.baixaId) {
+        const abertas = view.baixas.filter(b => b.planilhaId === n.planilhaId && pendenteReingresso(b));
+        return `
+          <tr class="${abertas.length ? 'pend' : 'ok'}">
+            <td>${esc(fmtDataHora(n.criadaEm))}</td>
+            <td>Lote: ${esc(n.baixas)} ${n.baixas === 1 ? 'baixa' : 'baixas'} (${esc(n.unidades)} un.)</td>
+            <td>${esc((n.responsaveis || []).join(', ') || '—')}</td>
+            <td class="arq" title="${esc(n.arquivo)}">${esc(n.arquivo)}</td>
+            <td>${abertas.length ? `<span class="pend-txt">${abertas.length} ainda pendente${abertas.length === 1 ? '' : 's'}</span>` : 'sem pendências'}</td>
+          </tr>`;
+      }
+      const b = porId.get(n.baixaId);
+      const situacao = !b ? 'baixa removida'
+        : confirmadoReingresso(b) ? `<span class="ok-txt">confirmado por ${esc(b.reingresso.por)} · ${esc(fmtBR(b.reingresso.data))}</span>`
+        : '<span class="pend-txt">pendente</span>';
       return `
-        <tr class="${abertas.length ? 'pend' : 'ok'}">
+        <tr class="${b && pendenteReingresso(b) ? 'pend' : 'ok'}">
           <td>${esc(fmtDataHora(n.criadaEm))}</td>
+          <td>${esc(n.sku)} · ${esc(n.quantidade)} un.</td>
+          <td>${esc(n.responsavel || '—')}</td>
           <td class="arq" title="${esc(n.arquivo)}">${esc(n.arquivo)}</td>
-          <td class="num">${n.baixas}</td>
-          <td class="num">${n.unidades}</td>
-          <td>${abertas.length ? `${abertas.length} ${abertas.length === 1 ? 'baixa' : 'baixas'} (${unidadesDe(abertas)} un.)` : 'sem pendências'}</td>
+          <td>${situacao}</td>
         </tr>`;
     }).join('')
-      : '<tr><td colspan="5" class="empty">Nenhuma notificação ainda. Ela é gerada quando uma planilha é emitida.</td></tr>';
+      : '<tr><td colspan="5" class="empty">Nenhuma notificação ainda. Uma é gerada para cada item que entra como pendente de reingresso.</td></tr>';
   }
-  // aviso para todos que abrem o controle enquanto houver baixas pendentes de reingresso
+  // aviso para todos que abrem o controle enquanto houver baixas pendentes de reingresso: mostra o último item pendente
   function renderAviso() {
     const pend = view.baixas.filter(pendenteReingresso);
-    const planilhas = new Set(pend.map(b => b.planilhaId));
-    const ultima = view.notificacoes.find(n => planilhas.has(n.planilhaId));
-    const outras = planilhas.size - 1;
+    const porId = new Map(pend.map(b => [b.id, b]));
+    const ultimo = view.notificacoes.find(n => n.baixaId && porId.has(n.baixaId));
+    const b = ultimo && porId.get(ultimo.baixaId);
     $('#aviso-reingresso').hidden = !pend.length;
     if (pend.length) {
-      $('#aviso-reingresso-txt').textContent = `Reingresso pendente: ${pend.length} ${pend.length === 1 ? 'baixa' : 'baixas'} (${unidadesDe(pend)} un.)`
-        + (ultima ? ` · planilha ${ultima.arquivo}` : '') + (outras > 0 ? ` e mais ${outras} planilha(s)` : '')
-        + '. Confirme o reingresso na aba Reingresso.';
+      const novo = b ? `Último item pendente de reingresso: ${b.sku} · ${b.quantidade} un. · ${b.responsavel || '—'} · planilha ${nomePlanilha(b)}.` : '';
+      const total = `Pendentes no total: ${pend.length} ${pend.length === 1 ? 'baixa' : 'baixas'} (${unidadesDe(pend)} un.).`;
+      $('#aviso-reingresso-txt').textContent = [novo, total, 'Confirme na aba Reingresso.'].filter(Boolean).join(' ');
     }
     const badge = $('#tab-badge-reingresso');
     badge.hidden = !pend.length;
