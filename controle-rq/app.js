@@ -1028,6 +1028,17 @@
     $('#rel-turno').value = '';
     lerRelatorio();
   });
+  // limpar relatórios: apaga as baixas que aparecem no relatório (respeita os filtros de período e turno)
+  $('#rel-apagar').addEventListener('click', async () => {
+    const lista = view.baixas.filter(casaRelatorio);
+    if (!lista.length) { await avisar('Não há baixas neste relatório para limpar.'); return; }
+    const un = lista.reduce((s, b) => s + (Number(b.quantidade) || 0), 0);
+    const filtrado = !!(R.de || R.ate || R.turno);
+    const escopo = filtrado ? 'as baixas que aparecem neste relatório (com os filtros atuais)' : 'TODAS as baixas salvas';
+    const msg = `Apagar ${escopo}: ${lista.length} ${lista.length === 1 ? 'baixa' : 'baixas'} e ${un} ${un === 1 ? 'unidade' : 'unidades'}? Isso não pode ser desfeito; use Backup antes se quiser guardar uma cópia. O cadastro de responsáveis e as planilhas geradas são mantidos.`;
+    if (!await confirmar(msg, 'Apagar', true)) return;
+    commit(lista.map(b => ({ t: 'del', c: 'baixas', id: b.id })));
+  });
   // clique num responsável abre ou fecha o detalhe das baixas dele
   $('#rel-resp-rows').addEventListener('click', e => {
     const tr = e.target.closest('tr.resumo');
