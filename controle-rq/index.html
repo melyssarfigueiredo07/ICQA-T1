@@ -16,10 +16,18 @@
   <button class="btn-ghost small" id="sair" type="button" hidden>Sair</button>
 </header>
 <section id="acesso" class="acesso" aria-live="polite">
-  <div class="acesso-box">
-    <h2 id="acesso-titulo">Verificando seu login…</h2>
-    <p id="acesso-txt"></p>
-    <button class="btn-add" id="acesso-entrar" type="button" hidden>Entrar</button>
+  <div class="acesso-topo">ICQA RJ02 - Controle de RQ</div>
+  <div class="acesso-centro">
+    <div class="acesso-logo">Mercado<span>Livre</span></div>
+    <div class="acesso-sub">Sistema de Controle de RQ · ICQA RJ02</div>
+    <div class="acesso-form">
+      <input id="acesso-usuario" class="acesso-campo" type="text" readonly placeholder="Verificando…" aria-label="Login do Grid">
+      <button id="acesso-entrar" class="acesso-botao" type="button" disabled>Entrar</button>
+    </div>
+    <div class="acesso-msg">
+      <strong id="acesso-titulo">Verificando seu login…</strong>
+      <p id="acesso-txt"></p>
+    </div>
   </div>
 </section>
 <div id="banner" class="banner" hidden></div>

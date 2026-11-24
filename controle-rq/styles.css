@@ -181,10 +181,20 @@ button:disabled{opacity:.45;cursor:not-allowed}
 input:disabled,select:disabled{background:#F5F5F5;color:#888;cursor:not-allowed}
 
 /* ---------- login para todos: sem login ou sem cadastro, o controle não mostra dados ---------- */
-.acesso{display:none;justify-content:center;padding:48px 16px}
+/* tela de login no modelo das telas de acesso do Mercado Livre: barra com o nome do app, logo, campo do login e Entrar */
+.acesso{display:none;flex:1;flex-direction:column;background:#fff}
 body.bloqueado .acesso{display:flex}
-body.bloqueado .layout,body.bloqueado .lembrete,body.bloqueado .aviso-reingresso,body.bloqueado .banner{display:none!important}
-.acesso-box{background:#fff;border-radius:10px;padding:24px 26px;max-width:520px;box-shadow:0 1px 3px rgba(0,0,0,.08);text-align:center}
-.acesso-box h2{margin:0 0 10px;font-size:18px;color:var(--navy)}
-.acesso-box p{margin:0 0 16px;color:var(--muted);line-height:1.5}
+body.bloqueado header,body.bloqueado .layout,body.bloqueado .lembrete,body.bloqueado .aviso-reingresso,body.bloqueado .banner{display:none!important}
+.acesso-topo{height:46px;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid #E6E6E6;font-size:15px;font-weight:600;color:#333}
+.acesso-centro{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px 16px 120px}
+.acesso-logo{font-size:30px;font-weight:800;color:#333;letter-spacing:-.5px}
+.acesso-logo span{color:var(--yellow)}
+.acesso-sub{margin:6px 0 28px;font-size:14px;color:#666}
+.acesso-form{width:100%;max-width:396px;display:flex;flex-direction:column;gap:12px}
+.acesso-campo{width:100%;height:46px;border:1px solid #DDD;border-radius:6px;padding:0 14px;font-size:16px;color:#333;background:#fff}
+.acesso-botao{height:44px;border:0;border-radius:6px;background:var(--yellow);color:#333;font-weight:700;font-size:15px;cursor:pointer}
+.acesso-botao:disabled{opacity:.5;cursor:default}
+.acesso-msg{width:100%;max-width:396px;margin-top:16px;text-align:center;color:#666;font-size:13px;line-height:1.5}
+.acesso-msg strong{display:block;margin-bottom:4px;font-size:14px;color:#333}
+.acesso-msg p{margin:0}
 input.semlogin{background:#FFF0F2}

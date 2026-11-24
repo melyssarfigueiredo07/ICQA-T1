@@ -212,9 +212,13 @@
       bloqueado = false;
     }
     document.body.classList.toggle('bloqueado', bloqueado);
+    // o campo mostra o login da sessão do Grid e não pode ser digitado: quem pudesse digitar entraria como qualquer um
+    const campo = $('#acesso-usuario');
+    campo.value = usuario || '';
+    campo.placeholder = identificadoEm ? 'Login não identificado' : 'Verificando…';
     $('#acesso-titulo').textContent = titulo;
     $('#acesso-txt').textContent = texto;
-    $('#acesso-entrar').hidden = !botao;
+    $('#acesso-entrar').disabled = !botao;
   }
   // Sair: grava o que estiver pendente, esvazia a tela e fecha o controle
   async function sair() {
