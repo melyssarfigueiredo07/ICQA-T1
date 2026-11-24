@@ -179,3 +179,12 @@ td.chk,th.chk{text-align:center}
 .quem.err{color:var(--danger)}
 button:disabled{opacity:.45;cursor:not-allowed}
 input:disabled,select:disabled{background:#F5F5F5;color:#888;cursor:not-allowed}
+
+/* ---------- login para todos: sem login ou sem cadastro, o controle não mostra dados ---------- */
+.acesso{display:none;justify-content:center;padding:48px 16px}
+body.bloqueado .acesso{display:flex}
+body.bloqueado .layout,body.bloqueado .lembrete,body.bloqueado .aviso-reingresso,body.bloqueado .banner{display:none!important}
+.acesso-box{background:#fff;border-radius:10px;padding:24px 26px;max-width:520px;box-shadow:0 1px 3px rgba(0,0,0,.08);text-align:center}
+.acesso-box h2{margin:0 0 10px;font-size:18px;color:var(--navy)}
+.acesso-box p{margin:0 0 16px;color:var(--muted);line-height:1.5}
+input.semlogin{background:#FFF0F2}

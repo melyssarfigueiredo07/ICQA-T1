@@ -12,8 +12,16 @@
   <div class="logo">mercado<span>livre</span></div>
   <h1>ICQA RJ02 - Controle de RQ</h1>
   <span id="sync" class="sync busy">Carregando…</span>
-  <span id="quem" class="quem">Identificando…</span>
+  <span id="quem" class="quem">Verificando…</span>
+  <button class="btn-ghost small" id="sair" type="button" hidden>Sair</button>
 </header>
+<section id="acesso" class="acesso" aria-live="polite">
+  <div class="acesso-box">
+    <h2 id="acesso-titulo">Verificando seu login…</h2>
+    <p id="acesso-txt"></p>
+    <button class="btn-add" id="acesso-entrar" type="button" hidden>Entrar</button>
+  </div>
+</section>
 <div id="banner" class="banner" hidden></div>
 
 <div id="lembrete" class="lembrete" hidden>
@@ -308,8 +316,8 @@
         <label><span>Cargo</span>
           <input id="r-cargo" list="dl-cargo" placeholder="Ex.: Operador">
         </label>
-        <label><span>Login (Grid)</span>
-          <input id="r-login" placeholder="ex.: bcosta" autocomplete="off">
+        <label><span>Login (Grid) *</span>
+          <input id="r-login" placeholder="ex.: bcosta" autocomplete="off" required>
         </label>
         <button type="submit" class="btn-add">+ Cadastrar</button>
         <div class="papeis">
