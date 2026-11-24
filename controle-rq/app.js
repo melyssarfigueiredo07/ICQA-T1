@@ -6,6 +6,8 @@
   const SAVE_MS = 1500;    // alterações agrupadas: no máximo ~40 gravações/min por aba (limite do Grid: 60/min)
   const NOTIF_GUARDADAS = 500;   // notificações de reingresso guardadas no Grid (as mais recentes): cada gravação as carrega
   const NOTIF_MOSTRADAS = 100;   // quantas aparecem na lista da aba Reingresso
+  const ADMINS = ['mrfigueiredo', 'matccosta'];   // administradores: cadastram e editam responsáveis, limpam reingressos e relatórios
+  const POLL_OCULTA_MS = 60000;                   // com a aba oculta, lê o Grid no máximo a cada 60 s (para as notificações do Chrome)
   const TURNOS = ['T1', 'T2', 'T3', 'T4'];
   const CARGOS = ['Operador', 'Conferente', 'Líder', 'Supervisor', 'Coordenador', 'Gerente'];
   const TURNO_CLS = { T1: 't-t1', T2: 't-t2', T3: 't-t3', T4: 't-t4' };
@@ -77,7 +79,7 @@
   //          reingresso = null ou {por, data, em}, quando um responsável por reingresso confirma
   //   origemReingresso = texto livre por baixa;  motivo = '' | 'saldo' | 'sku'
   //   warehouse e endereço RQ são fixos (WAREHOUSE_FIXO, RQ_FIXO); campos antigos desses dados ficam guardados, sem uso
-  const emptyRoot = () => ({ responsaveis: [], baixas: [], rascunhos: [], planilhas: [], notificacoes: [] });
+  const emptyRoot = () => ({ responsaveis: [], baixas: [], rascunhos: [], planilhas: [], notificacoes: [], preferencias: [] });
   const qtdBaixa = v => Number(v) || 0;
   const qtdRascunho = v => (v === '' || v == null) ? '' : (Number(v) || 0);
   // dados antigos guardavam uma lista de motivos (motivos: [...]); fica só o primeiro
@@ -95,7 +97,8 @@
       baixas: (Array.isArray(s.baixas) ? s.baixas : []).map(normBaixa),
       rascunhos: (Array.isArray(s.rascunhos) ? s.rascunhos : []).map(normRasc),
       planilhas: Array.isArray(s.planilhas) ? s.planilhas.slice() : [],
-      notificacoes: Array.isArray(s.notificacoes) ? s.notificacoes.slice() : []
+      notificacoes: Array.isArray(s.notificacoes) ? s.notificacoes.slice() : [],
+      preferencias: Array.isArray(s.preferencias) ? s.preferencias.slice() : []
     };
   }
   // Cada alteração local é uma operação. Ao gravar, as operações são reaplicadas sobre o estado do Grid,
@@ -132,6 +135,54 @@
   // a baixa entra na fila de reingresso quando a planilha do lote é emitida; sai quando é confirmada
   const confirmadoReingresso = b => !!(b.reingresso && b.reingresso.por);
   const pendenteReingresso = b => !!b.planilhaId && !confirmadoReingresso(b);
+
+  // ---------- quem está usando: o login do Grid (a sessão corporativa com que o documento é aberto) ----------
+  let usuario = null;          // login normalizado; null quando não foi possível identificar
+  let identificadoEm = null;   // preenchido quando a identificação termina; até lá o controle fica sem edição
+  async function identificar() {
+    if (preview) {
+      // prévia fora do Grid (estado local, não gravado): ?usuario= para testar; sem ele, o administrador padrão
+      return norm(new URLSearchParams(window.location.search).get('usuario') || 'mrfigueiredo');
+    }
+    try {
+      const r = await fetch('/api/v1/me', { credentials: 'same-origin', cache: 'no-store' });
+      if (!r.ok) return null;
+      const d = await r.json();
+      const campo = [d.username, d.ldap, d.user, d.login, d.id, d.email && String(d.email).split('@')[0]]
+        .find(v => typeof v === 'string' && v.trim());
+      return campo ? norm(campo) : null;
+    } catch (err) { return null; }
+  }
+  const identidade = Promise.race([identificar(), sleep(6000).then(() => null)]).then(u => {
+    usuario = u; identificadoEm = Date.now(); return u;
+  });
+  const souAdmin = () => !!usuario && ADMINS.includes(usuario);
+  const meuResp = () => (usuario ? view.responsaveis.find(r => norm(r.usuario) === usuario) : undefined);
+  const podeLancarBaixa = () => souAdmin() || !!(meuResp() && podeBaixa(meuResp()));
+  const podeConfirmarReingresso = () => souAdmin() || !!(meuResp() && podeReingresso(meuResp()));
+  // administradores editam tudo; os outros só lançam baixa ou confirmam reingresso, conforme o cadastro de cada um
+  function aplicarPermissoes() {
+    const adm = souAdmin(), lanca = podeLancarBaixa(), confirma = podeConfirmarReingresso();
+    const trava = (sel, ok) => document.querySelectorAll(sel).forEach(el => { el.disabled = !ok; });
+    trava('#formResp input, #formResp select, #formResp button, #resp-rows input, #resp-rows select, #resp-rows button', adm);
+    trava('#massa-add, #massa-limpar, #massa-salvar, #massa-rows input, #massa-rows select, #massa-rows button', lanca);
+    trava('#rows input, #rows select, #rows button, #btn-limpar, #btn-importar, #rel-apagar, #reing-limpar', adm);
+    trava('[data-pl-excluir]', adm);
+    trava('[data-pl-toggle]', lanca);
+    trava('#reing-rows [data-rconf], #reing-rows [data-rdesf], #reing-rows [data-rr]', confirma);
+    trava('#notif-pref', !!usuario);
+    $('#resp-aviso').hidden = adm;
+  }
+  function renderQuem() {
+    const el = $('#quem');
+    if (!identificadoEm) { el.textContent = 'Identificando…'; el.className = 'quem'; return; }
+    if (!usuario) { el.textContent = 'Usuário não identificado · somente leitura'; el.className = 'quem err'; return; }
+    const r = meuResp();
+    const papel = souAdmin() ? 'administrador'
+      : (r ? [podeBaixa(r) ? 'baixa' : '', podeReingresso(r) ? 'reingresso' : ''].filter(Boolean).join(' e ') || 'sem função' : 'sem cadastro');
+    el.textContent = `Você: ${usuario} · ${papel}`;
+    el.className = 'quem';
+  }
   // só um campo de edição segura o redesenho (um botão com o foco não precisa disso)
   const gridFocused = () => { const ae = document.activeElement; return !!(ae && ae.matches && ae.matches('input,select,textarea') && ae.closest('#rows,#resp-rows,#massa-rows,#reing-rows')); };
 
@@ -251,8 +302,12 @@
     }
   }
 
+  let ultimaLeitura = 0;
   async function poll() {
-    if (preview || !loaded || inFlight || document.hidden) return;
+    if (preview || !loaded || inFlight) return;
+    // com a aba oculta, lê o Grid só de vez em quando (para as notificações do Chrome, sem passar do limite)
+    if (document.hidden && Date.now() - ultimaLeitura < POLL_OCULTA_MS) return;
+    ultimaLeitura = Date.now();
     try {
       const res = await store.get();
       if (res.updated_at !== serverAt) {
@@ -266,10 +321,13 @@
   }
 
   async function load() {
+    await identidade;
     let res = await store.get();
     // um documento novo pode voltar vazio por um instante: tenta mais duas vezes antes de aceitar
     for (let i = 0; i < 2 && !hasData(res.state); i++) { await sleep(700); res = await store.get(); }
     takeServer(res);
+    view.notificacoes.forEach(n => notificadas.add(n.id));   // o que já existia ao abrir não gera notificação
+    baseLida = true;
     banner(preview ? 'Prévia fora do Grid: as alterações não são salvas. Abra o documento no Grid para usar de verdade.' : '');
     renderAll();
     setStatus(preview ? 'Prévia · não salvo fora do Grid' : `Sincronizado · ${hhmm()}`, preview ? 'warn' : 'ok');
@@ -313,6 +371,9 @@
     renderPlanilhas();
     renderReingresso();
     renderAviso();
+    renderQuem();
+    renderChrome();
+    aplicarPermissoes();
   }
 
   function setOptions(sel, html, value) {
@@ -338,12 +399,13 @@
           <td><input data-rf="nome" value="${esc(r.nome)}"></td>
           <td><select data-rf="turno">${opts.map(t => `<option ${t === r.turno ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></td>
           <td><input data-rf="cargo" list="dl-cargo" value="${esc(r.cargo)}"></td>
+          <td><input data-rf="login" value="${esc(r.usuario || '')}" placeholder="login"></td>
           <td class="chk"><input type="checkbox" data-rf="baixa" title="Responsável por baixa" ${podeBaixa(r) ? 'checked' : ''}></td>
           <td class="chk"><input type="checkbox" data-rf="reingresso" title="Responsável por reingresso" ${podeReingresso(r) ? 'checked' : ''}></td>
           <td class="actions"><button class="btn-danger" data-rdel title="Remover">✕</button></td>
         </tr>`;
     }).join('')
-      : '<tr><td colspan="6" class="empty">Nenhum responsável cadastrado ainda.</td></tr>';
+      : '<tr><td colspan="7" class="empty">Nenhum responsável cadastrado ainda.</td></tr>';
     $('#st-resp').textContent = `${list.length} ${list.length === 1 ? 'responsável' : 'responsáveis'}`;
   }
 
@@ -396,6 +458,7 @@
       tb.replaceChildren(frag);
     }
     updateStats();
+    aplicarPermissoes();
   }
   function updateStats() {
     const list = view.baixas.filter(matches);
@@ -816,10 +879,16 @@
       return;
     }
     if (!ok.length) { await avisar('Nenhuma linha preenchida. Preencha SKU, quantidade e motivo.'); return; }
-    const elegiveis = view.responsaveis.filter(podeBaixa).slice().sort(byNome);
-    if (!elegiveis.length) { await avisar('Nenhum responsável marcado como "Responsável por baixa". Marque a função no cadastro de responsáveis.'); showTab('resp'); return; }
-    const escolhido = await escolher(`Quem é o responsável por este lote (${ok.length} baixa(s))?`, elegiveis.map(r => ({ value: r.nome, label: r.nome })), 'Salvar lote');
-    if (!escolhido) return;
+    if (!podeLancarBaixa()) { await avisar('Você não tem a função Responsável por baixa. Peça a um administrador para marcar a função no cadastro.'); return; }
+    let escolhido;
+    if (souAdmin()) {
+      const elegiveis = view.responsaveis.filter(podeBaixa).slice().sort(byNome);
+      if (!elegiveis.length) { await avisar('Nenhum responsável marcado como "Responsável por baixa". Marque a função no cadastro de responsáveis.'); showTab('resp'); return; }
+      escolhido = await escolher(`Quem é o responsável por este lote (${ok.length} baixa(s))?`, elegiveis.map(r => ({ value: r.nome, label: r.nome })), 'Salvar lote');
+      if (!escolhido) return;
+    } else {
+      escolhido = meuResp().nome;   // quem lança a baixa é o próprio responsável
+    }
     const r = findResp(escolhido);
     const nome = r ? r.nome : escolhido;
     const turno = r ? r.turno : '';
@@ -891,6 +960,7 @@
 
   $('#formResp').addEventListener('submit', e => {
     e.preventDefault();
+    if (!souAdmin()) { avisar('Só os administradores cadastram responsáveis.'); return; }
     const nome = $('#r-nome').value.trim();
     const turno = $('#r-turno').value;
     const cargo = $('#r-cargo').value.trim();
@@ -898,23 +968,37 @@
     const reingresso = $('#r-reingresso').checked;
     if (!nome) { $('#r-nome').focus(); return; }
     if (!baixa && !reingresso) { avisar('Marque pelo menos uma função: Responsável por baixa ou Responsável por reingresso.'); return; }
+    const login = norm($('#r-login').value);
+    if (login && view.responsaveis.some(r => norm(r.usuario) === login)) { avisar(`O login "${login}" já está em outro responsável.`); return; }
     if (findResp(nome)) {
       avisar(`Já existe um responsável cadastrado como "${nome}".`).then(() => $('#r-nome').select());
       return;
     }
-    commit([{ t: 'add', c: 'responsaveis', rec: { id: uid(), nome, turno, cargo, baixa, reingresso } }]);
+    commit([{ t: 'add', c: 'responsaveis', rec: { id: uid(), nome, turno, cargo, baixa, reingresso, usuario: login } }]);
+    $('#r-login').value = '';
     $('#r-nome').value = '';
     $('#r-cargo').value = '';
     $('#r-nome').focus();
   });
 
   $('#resp-rows').addEventListener('change', e => {
+    if (!souAdmin()) return;
     const inp = e.target.closest('[data-rf]');
     if (!inp) return;
     const id = inp.closest('tr').dataset.id;
     const r = view.responsaveis.find(x => x.id === id);
     if (!r) return;
     const f = inp.dataset.rf;
+    if (f === 'login') {
+      const login = norm(inp.value);
+      if (login && view.responsaveis.some(x => x.id !== id && norm(x.usuario) === login)) {
+        inp.value = r.usuario || '';
+        avisar(`O login "${login}" já está em outro responsável.`);
+        return;
+      }
+      commit([{ t: 'set', c: 'responsaveis', id, patch: { usuario: login } }]);
+      return;
+    }
     if (f === 'baixa' || f === 'reingresso') {
       const funcoes = { baixa: podeBaixa(r), reingresso: podeReingresso(r), [f]: inp.checked };
       if (!funcoes.baixa && !funcoes.reingresso) {
@@ -946,6 +1030,7 @@
   });
 
   $('#resp-rows').addEventListener('click', async e => {
+    if (!souAdmin()) return;
     const btn = e.target.closest('[data-rdel]');
     if (!btn) return;
     const id = btn.closest('tr').dataset.id;
@@ -1204,7 +1289,7 @@
             <td class="arq" title="${esc(nomePlanilha(b))}">${esc(nomePlanilha(b))}</td>
             <td>${conf
               ? `${esc(b.reingresso.por)} · ${esc(fmtBR(b.reingresso.data))}`
-              : `<select data-rr="por"><option value="">— escolha quem fez —</option>${opts}</select>`}</td>
+              : (souAdmin() ? `<select data-rr="por"><option value="">— escolha quem fez —</option>${opts}</select>` : esc(meuResp() ? meuResp().nome : '—'))}</td>
             <td class="actions">${conf
               ? '<button class="btn-ghost small" data-rdesf>Desfazer</button>'
               : '<button class="btn-add small" data-rconf>Confirmar</button>'}</td>
@@ -1217,6 +1302,7 @@
     $('#reing-pend').textContent = `${pend.length} ${pend.length === 1 ? 'pendente' : 'pendentes'}`;
     $('#reing-un').textContent = `${un} ${un === 1 ? 'unidade' : 'unidades'}`;
     renderNotificacoes();
+    aplicarPermissoes();
   }
   // uma notificação por item novo (e as de lote, de versões anteriores); a lista mostra as mais recentes
   function renderNotificacoes() {
@@ -1248,6 +1334,7 @@
         </tr>`;
     }).join('')
       : '<tr><td colspan="5" class="empty">Nenhuma notificação ainda. Uma é gerada para cada item que entra como pendente de reingresso.</td></tr>';
+    if (baseLida) notificarNovas();
   }
   // aviso para todos que abrem o controle enquanto houver baixas pendentes de reingresso: mostra o último item pendente
   function renderAviso() {
@@ -1274,15 +1361,81 @@
     const b = view.baixas.find(x => x.id === id);
     if (!b) return;
     if (e.target.closest('[data-rconf]')) {
-      const r = findResp(tr.querySelector('[data-rr="por"]')?.value || '');
+      if (!podeConfirmarReingresso()) { await avisar('Você não tem a função Responsável por reingresso. Peça a um administrador para marcar a função no cadastro.'); return; }
+      const r = souAdmin() ? findResp(tr.querySelector('[data-rr="por"]')?.value || '') : meuResp();
       if (!r || !podeReingresso(r)) { await avisar('Escolha quem fez o reingresso (um responsável marcado como "Responsável por reingresso").'); return; }
       commit([{ t: 'set', c: 'baixas', id, patch: { reingresso: { por: r.nome, data: todayISO(), em: new Date().toISOString() } } }]);
       return;
     }
     if (e.target.closest('[data-rdesf]')) {
+      if (!podeConfirmarReingresso()) return;
       if (!await confirmar(`Desfazer a confirmação do reingresso de ${b.sku}? A baixa volta para pendentes.`, 'Desfazer')) return;
       commit([{ t: 'set', c: 'baixas', id, patch: { reingresso: null } }]);
     }
+  });
+
+  // ---------- notificações do Chrome (com o controle aberto, inclusive em segundo plano) ----------
+  const notificadas = new Set();   // notificações que este navegador já tratou
+  let baseLida = false;
+  const chromeOk = () => typeof window.Notification === 'function';
+  const chromeAtivo = () => chromeOk() && window.Notification.permission === 'granted';
+  function prefNotificar() {
+    const p = usuario ? view.preferencias.find(x => x.id === usuario) : null;
+    return p && p.notificar === 'meus' ? 'meus' : 'todos';
+  }
+  function renderChrome() {
+    const st = $('#notif-chrome-st'), bt = $('#notif-ativar'), sel = $('#notif-pref');
+    if (!chromeOk()) { st.textContent = 'Notificações do Chrome não estão disponíveis nesta tela.'; bt.hidden = true; }
+    else if (window.Notification.permission === 'granted') { st.textContent = 'Notificações do Chrome ativas.'; bt.hidden = true; }
+    else if (window.Notification.permission === 'denied') { st.textContent = 'Bloqueadas no Chrome: libere nas configurações do site.'; bt.hidden = true; }
+    else { st.textContent = 'Ative para receber no Chrome.'; bt.hidden = false; }
+    sel.value = prefNotificar();
+  }
+  function notificarNovas() {
+    const novas = view.notificacoes.filter(n => n.baixaId && !notificadas.has(n.id));
+    novas.forEach(n => notificadas.add(n.id));
+    if (!novas.length || !chromeAtivo()) return;
+    const meu = meuResp();
+    const pref = prefNotificar();
+    novas.slice().reverse().forEach(n => {   // da mais antiga para a mais nova
+      if (pref === 'meus' && (!meu || norm(n.responsavel) !== norm(meu.nome))) return;
+      try {
+        new Notification('Reingresso pendente', {
+          body: `${n.sku} · ${n.quantidade} un. · ${n.responsavel || '—'} · planilha ${n.arquivo}`,
+          tag: n.id
+        });
+      } catch (err) { /* o navegador recusou a notificação nesta tela */ }
+    });
+  }
+  // lista da aba Reingresso conforme o filtro "Mostrar"
+  function listaReingresso() {
+    const registradas = view.baixas.filter(b => b.planilhaId || confirmadoReingresso(b));
+    const filtro = $('#reing-filtro').value;
+    return filtro === 'pendentes' ? registradas.filter(pendenteReingresso)
+      : filtro === 'confirmados' ? registradas.filter(confirmadoReingresso) : registradas;
+  }
+  $('#notif-ativar').addEventListener('click', async () => {
+    if (chromeOk()) { try { await window.Notification.requestPermission(); } catch (err) { /* sem resposta do navegador */ } }
+    renderChrome();
+  });
+  $('#notif-pref').addEventListener('change', e => {
+    if (!usuario) return;
+    commit([{ t: 'add', c: 'preferencias', rec: { id: usuario, notificar: e.target.value === 'meus' ? 'meus' : 'todos' } }]);
+  });
+  // limpar reingressos (só administradores): tira as baixas do filtro atual da fila e apaga as notificações delas
+  $('#reing-limpar').addEventListener('click', async () => {
+    if (!souAdmin()) return;
+    const lista = listaReingresso();
+    if (!lista.length) { await avisar('Não há reingressos neste filtro para limpar.'); return; }
+    const ids = new Set(lista.map(b => b.id));
+    const avisos = view.notificacoes.filter(n => n.baixaId && ids.has(n.baixaId)).map(n => n.id);
+    const un = unidadesDe(lista);
+    const msg = `Tirar ${lista.length} ${lista.length === 1 ? 'baixa' : 'baixas'} (${un} un.) da fila de reingresso e apagar as notificações delas? As baixas continuam em Baixas salvas. Não pode ser desfeito.`;
+    if (!await confirmar(msg, 'Limpar reingressos', true)) return;
+    commit([
+      ...lista.map(b => ({ t: 'set', c: 'baixas', id: b.id, patch: { planilhaId: null, planilhaArq: null, reingresso: null } })),
+      ...avisos.map(id => ({ t: 'del', c: 'notificacoes', id }))
+    ]);
   });
 
   // ---------- início ----------

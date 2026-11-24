@@ -12,6 +12,7 @@
   <div class="logo">mercado<span>livre</span></div>
   <h1>ICQA RJ02 - Controle de RQ</h1>
   <span id="sync" class="sync busy">Carregando…</span>
+  <span id="quem" class="quem">Identificando…</span>
 </header>
 <div id="banner" class="banner" hidden></div>
 
@@ -156,6 +157,7 @@
         <span class="pill" id="reing-un">0 unidades</span>
         <span class="hint-inline">Entram aqui quando a planilha do lote é emitida</span>
         <div class="card-actions">
+          <button class="btn-danger" id="reing-limpar" type="button" title="Tira as baixas deste filtro da fila de reingresso e apaga as notificações delas. As baixas continuam em Baixas salvas.">Limpar reingressos</button>
           <label class="linha-inline"><span>Mostrar</span>
             <select id="reing-filtro">
               <option value="pendentes">Pendentes</option>
@@ -183,6 +185,16 @@
       <div class="card-head">
         <h2>Notificações de reingresso</h2>
         <span class="hint-inline">Uma para cada item novo pendente de reingresso · aparecem para todos que abrem o controle · as mais recentes</span>
+        <div class="card-actions">
+          <span class="hint-inline" id="notif-chrome-st"></span>
+          <button class="btn-add small" id="notif-ativar" type="button">Ativar notificações do Chrome</button>
+          <label class="linha-inline"><span>Notificar</span>
+            <select id="notif-pref">
+              <option value="todos">Todos os itens</option>
+              <option value="meus">Somente os meus</option>
+            </select>
+          </label>
+        </div>
       </div>
       <div class="table-wrap small">
         <table class="planilhas">
@@ -296,6 +308,9 @@
         <label><span>Cargo</span>
           <input id="r-cargo" list="dl-cargo" placeholder="Ex.: Operador">
         </label>
+        <label><span>Login (Grid)</span>
+          <input id="r-login" placeholder="ex.: bcosta" autocomplete="off">
+        </label>
         <button type="submit" class="btn-add">+ Cadastrar</button>
         <div class="papeis">
           <label><input type="checkbox" id="r-baixa" checked> Responsável por baixa</label>
@@ -303,6 +318,7 @@
         </div>
       </form>
       <p class="hint">Alterar o nome ou o turno aqui atualiza também as baixas já salvas.</p>
+      <p class="hint" id="resp-aviso" hidden>Somente os administradores (mrfigueiredo e matccosta) cadastram e editam responsáveis e suas funções.</p>
     </section>
 
     <section class="card">
@@ -312,10 +328,10 @@
       <div class="table-wrap">
         <table class="resps">
           <colgroup>
-            <col style="width:30%"><col style="width:13%"><col style="width:24%"><col style="width:12%"><col style="width:14%"><col style="width:7%">
+            <col style="width:22%"><col style="width:11%"><col style="width:18%"><col style="width:14%"><col style="width:10%"><col style="width:13%"><col style="width:12%">
           </colgroup>
           <thead>
-            <tr><th>Nome</th><th>Turno</th><th>Cargo</th><th class="chk">Baixa</th><th class="chk">Reingresso</th><th></th></tr>
+            <tr><th>Nome</th><th>Turno</th><th>Cargo</th><th>Login</th><th class="chk">Baixa</th><th class="chk">Reingresso</th><th></th></tr>
           </thead>
           <tbody id="resp-rows"></tbody>
         </table>
