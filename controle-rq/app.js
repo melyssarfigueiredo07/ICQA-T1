@@ -873,10 +873,12 @@
     if (el) el.textContent = !GOOGLE_SHEET_ID ? 'Google Planilhas: não ligada' : googleLigado() ? 'Google Planilhas: ligada' : 'Google Planilhas: fora do Grid';
   }
   function motivoGoogle(err) {
-    const cod = (err && (err.code || err.error)) || '';
-    if (GOOGLE_ERROS[cod]) return GOOGLE_ERROS[cod];
-    if (err && (err.status === 403 || err.statusCode === 403)) return 'a planilha não está ligada a este controle. Peça ao dono do controle para ligar a planilha';
-    return `a gravação na planilha Google falhou${cod ? ` (${cod})` : ''}`;
+    // o SDK pode trazer o código em code, em error ou só no texto da mensagem
+    const txt = String((err && (err.code || err.error || err.message)) || '');
+    const chave = Object.keys(GOOGLE_ERROS).find(k => txt.includes(k));
+    if (chave) return GOOGLE_ERROS[chave];
+    if (/\b403\b/.test(txt) || (err && (err.status === 403 || err.statusCode === 403))) return 'a planilha não está ligada a este controle. Peça ao dono do controle para ligar a planilha';
+    return `a gravação na planilha Google falhou${txt ? ` (${txt.slice(0, 80)})` : ''}`;
   }
   // grava o cabeçalho e as linhas do lote na primeira aba da planilha; devolve o id da aba
   async function gravarGoogle(p) {
