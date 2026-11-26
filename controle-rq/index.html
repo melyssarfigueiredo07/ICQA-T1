@@ -197,14 +197,15 @@
       </div>
     </section>
 
-    <!-- uma notificação para cada item que entra como pendente de reingresso: aparece para todos que abrem o controle -->
+    <!-- uma notificação para cada item com origem de reingresso preenchida que entra como pendente: aparece para todos que abrem o controle; só administradores limpam -->
     <section class="card">
       <div class="card-head">
         <h2>Notificações de reingresso</h2>
-        <span class="hint-inline">Uma para cada item novo pendente de reingresso · aparecem para todos que abrem o controle · as mais recentes</span>
+        <span class="hint-inline">Uma para cada item novo pendente de reingresso com origem preenchida · aparecem para todos que abrem o controle · as mais recentes</span>
         <div class="card-actions">
           <span class="hint-inline" id="notif-chrome-st"></span>
           <button class="btn-add small" id="notif-ativar" type="button">Ativar notificações do Chrome</button>
+          <button class="btn-danger" id="notif-limpar" type="button" title="Apaga as notificações de reingresso guardadas. As baixas e a fila de reingresso não mudam. Só administradores.">Limpar notificações</button>
           <label class="linha-inline"><span>Notificar</span>
             <select id="notif-pref">
               <option value="todos">Todos os itens</option>

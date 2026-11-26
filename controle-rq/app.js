@@ -165,6 +165,7 @@
     trava('[data-pl-toggle]', lanca);
     trava('#reing-rows [data-rconf], #reing-rows [data-rdesf], #reing-rows [data-rr]', confirma);
     trava('#notif-pref', !!usuario);
+    trava('#notif-limpar', adm);   // limpar notificações de reingresso: só administradores
     $('#resp-aviso').hidden = adm;
     document.querySelector('[data-tab="resp"]').hidden = !adm;   // cadastro de responsáveis: só administradores
   }
@@ -839,9 +840,10 @@
       id: uid(), arquivo, tipo: 'lote', criadaEm: new Date().toISOString(), responsaveis: nomes,
       baixas: lista.length, compartilhada: false, compartilhadaEm: '', linhas
     };
-    // emitir a planilha registra cada baixa do lote como pendente de reingresso e gera uma notificação por item novo;
-    // tudo numa única gravação, para não ficar meio registrado (a ordem se inverte porque cada inclusão vai para o topo)
-    const itens = lista.slice().reverse().map(b => ({
+    // emitir a planilha registra cada baixa do lote como pendente de reingresso; a notificação sai só para o item
+    // com origem de reingresso preenchida. Tudo numa única gravação, para não ficar meio registrado
+    // (a ordem se inverte porque cada inclusão vai para o topo)
+    const itens = lista.filter(b => String(b.origemReingresso || '').trim() !== '').reverse().map(b => ({
       id: uid(), tipo: 'item-pendente', baixaId: b.id, planilhaId: p.id, arquivo, criadaEm: p.criadaEm,
       sku: b.sku, quantidade: Number(b.quantidade) || 0, responsavel: b.responsavel || ''
     }));
@@ -1461,7 +1463,7 @@
           <td>${situacao}</td>
         </tr>`;
     }).join('')
-      : '<tr><td colspan="5" class="empty">Nenhuma notificação ainda. Uma é gerada para cada item que entra como pendente de reingresso.</td></tr>';
+      : '<tr><td colspan="5" class="empty">Nenhuma notificação ainda. Uma é gerada para cada item pendente de reingresso que tem origem preenchida.</td></tr>';
     if (baseLida) notificarNovas();
   }
   // aviso para todos que abrem o controle enquanto houver baixas pendentes de reingresso: mostra o último item pendente
@@ -1564,6 +1566,16 @@
       ...lista.map(b => ({ t: 'set', c: 'baixas', id: b.id, patch: { planilhaId: null, planilhaArq: null, reingresso: null } })),
       ...avisos.map(id => ({ t: 'del', c: 'notificacoes', id }))
     ]);
+  });
+
+  // limpar notificações de reingresso (só administradores): apaga as notificações guardadas; baixas e fila não mudam
+  $('#notif-limpar').addEventListener('click', async () => {
+    if (!souAdmin()) return;
+    const todas = view.notificacoes.slice();
+    if (!todas.length) { await avisar('Não há notificações de reingresso para limpar.'); return; }
+    const msg = `Apagar ${todas.length} ${todas.length === 1 ? 'notificação' : 'notificações'} de reingresso? As baixas e a fila de reingresso não mudam. Não pode ser desfeito.`;
+    if (!await confirmar(msg, 'Limpar notificações', true)) return;
+    commit(todas.map(n => ({ t: 'del', c: 'notificacoes', id: n.id })));
   });
 
   $('#sair').addEventListener('click', sair);
