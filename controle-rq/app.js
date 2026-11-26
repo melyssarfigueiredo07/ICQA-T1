@@ -88,7 +88,9 @@
   //   responsável: baixa e reingresso são as funções (cadastro antigo sem a marca vale como responsável por baixa)
   //   baixa: planilhaId = planilha emitida que a registrou como pendente de reingresso (só depois da emissão);
   //          reingresso = null ou {por, data, em}, quando um responsável por reingresso confirma
-  //   origemReingresso = texto livre por baixa;  motivo = '' | 'saldo' | 'sku'
+  //   origemReingresso = texto livre por baixa;  motivo = '' | 'saldo' | 'sku' | 'cx'
+  //   semReingresso = true: saldo sistêmico marcado como "não irá fazer reingresso"; a baixa não tem planilhaId, então
+  //          não entra na fila de reingresso nem gera notificação (continua na planilha e nas baixas salvas)
   //   warehouse e endereço RQ são fixos (WAREHOUSE_FIXO, RQ_FIXO); campos antigos desses dados ficam guardados, sem uso
   const emptyRoot = () => ({ responsaveis: [], baixas: [], rascunhos: [], planilhas: [], notificacoes: [], preferencias: [] });
   const qtdBaixa = v => Number(v) || 0;
@@ -471,7 +473,7 @@
       <td><input data-f="origemReingresso" list="dl-origem" value="${esc(b.origemReingresso)}"></td>
       <td><select data-f="responsavel">${respOpts(b.responsavel)}</select></td>
       <td data-turno>${turnoHTML(turnoOf(b))}</td>
-      <td>${motivoSelect(b.motivo, 'data-f="motivo"')}</td>
+      <td>${motivoSelect(b.motivo, 'data-f="motivo"')}${b.semReingresso ? ' <span class="pill">Não faz reingresso</span>' : ''}</td>
       <td><input data-f="skuReingresso" class="sku" value="${esc(b.skuReingresso)}"></td>
       <td><input data-f="data" type="date" value="${esc(b.data)}"></td>
       <td class="actions"><button class="btn-danger" data-del title="Remover">✕</button></td>`;
@@ -517,7 +519,7 @@
   function novaLinha(ref) {
     return {
       id: uid(), sku: '', quantidade: '', origemReingresso: ref ? ref.origemReingresso : '',
-      skuReingresso: '', motivo: '', data: (ref && ref.data) || todayISO()
+      skuReingresso: '', motivo: '', semReingresso: false, data: (ref && ref.data) || todayISO()
     };
   }
   function renderMassa(focusId) {
@@ -529,7 +531,7 @@
         <td><input data-m="sku" class="sku" value="${esc(r.sku)}" autocomplete="off"></td>
         <td><input data-m="quantidade" type="number" min="1" step="1" value="${esc(r.quantidade)}"></td>
         <td><input data-m="origemReingresso" list="dl-origem" value="${esc(r.origemReingresso)}" autocomplete="off"></td>
-        <td>${motivoSelect(r.motivo, 'data-m="motivo"')}</td>
+        <td>${motivoSelect(r.motivo, 'data-m="motivo"')}<label class="sem-reing" ${r.motivo === 'saldo' ? '' : 'hidden'}><input type="checkbox" data-m="semReingresso" ${r.semReingresso ? 'checked' : ''}> Não irá fazer reingresso</label></td>
         <td><input data-m="skuReingresso" class="sku" value="${esc(r.skuReingresso)}" autocomplete="off"></td>
         <td><input data-m="data" type="date" value="${esc(r.data)}"></td>
         <td class="actions"><button class="btn-danger" data-mdel title="Remover linha">✕</button></td>
@@ -840,16 +842,16 @@
       id: uid(), arquivo, tipo: 'lote', criadaEm: new Date().toISOString(), responsaveis: nomes,
       baixas: lista.length, compartilhada: false, compartilhadaEm: '', linhas
     };
-    // emitir a planilha registra cada baixa do lote como pendente de reingresso; a notificação sai só para o item
-    // com origem de reingresso preenchida. Tudo numa única gravação, para não ficar meio registrado
-    // (a ordem se inverte porque cada inclusão vai para o topo)
-    const itens = lista.filter(b => String(b.origemReingresso || '').trim() !== '').reverse().map(b => ({
+    // emitir a planilha registra cada baixa do lote como pendente de reingresso, menos as marcadas "não irá fazer reingresso";
+    // a notificação sai só para o item pendente com origem de reingresso preenchida. Tudo numa única gravação, para não ficar
+    // meio registrado (a ordem se inverte porque cada inclusão vai para o topo)
+    const itens = lista.filter(b => !b.semReingresso && String(b.origemReingresso || '').trim() !== '').reverse().map(b => ({
       id: uid(), tipo: 'item-pendente', baixaId: b.id, planilhaId: p.id, arquivo, criadaEm: p.criadaEm,
       sku: b.sku, quantidade: Number(b.quantidade) || 0, responsavel: b.responsavel || ''
     }));
     commit([
       { t: 'add', c: 'planilhas', rec: p },
-      ...lista.map(b => ({ t: 'set', c: 'baixas', id: b.id, patch: { planilhaId: p.id, planilhaArq: arquivo } })),
+      ...lista.map(b => ({ t: 'set', c: 'baixas', id: b.id, patch: { planilhaId: b.semReingresso ? null : p.id, planilhaArq: arquivo } })),
       ...itens.map(rec => ({ t: 'add', c: 'notificacoes', rec }))
     ]);
     flushNow();
@@ -933,7 +935,8 @@
       if (!ok.length) return { lote: [], ignoradas };
       const lote = ok.map(c => ({
         id: uid(), sku: c.sku, quantidade: Number(c.quantidade), origemReingresso: c.origemReingresso,
-        skuReingresso: c.skuReingresso, responsavel: nome, turno, motivo: c.motivo, data: c.data || todayISO()
+        skuReingresso: c.skuReingresso, responsavel: nome, turno, motivo: c.motivo, data: c.data || todayISO(),
+        semReingresso: c.motivo === 'saldo' && !!c.semReingresso
       }));
       const limpar = view.rascunhos.filter(r => ids.includes(r.id) || vazia(r));
       const ops = [
@@ -1024,7 +1027,7 @@
     const tb = $('#massa-rows');
     tb.addEventListener('input', e => {
       const inp = e.target.closest('[data-m]');
-      if (!inp || inp.tagName === 'SELECT') return;
+      if (!inp || inp.tagName === 'SELECT' || inp.type === 'checkbox') return;   // a caixa é gravada no evento change
       const id = inp.closest('tr').dataset.id;
       const f = inp.dataset.m;
       let v = inp.value;
@@ -1033,10 +1036,16 @@
       commit([{ t: 'set', c: 'rascunhos', id, patch: { [f]: v } }]);
     });
     tb.addEventListener('change', e => {
+      const chk = e.target.closest('[data-m="semReingresso"]');
+      if (chk) { commit([{ t: 'set', c: 'rascunhos', id: chk.closest('tr').dataset.id, patch: { semReingresso: chk.checked } }]); return; }
       const sel = e.target.closest('[data-m="motivo"]');
       if (!sel) return;
       const id = sel.closest('tr').dataset.id;
-      commit([{ t: 'set', c: 'rascunhos', id, patch: { motivo: sel.value } }]);
+      // "não irá fazer reingresso" só vale para saldo sistêmico: ao trocar o motivo, a marca é desmarcada
+      const saldo = sel.value === 'saldo';
+      const caixa = sel.closest('td').querySelector('.sem-reing');
+      if (caixa) { caixa.hidden = !saldo; if (!saldo) caixa.querySelector('input').checked = false; }
+      commit([{ t: 'set', c: 'rascunhos', id, patch: saldo ? { motivo: sel.value } : { motivo: sel.value, semReingresso: false } }]);
     });
     tb.addEventListener('keydown', e => {
       if (e.key !== 'Enter') return;
