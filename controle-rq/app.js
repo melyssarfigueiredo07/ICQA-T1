@@ -37,6 +37,17 @@
   const WAREHOUSE_FIXO = 'BRRJ02';
   const RQ_FIXO = 'RQ-0-005-000-00-00';
   const EMAIL_SUPORTE = 'soporteME@mercadolibre.com';
+  // Google Planilhas: o lote vai para uma cópia da RQ BASE ligada a este controle no Grid, e a planilha abre numa aba nova.
+  // GOOGLE_DOC_ID é o documento do Grid; GOOGLE_SHEET_ID é o trecho do link entre /d/ e /edit; GOOGLE_ABA vazio = primeira aba.
+  // Com GOOGLE_SHEET_ID vazio, o envio fica desligado e o app avisa.
+  const GOOGLE_DOC_ID = '01M7J64B17CD8HS33DAQG024XC';
+  const GOOGLE_SHEET_ID = '';
+  const GOOGLE_ABA = '';
+  const GOOGLE_ERROS = {
+    google_not_connected: 'o Google do controle não está conectado. Peça ao dono do controle para conectar o Google',
+    unauthorized: 'você não tem acesso a este controle no Grid',
+    google_workspace_api: 'o Google Planilhas recusou a gravação. Tente de novo em instantes'
+  };
 
   // ---------- utilidades ----------
   const $ = s => document.querySelector(s);
@@ -72,7 +83,7 @@
   // { responsaveis:[{id,nome,turno,cargo,baixa,reingresso}],
   //   baixas:[{id,sku,quantidade,origemReingresso,skuReingresso,responsavel,turno,data,motivo,planilhaId,planilhaArq,reingresso}],
   //   rascunhos:[{id,sku,quantidade,origemReingresso,skuReingresso,motivo,data}],
-  //   planilhas:[{id,arquivo,tipo,criadaEm,responsaveis,baixas,compartilhada,compartilhadaEm}],
+  //   planilhas:[{id,arquivo,tipo,criadaEm,responsaveis,baixas,compartilhada,compartilhadaEm,linhas,googleEm,googleGid}],
   //   notificacoes:[{id,tipo,planilhaId,arquivo,criadaEm,baixas,unidades,responsaveis}] }
   //   responsável: baixa e reingresso são as funções (cadastro antigo sem a marca vale como responsável por baixa)
   //   baixa: planilhaId = planilha emitida que a registrou como pendente de reingresso (só depois da emissão);
@@ -672,6 +683,8 @@
   function renderPlanilhas() {
     const lista = view.planilhas;
     const pend = lista.filter(p => !p.compartilhada);
+    const atual = googleAtual();
+    renderGoogleStatus();
     $('#planilhas-list').innerHTML = lista.length ? lista.map(p => `
       <tr class="${p.compartilhada ? 'ok' : 'pend'}" data-id="${esc(p.id)}">
         <td class="arq" title="${esc(p.arquivo)}">${esc(p.arquivo)}</td>
@@ -683,6 +696,8 @@
             ? `<span class="ok-txt">Compartilhada em ${esc(fmtDataHora(p.compartilhadaEm))}</span>`
             : `<span class="pend-txt">OBRIGATÓRIO: ${esc(destinatarios(p).join(' + '))}</span>`}
           <button class="btn-ghost small" data-pl-ver>Ver planilha</button>
+          ${googleLigado() && Array.isArray(p.linhas) ? '<button class="btn-ghost small" data-pl-google>Enviar ao Google</button>' : ''}
+          ${googleLigado() && atual && atual.id === p.id ? '<button class="btn-ghost small" data-pl-google-abrir>Abrir no Google</button>' : ''}
           <button class="btn-ghost small" data-pl-toggle>${p.compartilhada ? 'Desfazer' : 'Marcar compartilhada'}</button>
           <button class="btn-danger" data-pl-excluir title="Excluir esta planilha da lista">Excluir</button>
         </td>
@@ -842,6 +857,55 @@
     await avisar(`${resumo}\nPlanilha gerada: ${p.arquivo}\n\nLEMBRETE OBRIGATÓRIO: compartilhe esta planilha com:\n- ${destinatarios(p).join('\n- ')}\n\nEla fica na lista de planilhas geradas (nesta tela) até você marcar como compartilhada.`);
   }
 
+  // ---------- Google Planilhas: o lote vai para a planilha ligada ao controle e ela abre numa aba nova ----------
+  // a planilha ligada guarda só o último lote enviado: cada envio troca as linhas abaixo do cabeçalho
+  function googleLigado() { return !!GOOGLE_SHEET_ID && !!(window.Grid && window.Grid.sheets); }
+  function motivoSemGoogle() { return GOOGLE_SHEET_ID ? 'esta tela não está dentro do Grid' : 'a planilha Google ainda não foi ligada ao controle'; }
+  function googleLink(gid) { return `https://docs.google.com/spreadsheets/d/${GOOGLE_SHEET_ID}/edit#gid=${gid}`; }
+  // a planilha que está no Google agora é a enviada por último
+  function googleAtual() {
+    return view.planilhas
+      .filter(p => p.googleEm && typeof p.googleGid === 'number')
+      .sort((a, b) => (a.googleEm < b.googleEm ? 1 : a.googleEm > b.googleEm ? -1 : 0))[0] || null;
+  }
+  function renderGoogleStatus() {
+    const el = $('#g-status');
+    if (el) el.textContent = !GOOGLE_SHEET_ID ? 'Google Planilhas: não ligada' : googleLigado() ? 'Google Planilhas: ligada' : 'Google Planilhas: fora do Grid';
+  }
+  function motivoGoogle(err) {
+    const cod = (err && (err.code || err.error)) || '';
+    if (GOOGLE_ERROS[cod]) return GOOGLE_ERROS[cod];
+    if (err && (err.status === 403 || err.statusCode === 403)) return 'a planilha não está ligada a este controle. Peça ao dono do controle para ligar a planilha';
+    return `a gravação na planilha Google falhou${cod ? ` (${cod})` : ''}`;
+  }
+  // grava o cabeçalho e as linhas do lote na primeira aba da planilha; devolve o id da aba
+  async function gravarGoogle(p) {
+    const G = window.Grid;
+    G.configure({ docId: GOOGLE_DOC_ID });
+    const info = await G.sheets.info(GOOGLE_SHEET_ID);
+    const abas = (info && info.sheets) || [];
+    const aba = GOOGLE_ABA ? abas.find(a => a.title === GOOGLE_ABA) : abas[0];
+    if (!aba) throw Object.assign(new Error('aba não encontrada'), { code: 'aba_nao_encontrada' });
+    const fim = p.linhas.length + 1;
+    await G.sheets.batch(GOOGLE_SHEET_ID, [
+      { op: 'clear', range: `${aba.title}!A2:E${Math.max(aba.rowCount || 0, fim, 2)}` },
+      { op: 'set', range: `${aba.title}!A1:E${fim}`, values: [TEMPLATE_HEAD, ...p.linhas] }
+    ]);
+    return aba.sheetId;
+  }
+  // envia a planilha e a abre; "janela" é a aba aberta no clique (null se o navegador bloqueou)
+  async function enviarGoogle(p, janela) {
+    if (!googleLigado()) { if (janela) janela.close(); return { ok: false, motivo: motivoSemGoogle() }; }
+    if (!Array.isArray(p.linhas)) { if (janela) janela.close(); return { ok: false, motivo: 'esta planilha não tem o conteúdo guardado' }; }
+    let gid;
+    try { gid = await gravarGoogle(p); }
+    catch (err) { if (janela) janela.close(); return { ok: false, motivo: motivoGoogle(err) }; }
+    commit([{ t: 'set', c: 'planilhas', id: p.id, patch: { googleEm: new Date().toISOString(), googleGid: gid } }]);
+    flushNow();
+    if (janela) janela.location.href = googleLink(gid);
+    return { ok: true, aberta: !!janela };
+  }
+
   // ---------- Salvar lote ----------
   // grava tudo que está pendente antes de uma operação atômica
   async function gravarPendencias() {
@@ -927,8 +991,12 @@
     const turno = r ? r.turno : '';
     const cx = ok.filter(c => c.motivo === 'cx').length;
     if (cx && !await confirmar(`${cx} baixa(s) com motivo CX: o modelo da planilha ainda não tem o texto desse motivo, então a coluna reason fica em branco nessas linhas. Salvar e gerar a planilha mesmo assim?`, 'Gerar mesmo assim', true)) return;
+    // antes de gravar, abre a aba da planilha no Google enquanto o clique ainda vale (o navegador bloqueia abas abertas depois);
+    // a aba recebe o endereço da planilha quando o envio terminar
+    const janela = googleLigado() ? window.open('', '_blank') : null;
     const res = await salvarLote(ok.map(c => c.id), nome, turno);
     if (res.erro) {
+      if (janela) janela.close();
       const msgs = {
         pendente: 'Não foi possível gravar as alterações pendentes. Tente de novo em instantes.',
         conflito: 'Outra pessoa está salvando ao mesmo tempo. Tente de novo.',
@@ -937,11 +1005,15 @@
       await avisar(msgs[res.erro]);
       return;
     }
-    if (!res.lote.length) { await avisar('Essas linhas já foram salvas por outra pessoa ou deixaram de estar completas. A tela foi atualizada.'); return; }
-    // cada salvamento gera uma planilha nova, só com as colunas do modelo
+    if (!res.lote.length) { if (janela) janela.close(); await avisar('Essas linhas já foram salvas por outra pessoa ou deixaram de estar completas. A tela foi atualizada.'); return; }
+    // cada salvamento gera uma planilha nova, só com as colunas do modelo, e a envia ao Google Planilhas
     const p = await gerarPlanilha(res.lote, slug(nome), [nome]);
+    const g = googleLigado() ? await enviarGoogle(p, janela) : { ok: false, motivo: motivoSemGoogle() };
     const extra = res.ignoradas ? ` ${res.ignoradas} linha(s) não entraram (já salvas por outra pessoa ou deixaram de estar completas).` : '';
-    await lembreteModal(p, `${res.lote.length} baixa(s) salvas para ${nome}.${extra}`);
+    const linhaGoogle = g.ok
+      ? (g.aberta ? '\nA planilha foi enviada ao Google Planilhas e aberta numa aba nova.' : '\nA planilha foi enviada ao Google Planilhas. O navegador bloqueou a aba nova: use "Abrir no Google" na lista de planilhas geradas.')
+      : `\nNão foi possível enviar ao Google Planilhas: ${g.motivo}.${googleLigado() ? ' Use "Enviar ao Google" na lista quando resolver.' : ''}`;
+    await lembreteModal(p, `${res.lote.length} baixa(s) salvas para ${nome}.${extra}${linhaGoogle}`);
   });
   massaEventos();
   function massaEventos() {
@@ -1221,6 +1293,25 @@
   $('#planilhas-list').addEventListener('click', async e => {
     const ver = e.target.closest('[data-pl-ver]');
     if (ver) { abrirPlanilha(ver.closest('[data-id]').dataset.id); return; }
+    const gAbrir = e.target.closest('[data-pl-google-abrir]');
+    if (gAbrir) {
+      const p = view.planilhas.find(x => x.id === gAbrir.closest('[data-id]').dataset.id);
+      if (p && typeof p.googleGid === 'number' && googleLigado() && !window.open(googleLink(p.googleGid), '_blank')) {
+        await avisar(`O navegador bloqueou a aba nova. Abra este endereço: ${googleLink(p.googleGid)}`);
+      }
+      return;
+    }
+    const gEnviar = e.target.closest('[data-pl-google]');
+    if (gEnviar) {
+      const p = view.planilhas.find(x => x.id === gEnviar.closest('[data-id]').dataset.id);
+      if (!p) return;
+      const janela = window.open('', '_blank');   // clique do usuário: a aba abre antes do envio
+      const r = await enviarGoogle(p, janela);
+      await avisar(r.ok
+        ? (r.aberta ? 'Planilha enviada ao Google Planilhas e aberta numa aba nova.' : 'Planilha enviada ao Google Planilhas. O navegador bloqueou a aba nova: use "Abrir no Google" nesta lista.')
+        : `Não foi possível enviar ao Google Planilhas: ${r.motivo}.`);
+      return;
+    }
     const exc = e.target.closest('[data-pl-excluir]');
     if (exc) {
       const id = exc.closest('[data-id]').dataset.id;
