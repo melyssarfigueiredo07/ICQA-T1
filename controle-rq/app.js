@@ -149,9 +149,11 @@
   const confirmadoReingresso = b => !!(b.reingresso && b.reingresso.por);
   const pendenteReingresso = b => !!b.planilhaId && !confirmadoReingresso(b);
 
-  // ---------- quem está usando: o login digitado na tela de entrada (sem identificação automática) ----------
-  let usuario = null;   // login normalizado de quem entrou; null enquanto ninguém entrou
-  let saiu = false;     // a pessoa clicou em Sair: a tela pede um login de novo
+  // ---------- quem está usando: identificado pelo Grid (/api/v1/me), sem pedir login ----------
+  // administradores são os de ADMINS; quem está no cadastro com a função de baixa e/ou reingresso faz isso;
+  // os demais são visualizadores: veem o controle e não mudam nada
+  let usuario = null;        // login de quem está no Grid; null se o Grid não identificou
+  let identificado = false;  // a identificação já terminou, com ou sem resultado
   const souAdmin = () => !!usuario && ADMINS.includes(usuario);
   const meuResp = () => (usuario ? view.responsaveis.find(r => norm(r.usuario) === usuario) : undefined);
   const podeLancarBaixa = () => souAdmin() || !!(meuResp() && podeBaixa(meuResp()));
@@ -167,64 +169,49 @@
     trava('[data-pl-toggle]', lanca);
     trava('#reing-rows [data-rconf], #reing-rows [data-rdesf], #reing-rows [data-rr]', confirma);
     trava('#notif-pref', !!usuario);
+    trava('[data-pl-google]', lanca);   // enviar ao Google grava na planilha: só quem lança baixa
     trava('#notif-limpar', adm);   // limpar notificações de reingresso: só administradores
     $('#resp-aviso').hidden = adm;
     document.querySelector('[data-tab="resp"]').hidden = !adm;   // cadastro de responsáveis: só administradores
   }
-  function renderQuem() {
-    const el = $('#quem'), sairB = $('#sair');
-    sairB.hidden = !usuario;
-    if (!usuario) { el.textContent = 'Sem login · acesso bloqueado'; el.className = 'quem err'; return; }
-    if (!loaded) { el.textContent = `Você: ${usuario}`; el.className = 'quem'; return; }
-    if (!souAdmin() && !meuResp()) { el.textContent = `Você: ${usuario} · sem cadastro`; el.className = 'quem err'; return; }
+  // papel de quem está usando: administrador, responsável por baixa e/ou reingresso, ou visualizador
+  function papel() {
+    if (souAdmin()) return 'administrador';
     const r = meuResp();
-    const papel = souAdmin() ? 'administrador'
-      : ([podeBaixa(r) ? 'baixa' : '', podeReingresso(r) ? 'reingresso' : ''].filter(Boolean).join(' e ') || 'sem função');
-    el.textContent = `Você: ${usuario} · ${papel}`;
+    if (!r) return 'visualizador';   // ainda não está no cadastro
+    const funcoes = [podeBaixa(r) ? 'baixa' : '', podeReingresso(r) ? 'reingresso' : ''].filter(Boolean);
+    return funcoes.length ? `responsável por ${funcoes.join(' e ')}` : 'visualizador';
+  }
+  function renderQuem() {
+    const el = $('#quem');
+    if (!identificado) { el.textContent = 'Identificando…'; el.className = 'quem'; return; }
+    if (!usuario) { el.textContent = 'Sem identificação · visualizador'; el.className = 'quem err'; return; }
+    el.textContent = `Você: ${usuario} · ${papel()}`;
     el.className = 'quem';
   }
-  // o que a pessoa vê: sem login o controle não mostra nenhum dado; quem não está no cadastro vê só a mensagem
-  function aplicarAcesso() {
-    let bloqueado = true, titulo = 'Entre para usar o controle', texto = 'Digite o seu login e clique em Entrar.';
-    if (!usuario) {
-      if (saiu) { titulo = 'Você saiu do controle'; texto = 'Digite outro login e clique em Entrar.'; }
-    } else if (!loaded) {
-      titulo = 'Carregando o controle…'; texto = 'Se demorar, clique em Entrar para tentar de novo.';
-    } else if (!souAdmin() && !meuResp()) {
-      titulo = 'Sem acesso ao controle';
-      texto = `O login ${usuario} não está no cadastro de responsáveis. Peça a um administrador (mrfigueiredo ou matccosta) para cadastrá-lo.`;
-    } else {
-      bloqueado = false;
-    }
-    document.body.classList.toggle('bloqueado', bloqueado);
-    $('#acesso-titulo').textContent = bloqueado ? titulo : '';
-    $('#acesso-txt').textContent = bloqueado ? texto : '';
+  // identificação automática: o login de quem está no Grid (/api/v1/me); na prévia fora do Grid, ?usuario= para testar
+  async function identificarUsuario() {
+    if (preview) return norm(new URLSearchParams(window.location.search).get('usuario') || '') || null;
+    try {
+      const r = await fetch('/api/v1/me', { credentials: 'same-origin', cache: 'no-store' });
+      if (!r.ok) return null;
+      const d = await r.json();
+      if (!d || d.is_public === true) return null;   // identidade pública não é um usuário do controle
+      const campo = [d.ldap, d.caller_id, d.username, d.login, d.user].find(v => typeof v === 'string' && v.trim());
+      return campo ? norm(String(campo).split('@')[0]) : null;
+    } catch (err) { return null; }
   }
-  // Sair: grava o que estiver pendente, esvazia a tela e pede outro login
-  async function sair() {
-    if (!await gravarPendencias()) { await avisar('Ainda há alterações que não foram gravadas no Grid. Aguarde o aviso "Salvo" e clique em Sair de novo.'); return; }
-    saiu = true;
-    loaded = false;
-    usuario = null;
-    serverRoot = emptyRoot(); serverAt = null; pending = []; view = emptyRoot();
-    $('#acesso-usuario').value = '';
-    setStatus('Saiu do controle', 'err');
+  async function identificar() {
+    usuario = await Promise.race([identificarUsuario(), sleep(6000).then(() => null)]);
+    identificado = true;
+    banner(textoBanner());
     renderAll();
   }
-  // Entrar: o login digitado na tela de entrada; o Grid só é lido depois de entrar
-  async function entrar() {
-    const login = norm($('#acesso-usuario').value);
-    if (!login) {
-      $('#acesso-titulo').textContent = 'Digite o seu login';
-      $('#acesso-txt').textContent = 'Digite o login de quem vai usar o controle e clique em Entrar.';
-      return;
-    }
-    saiu = false;
-    loaded = false;
-    serverRoot = emptyRoot(); serverAt = null; view = emptyRoot();
-    usuario = login;
-    renderAll();
-    loadWithRetry();
+  // aviso no topo: a prévia fora do Grid, ou quem o Grid não identificou (o controle fica só para visualização)
+  function textoBanner() {
+    if (preview) return 'Prévia fora do Grid: as alterações não são salvas. Abra o documento no Grid para usar de verdade.';
+    if (identificado && !usuario) return 'Não consegui identificar você no Grid: o controle está só para visualização.';
+    return '';
   }
   // só um campo de edição segura o redesenho (um botão com o foco não precisa disso)
   const gridFocused = () => { const ae = document.activeElement; return !!(ae && ae.matches && ae.matches('input,select,textarea') && ae.closest('#rows,#resp-rows,#massa-rows,#reing-rows')); };
@@ -364,15 +351,13 @@
   }
 
   async function load() {
-    if (!usuario || saiu) { setStatus(saiu ? 'Saiu do controle' : 'Sem login', 'err'); renderAll(); return; }   // sem login não há leitura do Grid
     let res = await store.get();
-    if (saiu) return;
     // um documento novo pode voltar vazio por um instante: tenta mais duas vezes antes de aceitar
     for (let i = 0; i < 2 && !hasData(res.state); i++) { await sleep(700); res = await store.get(); }
     takeServer(res);
     view.notificacoes.forEach(n => notificadas.add(n.id));   // o que já existia ao abrir não gera notificação
     baseLida = true;
-    banner(preview ? 'Prévia fora do Grid: as alterações não são salvas. Abra o documento no Grid para usar de verdade.' : '');
+    banner(textoBanner());
     renderAll();
     setStatus(preview ? 'Prévia · não salvo fora do Grid' : `Sincronizado · ${hhmm()}`, preview ? 'warn' : 'ok');
     if (pending.length) scheduleFlush(0);
@@ -382,7 +367,7 @@
     catch (err) {
       setStatus('Não foi possível ler o Grid — nada será gravado até a conexão voltar', 'err');
       banner('Sem leitura do Grid. Tentando de novo em instantes…');
-      setTimeout(() => { if (usuario && !saiu) loadWithRetry(); }, 3000);
+      setTimeout(loadWithRetry, 3000);
     }
   }
 
@@ -419,7 +404,6 @@
     renderQuem();
     renderChrome();
     aplicarPermissoes();
-    aplicarAcesso();
   }
 
   function setOptions(sel, html, value) {
@@ -1587,9 +1571,6 @@
     commit(todas.map(n => ({ t: 'del', c: 'notificacoes', id: n.id })));
   });
 
-  $('#sair').addEventListener('click', sair);
-  $('#acesso-form').addEventListener('submit', e => { e.preventDefault(); entrar(); });
-
   // ---------- início ----------
   setInterval(poll, POLL_MS);
   document.addEventListener('visibilitychange', () => { if (document.hidden) flushNow(); else poll(); });
@@ -1598,5 +1579,6 @@
   window.addEventListener('beforeunload', e => { if (pending.length || inFlight) { e.preventDefault(); e.returnValue = ''; } });
   renderAll();
   showTab('baixas', false);
+  identificar();
   loadWithRetry();
 })();
